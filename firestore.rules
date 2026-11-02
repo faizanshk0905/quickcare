@@ -1,0 +1,76 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (request.auth.token.role == 'ADMIN' || 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN');
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId) || isAdmin();
+    }
+
+    // Patients Collection
+    match /patients/{patientId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (request.auth.uid == resource.data.uid || isAdmin());
+      allow create: if isAuthenticated();
+    }
+
+    // Doctors Collection
+    match /doctors/{doctorId} {
+      allow read: if true; // Public can search verified doctors
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && (request.auth.uid == resource.data.uid || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // Appointments Collection
+    match /appointments/{appointmentId} {
+      allow read: if isAuthenticated() && 
+        (request.auth.uid == resource.data.patientUid || 
+         request.auth.uid == resource.data.doctorUid || 
+         isAdmin());
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && 
+        (request.auth.uid == resource.data.patientUid || 
+         request.auth.uid == resource.data.doctorUid || 
+         isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // Prescriptions Collection
+    match /prescriptions/{prescriptionId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && 
+        (request.auth.token.role == 'DOCTOR' || isAdmin());
+    }
+
+    // Reviews Collection
+    match /reviews/{reviewId} {
+      allow read: if true; // Public can read verified doctor reviews
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin();
+    }
+
+    // Notifications Collection
+    match /notifications/{notificationId} {
+      allow read, update: if isAuthenticated() && request.auth.uid == resource.data.recipientUid;
+      allow create: if isAuthenticated();
+      allow delete: if isAuthenticated() && request.auth.uid == resource.data.recipientUid;
+    }
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "appName": "QUICK CARE",
+  "tagline": "Your Health, Our Priority",
+  "nav": {
+    "home": "Home",
+    "findDoctors": "Find Doctors",
+    "about": "About Us",
+    "contact": "Contact",
+    "login": "Sign In",
+    "register": "Register",
+    "dashboard": "Dashboard",
+    "logout": "Sign Out",
+    "myAppointments": "My Appointments",
+    "prescriptions": "Prescriptions",
+    "notifications": "Notifications",
+    "profile": "Profile"
+  },
+  "hero": {
+    "title": "Compassionate Healthcare at Your Fingertips",
+    "subtitle": "Book verified doctor appointments, consult top medical specialists over high-definition secure video, and consult our 24/7 AI Healthcare Assistant.",
+    "ctaBook": "Book an Appointment",
+    "ctaFind": "Search Doctors",
+    "ctaAi": "Ask QuickCare AI"
+  },
+  "features": {
+    "verifiedDoctors": "100% Verified Doctors",
+    "verifiedDoctorsDesc": "Every specialist undergoes thorough administrative medical license verification.",
+    "videoConsult": "Secure Video Consultations",
+    "videoConsultDesc": "Encrypted WebRTC telehealth rooms with one-click joining and doctor-patient confidentiality.",
+    "smartAi": "AI Healthcare Assistant",
+    "smartAiDesc": "Interactive clinical symptom triaging with multilingual medical guidance.",
+    "digitalRx": "Instant Digital Prescriptions",
+    "digitalRxDesc": "Receive tamper-evident digital prescriptions with instant downloadable PDF records."
+  },
+  "appointment": {
+    "bookTitle": "Book Doctor Consultation",
+    "selectDate": "Select Appointment Date",
+    "selectSlot": "Select Available Time Slot",
+    "consultType": "Consultation Type",
+    "videoCall": "Online Video Consultation",
+    "inPerson": "In-Person Clinic Visit",
+    "reason": "Reason for Consultation / Symptoms",
+    "confirm": "Confirm Appointment",
+    "fee": "Consultation Fee",
+    "noSlots": "No available slots on this date. Please select another date.",
+    "bookedSuccess": "Appointment successfully booked!"
+  },
+  "ai": {
+    "title": "QuickCare AI Assistant",
+    "subtitle": "Clinical symptom guidance & doctor recommendations",
+    "disclaimer": "Informational guide only. In severe emergencies, call 108/911 immediately.",
+    "placeholder": "Describe your symptoms (e.g. chest heaviness, mild fever, skin rash)...",
+    "send": "Send",
+    "clear": "Clear Chat",
+    "recommendedDocs": "Recommended Verified Specialists"
+  },
+  "accessibility": {
+    "title": "Accessibility Options",
+    "fontSize": "Text Size",
+    "normal": "Default",
+    "large": "Large",
+    "xlarge": "Extra Large",
+    "contrast": "High Contrast Mode",
+    "tts": "Read Aloud (Text-to-Speech)"
+  }
+}
