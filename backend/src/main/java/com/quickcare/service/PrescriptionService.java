@@ -1,7 +1,6 @@
 package com.quickcare.service;
 
 import com.quickcare.dto.PrescriptionRequest;
-import com.quickcare.exception.BadRequestException;
 import com.quickcare.exception.ResourceNotFoundException;
 import com.quickcare.exception.UnauthorizedException;
 import com.quickcare.model.Appointment;

@@ -104,7 +104,6 @@ public class AppointmentService {
 
     public synchronized Appointment updateStatus(String appointmentId, String newStatus, String reason) {
         Appointment apt = getAppointmentById(appointmentId);
-        String oldStatus = apt.getStatus();
         apt.setStatus(newStatus.toUpperCase());
         apt.setUpdatedAt(Instant.now());
 
