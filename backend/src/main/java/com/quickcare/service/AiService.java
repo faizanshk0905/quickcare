@@ -2,7 +2,6 @@ package com.quickcare.service;
 
 import com.quickcare.dto.AiChatRequest;
 import com.quickcare.dto.AiChatResponse;
-import com.quickcare.model.ChatMessage;
 import com.quickcare.model.Doctor;
 import com.quickcare.repository.FirestoreDatabaseService;
 import org.slf4j.Logger;
@@ -142,16 +141,22 @@ public class AiService {
             headers.setContentType(MediaType.APPLICATION_JSON);
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
 
+            @SuppressWarnings("rawtypes")
             ResponseEntity<Map> response = restTemplate.postForEntity(endpoint, entity, Map.class);
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                List candidates = (List) response.getBody().get("candidates");
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> candidates = (List<Map<String, Object>>) response.getBody().get("candidates");
                 if (candidates != null && !candidates.isEmpty()) {
-                    Map first = (Map) candidates.get(0);
-                    Map resContent = (Map) first.get("content");
-                    List parts = (List) resContent.get("parts");
-                    if (parts != null && !parts.isEmpty()) {
-                        Map p = (Map) parts.get(0);
-                        return (String) p.get("text");
+                    Map<String, Object> first = candidates.get(0);
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> resContent = (Map<String, Object>) first.get("content");
+                    if (resContent != null) {
+                        @SuppressWarnings("unchecked")
+                        List<Map<String, Object>> parts = (List<Map<String, Object>>) resContent.get("parts");
+                        if (parts != null && !parts.isEmpty()) {
+                            Map<String, Object> p = parts.get(0);
+                            return (String) p.get("text");
+                        }
                     }
                 }
             }
