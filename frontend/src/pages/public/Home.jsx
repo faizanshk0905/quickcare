@@ -1,54 +1,74 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { doctorService } from '../../services/doctorService';
-import { DoctorCard } from '../../components/common/DoctorCard';
 import {
   HeartPulse,
   Video,
   Bot,
   FileText,
   ShieldCheck,
-  Star,
-  Search,
   Calendar,
   Clock,
   ArrowRight,
-  Stethoscope,
-  Activity,
-  Award,
   Users,
   CheckCircle,
+  Lock,
+  Sparkles,
+  Layers,
+  Activity,
+  BellRing,
+  Stethoscope,
 } from 'lucide-react';
 
 export const Home = () => {
   const { t } = useTranslation();
-  const [featuredDoctors, setFeaturedDoctors] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchDoctors = async () => {
-      try {
-        const res = await doctorService.searchDoctors();
-        if (res && res.data) {
-          setFeaturedDoctors(res.data.slice(0, 3));
-        }
-      } catch (err) {
-        console.error('Failed to load featured doctors', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchDoctors();
-  }, []);
 
   const specialities = [
-    { name: 'Cardiology', icon: '❤️', doctors: '24+ Doctors', desc: 'Heart care, ECG & BP management' },
-    { name: 'Dermatology', icon: '✨', doctors: '18+ Doctors', desc: 'Skin, hair & allergy specialists' },
-    { name: 'Pediatrics', icon: '👶', doctors: '32+ Doctors', desc: 'Infant health, child care & vaccines' },
-    { name: 'Orthopedics', icon: '🦴', doctors: '15+ Doctors', desc: 'Joint replacement, bone & spine care' },
-    { name: 'Neurology', icon: '🧠', doctors: '12+ Doctors', desc: 'Brain, nerves & headache treatment' },
-    { name: 'Dentistry', icon: '🦷', doctors: '20+ Doctors', desc: 'Teeth alignment, oral hygiene & surgery' },
+    { name: 'Cardiology', icon: '❤️', doctors: 'Heart & Vascular', desc: 'Preventive cardiology, ECG, blood pressure & coronary management' },
+    { name: 'Dermatology', icon: '✨', doctors: 'Skin & Allergy', desc: 'Clinical dermatology, eczema, psoriasis & allergy treatment' },
+    { name: 'Pediatrics', icon: '👶', doctors: 'Child Healthcare', desc: 'Neonatal care, child growth monitoring & routine immunizations' },
+    { name: 'Orthopedics', icon: '🦴', doctors: 'Bone & Joints', desc: 'Joint replacement, spine care, arthritis & sports rehabilitation' },
+    { name: 'Neurology', icon: '🧠', doctors: 'Neuro Care', desc: 'Comprehensive diagnosis for neurological & migraine disorders' },
+    { name: 'Dentistry', icon: '🦷', doctors: 'Oral Health', desc: 'Preventive dental care, oral surgery & clinical hygiene' },
+  ];
+
+  const platformFeatures = [
+    {
+      icon: Clock,
+      color: 'blue',
+      title: 'Automated 15-Minute Slot Engine',
+      description: 'Continuous 15-minute appointment slots generated automatically based on doctor schedules, break timings, and timezones with zero double-booking.',
+    },
+    {
+      icon: Lock,
+      color: 'indigo',
+      title: 'One Doctor – One Active Consultation',
+      description: 'Strict concurrency-safe active consultation locking protects patient privacy by ensuring doctors can never conduct overlapping video meetings.',
+    },
+    {
+      icon: Users,
+      color: 'purple',
+      title: 'Virtual Waiting Room & Queue Position',
+      description: 'Patients monitor their live position in queue while doctors admit patients sequentially upon finishing their ongoing consultation.',
+    },
+    {
+      icon: BellRing,
+      color: 'emerald',
+      title: '15-Min Auto-Confirmation & Reallocation',
+      description: 'Patients receive an availability prompt 15 minutes before consultations; declined or unconfirmed slots are released instantly to other patients.',
+    },
+    {
+      icon: Bot,
+      color: 'teal',
+      title: 'AI Clinical Triaging & Strict Matching',
+      description: 'Multilingual symptom triaging in English, Hindi, and Marathi that routes only to verified specialties and honestly informs when a specialty is unlisted.',
+    },
+    {
+      icon: FileText,
+      color: 'sky',
+      title: 'Encrypted Video & Digital Rx',
+      description: 'High-definition browser-native WebRTC telemedicine consultations coupled with official digital prescriptions and 1-click PDF downloads.',
+    },
   ];
 
   return (
@@ -108,115 +128,113 @@ export const Home = () => {
               </div>
             </div>
 
-            {/* Right Column: Professional TeleHealth & 15-Minute Slot Live Showcase */}
+            {/* Right Column: Platform Architecture & Technology Console (No Individual Doctor Info) */}
             <div className="lg:col-span-5 relative">
               {/* Soft Ambient Glows */}
               <div className="absolute -top-8 -right-8 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
               <div className="absolute -bottom-8 -left-8 w-64 h-64 bg-teal-500/10 rounded-full blur-3xl pointer-events-none" />
 
-              {/* Main Showcase Card */}
-              <div className="relative mx-auto max-w-md bg-white rounded-3xl p-6 shadow-2xl border border-slate-100 space-y-4">
-                {/* Live Clinic Header Bar */}
-                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                  <div className="flex items-center gap-2">
-                    <span className="relative flex h-2.5 w-2.5">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
-                    </span>
-                    <span className="text-xs font-extrabold text-slate-800">QuickCare TeleHealth Hub</span>
-                  </div>
-                  <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 font-bold text-[11px] flex items-center gap-1 border border-blue-100">
-                    <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
-                    Verified Specialists
-                  </span>
-                </div>
-
-                {/* Doctor Profile Showcase */}
-                <div className="flex items-center gap-3.5 p-3.5 bg-gradient-to-br from-slate-50 via-blue-50/40 to-teal-50/30 rounded-2xl border border-blue-100/70">
-                  <div className="relative shrink-0">
-                    <img
-                      src="https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=400"
-                      alt="Dr. Priya Deshmukh"
-                      className="w-16 h-16 rounded-2xl object-cover shadow-sm border-2 border-white"
-                    />
-                    <span className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 border-2 border-white rounded-full" title="Online & Available Now" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <h3 className="font-extrabold text-slate-900 text-sm truncate">Dr. Priya Deshmukh</h3>
-                      <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0" />
+              {/* Main Platform Showcase Card */}
+              <div className="relative mx-auto max-w-md bg-white rounded-3xl p-6 sm:p-7 shadow-2xl border border-slate-100 space-y-4">
+                {/* Header: Platform Status Bar */}
+                <div className="flex items-center justify-between pb-3.5 border-b border-slate-100">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-sm shadow-blue-500/30">
+                      <HeartPulse className="w-5 h-5" />
                     </div>
-                    <p className="text-xs text-blue-700 font-semibold truncate">Senior Cardiologist • MD, DM</p>
-                    <div className="flex items-center gap-2 mt-1 text-[11px] text-slate-500">
-                      <span className="flex items-center text-amber-500 font-bold">
-                        <Star className="w-3 h-3 fill-amber-400 text-amber-400 mr-0.5" />
-                        4.9
-                      </span>
-                      <span>•</span>
-                      <span>14 yrs exp</span>
-                      <span>•</span>
-                      <span className="font-bold text-slate-800">₹800</span>
+                    <div>
+                      <h3 className="text-xs font-extrabold text-slate-900 leading-tight">QuickCare Cloud Engine</h3>
+                      <p className="text-[10px] text-slate-500 leading-tight">Real-Time Healthcare Architecture</p>
                     </div>
                   </div>
-                </div>
-
-                {/* Next Available 15-Minute Slot Selector */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-bold text-slate-800 flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5 text-blue-600" />
-                      15-Minute Live Slots Today
-                    </span>
-                    <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 border border-emerald-200/60 px-2 py-0.5 rounded-md">
-                      Instant Booking
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2 text-center">
-                    <Link
-                      to="/doctors/doc_001"
-                      className="p-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-500/20 transition cursor-pointer"
-                    >
-                      <p className="text-[9px] uppercase font-semibold text-blue-100">Fastest</p>
-                      <p className="text-xs font-extrabold">10:00 AM</p>
-                    </Link>
-                    <Link
-                      to="/doctors/doc_001"
-                      className="p-2 rounded-xl bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 text-slate-700 font-bold text-xs transition cursor-pointer"
-                    >
-                      <p className="text-[9px] text-slate-400 font-medium">Available</p>
-                      <p className="text-xs font-extrabold">10:15 AM</p>
-                    </Link>
-                    <Link
-                      to="/doctors/doc_001"
-                      className="p-2 rounded-xl bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 text-slate-700 font-bold text-xs transition cursor-pointer"
-                    >
-                      <p className="text-[9px] text-slate-400 font-medium">Available</p>
-                      <p className="text-xs font-extrabold">10:30 AM</p>
-                    </Link>
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-bold border border-emerald-100">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span>System Active</span>
                   </div>
                 </div>
 
-                {/* Live Telehealth Capabilities */}
-                <div className="grid grid-cols-2 gap-2 text-[11px]">
-                  <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100 flex items-center gap-2 text-slate-700">
-                    <Video className="w-4 h-4 text-blue-600 shrink-0" />
-                    <span className="font-semibold">WebRTC HD Video</span>
+                {/* Core Architecture Metric Tiles */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3.5 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50/50 border border-blue-100/70 space-y-1">
+                    <div className="flex items-center justify-between text-blue-600">
+                      <Clock className="w-4 h-4" />
+                      <span className="text-[10px] font-bold bg-white/80 px-2 py-0.5 rounded-md">Automated</span>
+                    </div>
+                    <p className="text-xl font-black text-slate-900">15-Min</p>
+                    <p className="text-[11px] font-bold text-slate-700 leading-tight">Continuous Slot Engine</p>
+                    <p className="text-[10px] text-slate-500 leading-tight">Atomic double-booking prevention</p>
                   </div>
-                  <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100 flex items-center gap-2 text-slate-700">
-                    <FileText className="w-4 h-4 text-teal-600 shrink-0" />
-                    <span className="font-semibold">Instant Digital Rx</span>
+
+                  <div className="p-3.5 rounded-2xl bg-gradient-to-br from-teal-50 to-emerald-50/50 border border-teal-100/70 space-y-1">
+                    <div className="flex items-center justify-between text-teal-600">
+                      <Lock className="w-4 h-4" />
+                      <span className="text-[10px] font-bold bg-white/80 px-2 py-0.5 rounded-md">Isolated</span>
+                    </div>
+                    <p className="text-xl font-black text-slate-900">1-on-1</p>
+                    <p className="text-[11px] font-bold text-slate-700 leading-tight">Consultation Lock</p>
+                    <p className="text-[10px] text-slate-500 leading-tight">Protected patient privacy</p>
                   </div>
                 </div>
 
-                {/* Action CTA */}
-                <Link
-                  to="/doctors"
-                  className="w-full py-3.5 bg-gradient-to-r from-blue-600 via-blue-700 to-teal-600 hover:from-blue-700 hover:to-teal-700 text-white font-bold text-xs rounded-2xl shadow-lg shadow-blue-500/25 transition-all flex items-center justify-center gap-2 hover:translate-y-[-1px] active:translate-y-0"
-                >
-                  <span>Explore Verified Specialists & Book</span>
-                  <ArrowRight className="w-4 h-4" />
-                </Link>
+                {/* Platform Clinical Capabilities Feed */}
+                <div className="space-y-2 bg-slate-50/80 p-3.5 rounded-2xl border border-slate-100">
+                  <p className="text-[11px] font-extrabold text-slate-700 flex items-center justify-between">
+                    <span>Platform Services</span>
+                    <span className="text-[10px] text-blue-600 font-bold">Live Synchronized</span>
+                  </p>
+
+                  <div className="space-y-2 text-xs">
+                    <div className="flex items-center gap-2.5 p-2 bg-white rounded-xl border border-slate-100 shadow-2xs">
+                      <div className="w-7 h-7 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+                        <Users className="w-4 h-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-[11px] text-slate-800">Virtual Waiting Room</p>
+                        <p className="text-[10px] text-slate-500 truncate">Real-time queue tracking & doctor admission</p>
+                      </div>
+                      <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">Live</span>
+                    </div>
+
+                    <div className="flex items-center gap-2.5 p-2 bg-white rounded-xl border border-slate-100 shadow-2xs">
+                      <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                        <Bot className="w-4 h-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-[11px] text-slate-800">AI Clinical Triaging</p>
+                        <p className="text-[10px] text-slate-500 truncate">Strict verified specialty symptom matching</p>
+                      </div>
+                      <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">24/7</span>
+                    </div>
+
+                    <div className="flex items-center gap-2.5 p-2 bg-white rounded-xl border border-slate-100 shadow-2xs">
+                      <div className="w-7 h-7 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center shrink-0">
+                        <FileText className="w-4 h-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-[11px] text-slate-800">Digital e-Prescriptions</p>
+                        <p className="text-[10px] text-slate-500 truncate">Instant authorized PDF clinical summary</p>
+                      </div>
+                      <span className="text-[10px] font-bold text-teal-600 bg-teal-50 px-2 py-0.5 rounded-md">Instant</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Primary Action Buttons */}
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <Link
+                    to="/register"
+                    className="py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md shadow-blue-500/25 transition text-center flex items-center justify-center gap-1.5"
+                  >
+                    <span>Get Started</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </Link>
+                  <Link
+                    to="/about"
+                    className="py-3 bg-white hover:bg-slate-50 border border-slate-200 text-slate-800 font-bold text-xs rounded-xl shadow-2xs transition text-center"
+                  >
+                    <span>About QuickCare</span>
+                  </Link>
+                </div>
               </div>
 
               {/* Floating Trust Pills */}
@@ -225,18 +243,18 @@ export const Home = () => {
                   ✓
                 </div>
                 <div>
-                  <p className="font-bold text-[11px] leading-tight">Virtual Waiting Room</p>
-                  <p className="text-[10px] text-slate-500 leading-tight">Queue Position & Admittance</p>
+                  <p className="font-bold text-[11px] leading-tight">15-Min Automated Alerts</p>
+                  <p className="text-[10px] text-slate-500 leading-tight">Instant slot reallocation on decline</p>
                 </div>
               </div>
 
               <div className="hidden sm:flex absolute -top-4 -right-4 bg-white/95 backdrop-blur-md px-3.5 py-2 rounded-2xl border border-slate-200/80 shadow-lg items-center gap-2 text-xs text-slate-800">
                 <div className="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
-                  <Bot className="w-4 h-4 text-blue-600" />
+                  <ShieldCheck className="w-4 h-4 text-blue-600" />
                 </div>
                 <div>
-                  <p className="font-bold text-[11px] leading-tight">AI Clinical Triaging</p>
-                  <p className="text-[10px] text-slate-500 leading-tight">Strict Specialist Matching</p>
+                  <p className="font-bold text-[11px] leading-tight">Encrypted Telemedicine</p>
+                  <p className="text-[10px] text-slate-500 leading-tight">HIPAA & Clinical Standards</p>
                 </div>
               </div>
             </div>
@@ -254,7 +272,7 @@ export const Home = () => {
             Explore Medical Specialities
           </h2>
           <p className="text-sm text-slate-600 mt-2">
-            Find the right expert care tailored to your exact symptoms and condition.
+            Find the right clinical discipline tailored to your exact symptoms and condition.
           </p>
         </div>
 
@@ -278,7 +296,7 @@ export const Home = () => {
               </h3>
               <p className="text-xs text-slate-500 mt-1 leading-relaxed">{s.desc}</p>
               <div className="mt-4 flex items-center text-xs font-bold text-blue-600 group-hover:translate-x-1 transition-transform">
-                <span>View Doctors</span>
+                <span>Browse Speciality</span>
                 <ArrowRight className="w-3.5 h-3.5 ml-1" />
               </div>
             </Link>
@@ -296,7 +314,7 @@ export const Home = () => {
             How QuickCare Simplifies Healthcare
           </h2>
           <p className="text-sm text-slate-400 mt-2">
-            From discovering the right specialist to receiving authorized digital prescriptions in minutes.
+            From discovering the right clinical department to receiving authorized digital prescriptions in minutes.
           </p>
         </div>
 
@@ -307,7 +325,7 @@ export const Home = () => {
             </span>
             <h3 className="font-bold text-base text-white">Find or Ask AI</h3>
             <p className="text-xs text-slate-400 leading-relaxed">
-              Use our smart doctor filters or tell QuickCare AI your symptoms in English, Hindi, or Marathi for an instant recommendation.
+              Use smart clinical filters or tell QuickCare AI your symptoms in English, Hindi, or Marathi for instant triaging.
             </p>
           </div>
 
@@ -315,9 +333,9 @@ export const Home = () => {
             <span className="w-8 h-8 rounded-full bg-teal-500 text-white font-extrabold text-sm flex items-center justify-center">
               2
             </span>
-            <h3 className="font-bold text-base text-white">Select Live Slot</h3>
+            <h3 className="font-bold text-base text-white">Select Live 15-Min Slot</h3>
             <p className="text-xs text-slate-400 leading-relaxed">
-              Choose your preferred date and verified doctor's open time slot with double-booking prevention.
+              Choose your preferred date and open 15-minute time slot with concurrency-safe booking guarantees.
             </p>
           </div>
 
@@ -327,7 +345,7 @@ export const Home = () => {
             </span>
             <h3 className="font-bold text-base text-white">Video Consultation</h3>
             <p className="text-xs text-slate-400 leading-relaxed">
-              Join the private encrypted WebRTC telehealth room with camera, microphone, and direct doctor communication.
+              Join the private encrypted WebRTC telehealth room with camera, microphone, and direct clinical communication.
             </p>
           </div>
 
@@ -337,41 +355,47 @@ export const Home = () => {
             </span>
             <h3 className="font-bold text-base text-white">Digital Prescription</h3>
             <p className="text-xs text-slate-400 leading-relaxed">
-              Receive doctor's digital prescription with diagnosis, medicine doses, and one-click PDF download immediately.
+              Receive authorized digital prescriptions with diagnosis, medicine dosages, and 1-click PDF download immediately.
             </p>
           </div>
         </div>
       </section>
 
-      {/* FEATURED TOP DOCTORS */}
+      {/* CORE PLATFORM CAPABILITIES & TECHNOLOGY SUITE (No Individual Doctor Cards) */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
-          <div>
-            <span className="text-xs font-extrabold text-blue-600 tracking-wider uppercase">
-              Top Medical Faculty
-            </span>
-            <h2 className="text-3xl font-extrabold text-slate-900 mt-1">
-              Recommended Verified Doctors
-            </h2>
-          </div>
-          <Link
-            to="/doctors"
-            className="text-sm font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1"
-          >
-            <span>View All Doctors</span>
-            <ArrowRight className="w-4 h-4" />
-          </Link>
+        <div className="text-center max-w-2xl mx-auto mb-12">
+          <span className="text-xs font-extrabold text-blue-600 tracking-wider uppercase">
+            Platform Technology
+          </span>
+          <h2 className="text-3xl font-extrabold text-slate-900 mt-2">
+            Why Patients & Healthcare Facilities Trust QuickCare
+          </h2>
+          <p className="text-sm text-slate-600 mt-2">
+            An integrated telemedicine ecosystem built with concurrency-safe scheduling, live queue tracking, and clinical safety.
+          </p>
         </div>
 
-        {loading ? (
-          <div className="p-12 text-center text-slate-400 text-sm">Loading doctors...</div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {featuredDoctors.map((doc) => (
-              <DoctorCard key={doc.doctorId} doctor={doc} />
-            ))}
-          </div>
-        )}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {platformFeatures.map((feat, index) => {
+            const Icon = feat.icon;
+            return (
+              <div
+                key={index}
+                className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs hover:shadow-lg transition space-y-3"
+              >
+                <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shadow-xs">
+                  <Icon className="w-5 h-5" />
+                </div>
+                <h3 className="font-bold text-slate-900 text-base">
+                  {feat.title}
+                </h3>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  {feat.description}
+                </p>
+              </div>
+            );
+          })}
+        </div>
       </section>
 
       {/* CTA BANNER */}
@@ -379,17 +403,17 @@ export const Home = () => {
         <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-teal-600 rounded-3xl p-8 sm:p-12 text-white flex flex-col md:flex-row items-center justify-between gap-8 shadow-xl">
           <div className="space-y-3 max-w-xl text-center md:text-left">
             <h3 className="text-2xl sm:text-3xl font-extrabold">
-              Are you a licensed medical practitioner?
+              Experience Modern Healthcare with QuickCare
             </h3>
             <p className="text-sm text-blue-100 leading-relaxed">
-              Join QuickCare network, manage your digital schedule, accept verified telemedicine consultations, and expand your clinical practice.
+              Book consultations in seconds, monitor virtual queue position in real time, and receive instant digital prescriptions from any device.
             </p>
           </div>
           <Link
-            to="/register-doctor"
+            to="/register"
             className="px-8 py-4 bg-white text-blue-700 font-extrabold rounded-2xl shadow-lg hover:bg-blue-50 transition shrink-0"
           >
-            Register as Doctor
+            Create Free Account
           </Link>
         </div>
       </section>
