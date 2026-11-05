@@ -9,6 +9,7 @@ public class AiChatResponse {
     private List<Doctor> recommendedDoctors;
     private boolean emergency;
     private String emergencyDisclaimer;
+    private boolean specialistAvailable;
     private String conversationId;
 
     public AiChatResponse() {}
@@ -27,6 +28,9 @@ public class AiChatResponse {
 
     public String getEmergencyDisclaimer() { return emergencyDisclaimer; }
     public void setEmergencyDisclaimer(String emergencyDisclaimer) { this.emergencyDisclaimer = emergencyDisclaimer; }
+
+    public boolean isSpecialistAvailable() { return specialistAvailable; }
+    public void setSpecialistAvailable(boolean specialistAvailable) { this.specialistAvailable = specialistAvailable; }
 
     public String getConversationId() { return conversationId; }
     public void setConversationId(String conversationId) { this.conversationId = conversationId; }

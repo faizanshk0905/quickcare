@@ -72,6 +72,7 @@ export const AiChatWidget = () => {
           isEmergency: data.emergency,
           emergencyDisclaimer: data.emergencyDisclaimer,
           suggestedSpecialization: data.suggestedSpecialization,
+          specialistAvailable: data.specialistAvailable,
           recommendedDoctors: data.recommendedDoctors || [],
         };
 
@@ -228,6 +229,19 @@ export const AiChatWidget = () => {
                       </button>
                     )}
                   </div>
+
+                  {/* Notice when specialist is not available at Quick Care */}
+                  {m.sender === 'assistant' && m.specialistAvailable === false && m.suggestedSpecialization && !m.isEmergency && (
+                    <div className="p-3 bg-amber-50/90 border border-amber-200 rounded-2xl shadow-2xs space-y-1">
+                      <div className="flex items-center gap-1.5 text-amber-800 font-bold text-xs">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span>Specialist Not Available at Quick Care</span>
+                      </div>
+                      <p className="text-[11px] text-amber-700 leading-relaxed">
+                        Our hospital does not currently have a doctor specializing in <strong>{m.suggestedSpecialization}</strong>. Please consult an external healthcare facility for this department.
+                      </p>
+                    </div>
+                  )}
 
                   {/* Specialization & Recommended Doctors */}
                   {m.recommendedDoctors && m.recommendedDoctors.length > 0 && (

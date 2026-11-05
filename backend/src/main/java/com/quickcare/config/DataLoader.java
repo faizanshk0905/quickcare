@@ -88,14 +88,8 @@ public class DataLoader implements CommandLineRunner {
                 "https://images.unsplash.com/photo-1537368910025-700350fe46c7?auto=format&fit=crop&q=80&w=400"
         );
 
-        createDoctor(
-                "usr_doc_05", "Dr. Meera Nambiar", "meera.nambiar@quickcare.com", "+91 98200 88776",
-                "doc_005", "Neurology", "MBBS, MD (Medicine), DM (Neurology)", 12,
-                "MCI-NEUR-66524", 850.0, "VERIFIED", 4.85, 110,
-                "Senior Neurologist treating headaches, stroke, epilepsy, and neuromuscular conditions with modern neuro-diagnostics.",
-                "NeuroCare Super Speciality Center, Chennai",
-                "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?auto=format&fit=crop&q=80&w=400"
-        );
+        // Note: Quick Care does NOT currently have a Neurologist, Oncologist, or Gastroenterologist on staff.
+        // If a patient asks for a specialist in these fields, the system correctly and strictly informs them.
 
         // 4. PENDING DOCTOR (for admin approval demonstration)
         createDoctor(
