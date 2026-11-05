@@ -89,7 +89,7 @@ public class ReviewService {
         List<Review> reviews = db.findReviewsByDoctorId(doctorId);
         if (reviews.isEmpty()) return 0.0;
         return reviews.stream()
-                .mapToDouble(Review::getRating)
+                .mapToDouble(r -> r.getRating())
                 .average()
                 .orElse(0.0);
     }

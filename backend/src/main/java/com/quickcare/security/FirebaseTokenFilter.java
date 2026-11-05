@@ -48,7 +48,7 @@ public class FirebaseTokenFilter extends OncePerRequestFilter {
                         String uid = decodedToken.getUid();
                         String email = decodedToken.getEmail();
                         Optional<User> userOpt = databaseService.findUserByUid(uid);
-                        String role = userOpt.map(User::getRole).orElse("PATIENT");
+                        String role = userOpt.map(u -> u.getRole()).orElse("PATIENT");
 
                         UserPrincipal principal = new UserPrincipal(uid, email, role);
                         UsernamePasswordAuthenticationToken authentication =

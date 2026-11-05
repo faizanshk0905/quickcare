@@ -53,7 +53,7 @@ public class AdminService {
         // Specialization Breakdown
         Map<String, Long> specMap = doctors.stream()
                 .filter(d -> d.getSpecialization() != null)
-                .collect(Collectors.groupingBy(Doctor::getSpecialization, Collectors.counting()));
+                .collect(Collectors.groupingBy(d -> d.getSpecialization(), Collectors.counting()));
         stats.setSpecializationStats(specMap);
 
         // Monthly appointments breakdown
