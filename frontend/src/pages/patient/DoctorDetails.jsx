@@ -51,21 +51,34 @@ export const DoctorDetails = () => {
     fetchDoc();
   }, [doctorId]);
 
-  // Load Doctor Availability for chosen date
-  useEffect(() => {
-    const fetchAvailability = async () => {
-      if (!doctorId || !selectedDate) return;
-      try {
-        const res = await doctorService.getDoctorAvailability(doctorId, selectedDate);
-        if (res && res.data) {
-          setAvailability(res.data);
+  // Load Doctor Availability for chosen date with Real-Time Polling
+  const fetchAvailability = async (isBackground = false) => {
+    if (!doctorId || !selectedDate) return;
+    try {
+      const res = await doctorService.getDoctorAvailability(doctorId, selectedDate);
+      if (res && res.data) {
+        setAvailability(res.data);
+        // If current selected slot was booked by someone else in the meantime
+        if (selectedSlot && res.data.bookedSlots?.includes(selectedSlot)) {
           setSelectedSlot('');
+          setBookingError('This appointment slot has just been booked. Please select another slot.');
         }
-      } catch (err) {
-        console.error(err);
       }
-    };
-    fetchAvailability();
+    } catch (err) {
+      if (!isBackground) console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    fetchAvailability(false);
+    setSelectedSlot('');
+
+    // Real-time synchronization interval (every 3.5s)
+    const interval = setInterval(() => {
+      fetchAvailability(true);
+    }, 3500);
+
+    return () => clearInterval(interval);
   }, [doctorId, selectedDate]);
 
   const handleBooking = async (e) => {
@@ -104,11 +117,17 @@ export const DoctorDetails = () => {
 
       if (res && res.success) {
         setBookingSuccess(true);
+        fetchAvailability(false);
       }
     } catch (err) {
-      setBookingError(
-        err.response?.data?.message || err.message || 'Failed to book appointment. Please try another slot.'
-      );
+      const errorMsg = err.response?.data?.message || err.message || '';
+      if (errorMsg.toLowerCase().includes('booked')) {
+        setBookingError('This appointment slot has just been booked. Please select another slot.');
+      } else {
+        setBookingError(errorMsg || 'Failed to book appointment. Please try another slot.');
+      }
+      setSelectedSlot('');
+      fetchAvailability(false);
     } finally {
       setBookingLoading(false);
     }
@@ -328,15 +347,32 @@ export const DoctorDetails = () => {
 
                 {/* Time Slots */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                    Available Time Slots ({openSlots.length} open)
-                  </label>
-                  {openSlots.length === 0 ? (
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-bold text-slate-700">
+                      15-Min Slots ({openSlots.length} available)
+                    </label>
+                    <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      Live Real-Time
+                    </span>
+                  </div>
+
+                  {/* Doctor Schedule Context */}
+                  <div className="mb-2 p-2 rounded-xl bg-slate-50 border border-slate-100 text-[10px] text-slate-500 flex flex-wrap items-center justify-between gap-1">
+                    <span>🕒 Working: {doctor.workingHours || '09:00 AM - 05:00 PM'}</span>
+                    <span>☕ Break: {doctor.breakStartTime || '01:00 PM'} - {doctor.breakEndTime || '02:00 PM'}</span>
+                  </div>
+
+                  {availability?.holiday ? (
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-center text-xs text-amber-800 font-medium">
+                      🏖️ Dr. {doctor.fullName} is on scheduled holiday/leave on this date. Please choose another date.
+                    </div>
+                  ) : openSlots.length === 0 ? (
                     <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-center text-xs text-slate-400">
-                      No open slots on this date. Please select another date above.
+                      No open slots on this date (working hours passed, day off, or all slots booked). Please select another date.
                     </div>
                   ) : (
-                    <div className="grid grid-cols-3 gap-2 max-h-36 overflow-y-auto p-1">
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-44 overflow-y-auto p-1">
                       {openSlots.map((slot) => (
                         <button
                           key={slot}

@@ -35,4 +35,24 @@ export const appointmentService = {
     const res = await api.delete(`/appointments/${appointmentId}`, { params: { reason } });
     return res.data;
   },
+
+  async checkIn(appointmentId) {
+    const res = await api.post(`/appointments/${appointmentId}/check-in`);
+    return res.data;
+  },
+
+  async admit(appointmentId) {
+    const res = await api.post(`/appointments/${appointmentId}/admit`);
+    return res.data;
+  },
+
+  async getWaitingStatus(appointmentId) {
+    const res = await api.get(`/appointments/${appointmentId}/waiting-status`);
+    return res.data;
+  },
+
+  async getDoctorWaitingQueue() {
+    const res = await api.get('/appointments/doctor/waiting-queue');
+    return res.data;
+  },
 };

@@ -10,6 +10,9 @@ public class DoctorAvailability {
     private List<String> availableSlots = new ArrayList<>();
     private List<String> bookedSlots = new ArrayList<>();
     private String workingHours;
+    private boolean holiday = false;
+    private String holidayReason;
+    private int slotDurationMinutes = 15;
 
     public DoctorAvailability() {}
 
@@ -38,4 +41,13 @@ public class DoctorAvailability {
 
     public String getWorkingHours() { return workingHours; }
     public void setWorkingHours(String workingHours) { this.workingHours = workingHours; }
+
+    public boolean isHoliday() { return holiday; }
+    public void setHoliday(boolean holiday) { this.holiday = holiday; }
+
+    public String getHolidayReason() { return holidayReason; }
+    public void setHolidayReason(String holidayReason) { this.holidayReason = holidayReason; }
+
+    public int getSlotDurationMinutes() { return slotDurationMinutes; }
+    public void setSlotDurationMinutes(int slotDurationMinutes) { this.slotDurationMinutes = slotDurationMinutes; }
 }

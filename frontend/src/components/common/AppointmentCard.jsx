@@ -140,14 +140,20 @@ export const AppointmentCard = ({
           </>
         )}
 
-        {/* Video Consultation Join Button (For both when CONFIRMED) */}
+        {/* Video Consultation & Virtual Waiting Room Button (For both when CONFIRMED) */}
         {appointment.status === 'CONFIRMED' && appointment.consultationType === 'VIDEO' && (
           <Link
             to={`/consultations/${appointment.appointmentId}`}
             className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-blue-600 to-teal-600 hover:from-blue-700 hover:to-teal-700 text-white text-xs font-bold rounded-xl shadow-md shadow-blue-500/20 transition active:scale-95"
           >
             <Video className="w-4 h-4 animate-pulse" />
-            <span>Join Video Consultation</span>
+            <span>
+              {isDoctor
+                ? 'Manage & Enter Video Consultation'
+                : appointment.admitted
+                ? 'Join Active Video Consultation'
+                : 'Enter Virtual Waiting Room'}
+            </span>
           </Link>
         )}
 

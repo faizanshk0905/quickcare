@@ -17,6 +17,14 @@ public class Doctor {
     private double consultationFee;
     private List<String> availableDays = new ArrayList<>();
     private String workingHours; // e.g. "09:00 AM - 05:00 PM"
+    private String workingStartTime = "09:00 AM";
+    private String workingEndTime = "05:00 PM";
+    private String breakStartTime = "01:00 PM";
+    private String breakEndTime = "02:00 PM";
+    private int slotDurationMinutes = 15;
+    private String timezone = "Asia/Kolkata";
+    private List<String> holidays = new ArrayList<>();
+    private String activeConsultationId;
     private String verificationStatus; // PENDING, VERIFIED, REJECTED
     private String profileImage;
     private double rating;
@@ -67,6 +75,30 @@ public class Doctor {
 
     public String getWorkingHours() { return workingHours; }
     public void setWorkingHours(String workingHours) { this.workingHours = workingHours; }
+
+    public String getWorkingStartTime() { return workingStartTime; }
+    public void setWorkingStartTime(String workingStartTime) { this.workingStartTime = workingStartTime; }
+
+    public String getWorkingEndTime() { return workingEndTime; }
+    public void setWorkingEndTime(String workingEndTime) { this.workingEndTime = workingEndTime; }
+
+    public String getBreakStartTime() { return breakStartTime; }
+    public void setBreakStartTime(String breakStartTime) { this.breakStartTime = breakStartTime; }
+
+    public String getBreakEndTime() { return breakEndTime; }
+    public void setBreakEndTime(String breakEndTime) { this.breakEndTime = breakEndTime; }
+
+    public int getSlotDurationMinutes() { return slotDurationMinutes; }
+    public void setSlotDurationMinutes(int slotDurationMinutes) { this.slotDurationMinutes = slotDurationMinutes; }
+
+    public String getTimezone() { return timezone; }
+    public void setTimezone(String timezone) { this.timezone = timezone; }
+
+    public List<String> getHolidays() { return holidays; }
+    public void setHolidays(List<String> holidays) { this.holidays = holidays != null ? holidays : new ArrayList<>(); }
+
+    public String getActiveConsultationId() { return activeConsultationId; }
+    public void setActiveConsultationId(String activeConsultationId) { this.activeConsultationId = activeConsultationId; }
 
     public String getVerificationStatus() { return verificationStatus; }
     public void setVerificationStatus(String verificationStatus) { this.verificationStatus = verificationStatus; }

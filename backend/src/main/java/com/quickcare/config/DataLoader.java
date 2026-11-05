@@ -212,13 +212,24 @@ public class DataLoader implements CommandLineRunner {
         d.setClinicAddress(clinic);
         d.setProfileImage(img);
         d.setWorkingHours("09:00 AM - 05:00 PM");
+        d.setWorkingStartTime("09:00 AM");
+        d.setWorkingEndTime("05:00 PM");
+        d.setBreakStartTime("01:00 PM");
+        d.setBreakEndTime("02:00 PM");
+        d.setSlotDurationMinutes(15);
+        d.setTimezone("Asia/Kolkata");
         d.setAvailableDays(Arrays.asList("Monday", "Tuesday", "Wednesday", "Thursday", "Friday"));
         db.saveDoctor(d);
 
-        // Populate availability for next 7 days
+        // Populate 15-minute availability slots for next 7 days (excluding break 1-2 PM)
         List<String> slots = Arrays.asList(
-                "09:00 AM", "09:30 AM", "10:00 AM", "10:30 AM", "11:00 AM",
-                "02:00 PM", "02:30 PM", "03:00 PM", "03:30 PM", "04:00 PM"
+                "09:00 AM", "09:15 AM", "09:30 AM", "09:45 AM",
+                "10:00 AM", "10:15 AM", "10:30 AM", "10:45 AM",
+                "11:00 AM", "11:15 AM", "11:30 AM", "11:45 AM",
+                "12:00 PM", "12:15 PM", "12:30 PM", "12:45 PM",
+                "02:00 PM", "02:15 PM", "02:30 PM", "02:45 PM",
+                "03:00 PM", "03:15 PM", "03:30 PM", "03:45 PM",
+                "04:00 PM", "04:15 PM", "04:30 PM", "04:45 PM"
         );
         LocalDate start = LocalDate.now();
         for (int i = 0; i < 7; i++) {
@@ -226,9 +237,10 @@ public class DataLoader implements CommandLineRunner {
                     d.getDoctorId() + "_" + start.plusDays(i),
                     d.getDoctorId(),
                     start.plusDays(i).toString(),
-                    slots
+                    new java.util.ArrayList<>(slots)
             );
             da.setWorkingHours(d.getWorkingHours());
+            da.setSlotDurationMinutes(15);
             db.saveAvailability(da);
         }
     }

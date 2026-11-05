@@ -81,6 +81,37 @@ public class AppointmentController {
         return ResponseEntity.ok(ApiResponse.ok("Appointment rescheduled successfully", updated));
     }
 
+    @PostMapping("/{appointmentId}/check-in")
+    public ResponseEntity<ApiResponse<Appointment>> checkInPatient(
+            @PathVariable String appointmentId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        Appointment apt = appointmentService.checkInPatient(appointmentId, principal.getUid());
+        return ResponseEntity.ok(ApiResponse.ok("Checked into waiting room successfully", apt));
+    }
+
+    @PostMapping("/{appointmentId}/admit")
+    public ResponseEntity<ApiResponse<Appointment>> admitPatient(
+            @PathVariable String appointmentId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        Appointment apt = appointmentService.admitPatient(appointmentId, principal.getUid());
+        return ResponseEntity.ok(ApiResponse.ok("Patient admitted to consultation", apt));
+    }
+
+    @GetMapping("/{appointmentId}/waiting-status")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getWaitingRoomStatus(
+            @PathVariable String appointmentId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        Map<String, Object> status = appointmentService.getWaitingRoomStatus(appointmentId, principal.getUid());
+        return ResponseEntity.ok(ApiResponse.ok(status));
+    }
+
+    @GetMapping("/doctor/waiting-queue")
+    public ResponseEntity<ApiResponse<List<Appointment>>> getDoctorWaitingQueue(
+            @AuthenticationPrincipal UserPrincipal principal) {
+        List<Appointment> queue = appointmentService.getWaitingQueueForDoctor(principal.getUid());
+        return ResponseEntity.ok(ApiResponse.ok(queue));
+    }
+
     @DeleteMapping("/{appointmentId}")
     public ResponseEntity<ApiResponse<Appointment>> cancelAppointment(
             @PathVariable String appointmentId,

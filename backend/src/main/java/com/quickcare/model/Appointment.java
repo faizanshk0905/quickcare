@@ -21,6 +21,12 @@ public class Appointment {
     private String cancellationReason;
     private double consultationFee;
     private String meetingRoomId;
+    private boolean patientCheckedIn = false;
+    private Instant checkedInAt;
+    private boolean admitted = false;
+    private Instant admittedAt;
+    private Instant consultationStartedAt;
+    private Instant consultationEndedAt;
     private Instant createdAt;
     private Instant updatedAt;
 
@@ -84,6 +90,24 @@ public class Appointment {
 
     public String getMeetingRoomId() { return meetingRoomId; }
     public void setMeetingRoomId(String meetingRoomId) { this.meetingRoomId = meetingRoomId; }
+
+    public boolean isPatientCheckedIn() { return patientCheckedIn; }
+    public void setPatientCheckedIn(boolean patientCheckedIn) { this.patientCheckedIn = patientCheckedIn; }
+
+    public Instant getCheckedInAt() { return checkedInAt; }
+    public void setCheckedInAt(Instant checkedInAt) { this.checkedInAt = checkedInAt; }
+
+    public boolean isAdmitted() { return admitted; }
+    public void setAdmitted(boolean admitted) { this.admitted = admitted; }
+
+    public Instant getAdmittedAt() { return admittedAt; }
+    public void setAdmittedAt(Instant admittedAt) { this.admittedAt = admittedAt; }
+
+    public Instant getConsultationStartedAt() { return consultationStartedAt; }
+    public void setConsultationStartedAt(Instant consultationStartedAt) { this.consultationStartedAt = consultationStartedAt; }
+
+    public Instant getConsultationEndedAt() { return consultationEndedAt; }
+    public void setConsultationEndedAt(Instant consultationEndedAt) { this.consultationEndedAt = consultationEndedAt; }
 
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }

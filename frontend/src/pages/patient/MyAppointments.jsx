@@ -90,9 +90,12 @@ export const MyAppointments = () => {
       setRescheduleTarget(null);
       fetchAppointments();
     } catch (err) {
-      setRescheduleError(
-        err.response?.data?.message || err.message || 'Failed to reschedule appointment.'
-      );
+      const msg = err.response?.data?.message || err.message || '';
+      if (msg.toLowerCase().includes('booked') || msg.toLowerCase().includes('unavailable')) {
+        setRescheduleError('This appointment slot has just been booked. Please select another slot.');
+      } else {
+        setRescheduleError(msg || 'Failed to reschedule appointment.');
+      }
     } finally {
       setReschedulingLoading(false);
     }

@@ -31,6 +31,8 @@ public class FirestoreDatabaseService {
     private final Map<String, Review> reviews = new ConcurrentHashMap<>();
     private final Map<String, VideoConsultation> videoConsultations = new ConcurrentHashMap<>();
     private final Map<String, AiConversation> aiConversations = new ConcurrentHashMap<>();
+    // Server-side One Doctor - One Active Video Consultation Concurrency Lock (doctorId -> consultationId)
+    private final Map<String, String> activeDoctorConsultationLocks = new ConcurrentHashMap<>();
 
     @Autowired
     public FirestoreDatabaseService(@Autowired(required = false) Firestore firestore) {
@@ -179,7 +181,8 @@ public class FirestoreDatabaseService {
                 date.equals(a.getAppointmentDate()) &&
                 time.equalsIgnoreCase(a.getAppointmentTime()) &&
                 !"CANCELLED".equalsIgnoreCase(a.getStatus()) &&
-                !"REJECTED".equalsIgnoreCase(a.getStatus())
+                !"REJECTED".equalsIgnoreCase(a.getStatus()) &&
+                !"NO_SHOW".equalsIgnoreCase(a.getStatus())
         );
     }
 
@@ -359,6 +362,87 @@ public class FirestoreDatabaseService {
         return videoConsultations.values().stream()
                 .filter(c -> appointmentId.equals(c.getAppointmentId()))
                 .findFirst();
+    }
+
+    // SERVER-SIDE ACTIVE CONSULTATION CONCURRENCY LOCK (ONE DOCTOR - ONE ACTIVE VIDEO CONSULTATION)
+    public synchronized boolean acquireDoctorConsultationLock(String doctorId, String consultationId) {
+        String existingConsultationId = activeDoctorConsultationLocks.get(doctorId);
+        if (existingConsultationId != null && !existingConsultationId.equals(consultationId)) {
+            // Verify if existing consultation is still ACTIVE in DB
+            VideoConsultation existingVc = videoConsultations.get(existingConsultationId);
+            if (existingVc != null && "ACTIVE".equalsIgnoreCase(existingVc.getStatus())) {
+                logger.warn("Lock collision: Doctor {} is already in ACTIVE consultation {}", doctorId, existingConsultationId);
+                return false;
+            }
+        }
+        activeDoctorConsultationLocks.put(doctorId, consultationId);
+        logger.info("Active consultation lock granted to doctor {} for session {}", doctorId, consultationId);
+        return true;
+    }
+
+    public synchronized void releaseDoctorConsultationLock(String doctorId, String consultationId) {
+        String existing = activeDoctorConsultationLocks.get(doctorId);
+        if (existing != null && (consultationId == null || existing.equals(consultationId))) {
+            activeDoctorConsultationLocks.remove(doctorId);
+            logger.info("Released active consultation lock for doctor {} (session: {})", doctorId, consultationId);
+        }
+    }
+
+    public synchronized boolean isDoctorCurrentlyInConsultation(String doctorId) {
+        String existing = activeDoctorConsultationLocks.get(doctorId);
+        if (existing == null) return false;
+        VideoConsultation vc = videoConsultations.get(existing);
+        if (vc != null && "ACTIVE".equalsIgnoreCase(vc.getStatus())) {
+            return true;
+        }
+        // Lock was stale
+        activeDoctorConsultationLocks.remove(doctorId);
+        return false;
+    }
+
+    public synchronized String getActiveDoctorConsultationId(String doctorId) {
+        String existing = activeDoctorConsultationLocks.get(doctorId);
+        if (existing == null) return null;
+        VideoConsultation vc = videoConsultations.get(existing);
+        if (vc != null && "ACTIVE".equalsIgnoreCase(vc.getStatus())) {
+            return existing;
+        }
+        activeDoctorConsultationLocks.remove(doctorId);
+        return null;
+    }
+
+    // PATIENT WAITING ROOM & QUEUE MANAGEMENT
+    public List<Appointment> findWaitingAppointmentsByDoctor(String doctorId, String date) {
+        return appointments.values().stream()
+                .filter(a -> doctorId.equals(a.getDoctorId()) &&
+                        (date == null || date.equals(a.getAppointmentDate())) &&
+                        a.isPatientCheckedIn() &&
+                        !a.isAdmitted() &&
+                        !"COMPLETED".equalsIgnoreCase(a.getStatus()) &&
+                        !"CANCELLED".equalsIgnoreCase(a.getStatus()) &&
+                        !"REJECTED".equalsIgnoreCase(a.getStatus()) &&
+                        !"NO_SHOW".equalsIgnoreCase(a.getStatus()))
+                .sorted((a1, a2) -> {
+                    if (a1.getCheckedInAt() != null && a2.getCheckedInAt() != null) {
+                        return a1.getCheckedInAt().compareTo(a2.getCheckedInAt());
+                    }
+                    return a1.getCreatedAt().compareTo(a2.getCreatedAt());
+                })
+                .collect(Collectors.toList());
+    }
+
+    public int calculateQueuePosition(String appointmentId) {
+        Appointment apt = appointments.get(appointmentId);
+        if (apt == null || !apt.isPatientCheckedIn() || apt.isAdmitted()) {
+            return 0; // Not waiting
+        }
+        List<Appointment> queue = findWaitingAppointmentsByDoctor(apt.getDoctorId(), apt.getAppointmentDate());
+        for (int i = 0; i < queue.size(); i++) {
+            if (appointmentId.equals(queue.get(i).getAppointmentId())) {
+                return i + 1; // 1-based position (Position 1, Position 2...)
+            }
+        }
+        return 0;
     }
 
     // AI CONVERSATIONS
