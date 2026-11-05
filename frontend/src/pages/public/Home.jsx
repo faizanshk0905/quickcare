@@ -93,7 +93,7 @@ export const Home = () => {
               </p>
 
               {/* Action Buttons */}
-              <div className="flex flex-wrap items-center gap-4 pt-2">
+              <div className="flex flex-wrap items-center gap-3 pt-2">
                 <Link
                   to="/doctors"
                   className="px-6 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl shadow-lg shadow-blue-500/25 transition-all flex items-center gap-2 hover:translate-y-[-2px]"
@@ -104,10 +104,18 @@ export const Home = () => {
 
                 <Link
                   to="/register"
-                  className="px-6 py-3.5 bg-white hover:bg-slate-50 text-slate-800 font-bold rounded-2xl border border-slate-200 shadow-xs transition-all flex items-center gap-2 hover:translate-y-[-2px]"
+                  className="px-5 py-3.5 bg-white hover:bg-slate-50 text-slate-800 font-bold rounded-2xl border border-slate-200 shadow-xs transition-all flex items-center gap-2 hover:translate-y-[-2px]"
                 >
                   <Users className="w-5 h-5 text-teal-600" />
                   <span>Join as Patient</span>
+                </Link>
+
+                <Link
+                  to="/register-doctor"
+                  className="px-5 py-3.5 bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold rounded-2xl border border-teal-200/80 shadow-xs transition-all flex items-center gap-2 hover:translate-y-[-2px]"
+                >
+                  <Stethoscope className="w-5 h-5 text-teal-600" />
+                  <span>Join as a Doctor</span>
                 </Link>
               </div>
 
@@ -225,14 +233,15 @@ export const Home = () => {
                     to="/register"
                     className="py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md shadow-blue-500/25 transition text-center flex items-center justify-center gap-1.5"
                   >
-                    <span>Get Started</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
+                    <Users className="w-3.5 h-3.5" />
+                    <span>Join as Patient</span>
                   </Link>
                   <Link
-                    to="/about"
-                    className="py-3 bg-white hover:bg-slate-50 border border-slate-200 text-slate-800 font-bold text-xs rounded-xl shadow-2xs transition text-center"
+                    to="/register-doctor"
+                    className="py-3 bg-teal-50 hover:bg-teal-100 border border-teal-200/80 text-teal-800 font-bold text-xs rounded-xl shadow-2xs transition text-center flex items-center justify-center gap-1.5"
                   >
-                    <span>About QuickCare</span>
+                    <Stethoscope className="w-3.5 h-3.5 text-teal-600" />
+                    <span>Join as Doctor</span>
                   </Link>
                 </div>
               </div>
@@ -409,12 +418,21 @@ export const Home = () => {
               Book consultations in seconds, monitor virtual queue position in real time, and receive instant digital prescriptions from any device.
             </p>
           </div>
-          <Link
-            to="/register"
-            className="px-8 py-4 bg-white text-blue-700 font-extrabold rounded-2xl shadow-lg hover:bg-blue-50 transition shrink-0"
-          >
-            Create Free Account
-          </Link>
+          <div className="flex flex-wrap items-center gap-3">
+            <Link
+              to="/register-doctor"
+              className="px-7 py-3.5 bg-white text-blue-700 font-extrabold text-xs rounded-2xl shadow-lg hover:bg-blue-50 transition shrink-0 flex items-center gap-2"
+            >
+              <Stethoscope className="w-4 h-4 text-blue-600" />
+              <span>Join as a Doctor</span>
+            </Link>
+            <Link
+              to="/register"
+              className="px-6 py-3.5 bg-blue-800/60 hover:bg-blue-800 text-white font-bold text-xs rounded-2xl border border-white/20 transition shrink-0"
+            >
+              Join as Patient
+            </Link>
+          </div>
         </div>
       </section>
     </div>
