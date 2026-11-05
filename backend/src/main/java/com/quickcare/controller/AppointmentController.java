@@ -112,6 +112,38 @@ public class AppointmentController {
         return ResponseEntity.ok(ApiResponse.ok(queue));
     }
 
+    @PostMapping("/{appointmentId}/confirm-availability")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> confirmAvailability(
+            @PathVariable String appointmentId,
+            @RequestBody Map<String, String> body,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        String response = body.get("response");
+        Map<String, Object> result = appointmentService.confirmAvailability(appointmentId, principal.getUid(), response);
+        return ResponseEntity.ok(ApiResponse.ok((String) result.get("message"), result));
+    }
+
+    @PostMapping("/{appointmentId}/admin/release-slot")
+    public ResponseEntity<ApiResponse<Appointment>> adminReleaseSlot(
+            @PathVariable String appointmentId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        Appointment apt = appointmentService.adminReleaseSlot(appointmentId, principal.getUsername());
+        return ResponseEntity.ok(ApiResponse.ok("Appointment slot released successfully by Administrator", apt));
+    }
+
+    @GetMapping("/admin/confirmations")
+    public ResponseEntity<ApiResponse<List<Appointment>>> getAdminConfirmations(
+            @AuthenticationPrincipal UserPrincipal principal) {
+        List<Appointment> list = appointmentService.getAllConfirmations();
+        return ResponseEntity.ok(ApiResponse.ok(list));
+    }
+
+    @GetMapping("/{appointmentId}/audit-logs")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getAuditLogs(
+            @PathVariable String appointmentId) {
+        Appointment apt = appointmentService.getAppointmentById(appointmentId);
+        return ResponseEntity.ok(ApiResponse.ok(apt.getAuditLogs()));
+    }
+
     @DeleteMapping("/{appointmentId}")
     public ResponseEntity<ApiResponse<Appointment>> cancelAppointment(
             @PathVariable String appointmentId,

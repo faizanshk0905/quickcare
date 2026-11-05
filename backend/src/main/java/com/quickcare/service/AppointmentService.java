@@ -9,10 +9,12 @@ import com.quickcare.repository.FirestoreDatabaseService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.*;
 
 @Service
@@ -153,6 +155,22 @@ public class AppointmentService {
         notificationService.sendNotification(patient.getUid(), "Appointment Submitted",
                 "Your appointment request with Dr. " + doctor.getFullName() + " for " + req.getAppointmentDate() + " at " + req.getAppointmentTime() + " has been submitted.",
                 "APPOINTMENT_BOOKED", saved.getAppointmentId());
+
+        saved.addAuditLog("APPOINTMENT_CREATED", patient.getEmail(), "Appointment booked for " + req.getAppointmentDate() + " at " + req.getAppointmentTime());
+        db.saveAppointment(saved);
+
+        // If booked less than 15 minutes before start time, trigger immediate confirmation prompt
+        try {
+            LocalDate aDate = LocalDate.parse(saved.getAppointmentDate());
+            LocalTime aTime = doctorService.parseTimeFlexible(saved.getAppointmentTime(), null);
+            if (aTime != null) {
+                ZonedDateTime zdt = ZonedDateTime.of(aDate, aTime, zoneId);
+                long minutesToStart = Duration.between(Instant.now(), zdt.toInstant()).toMinutes();
+                if (minutesToStart <= 15 && minutesToStart >= -10) {
+                    triggerConfirmationPrompt(saved);
+                }
+            }
+        } catch (Exception ignored) {}
 
         return saved;
     }
@@ -351,6 +369,210 @@ public class AppointmentService {
         Doctor doc = db.findDoctorByUid(doctorUid)
                 .orElseThrow(() -> new ResourceNotFoundException("Doctor profile not found for uid: " + doctorUid));
         return db.findWaitingAppointmentsByDoctor(doc.getDoctorId(), LocalDate.now().toString());
+    }
+
+    public synchronized void triggerConfirmationPrompt(Appointment apt) {
+        if (apt.isConfirmationPromptSent()) return;
+        if ("CANCELLED".equalsIgnoreCase(apt.getStatus()) || "REJECTED".equalsIgnoreCase(apt.getStatus()) || "COMPLETED".equalsIgnoreCase(apt.getStatus()) || "DECLINED".equalsIgnoreCase(apt.getStatus())) {
+            return;
+        }
+
+        apt.setConfirmationPromptSent(true);
+        apt.setConfirmationPromptSentAt(Instant.now());
+        apt.setConfirmationStatus("PENDING_CONFIRMATION");
+        apt.setUpdatedAt(Instant.now());
+        apt.addAuditLog("CONFIRMATION_PROMPT_SENT", "SYSTEM", "Automated 15-minute confirmation prompt dispatched to patient.");
+        db.saveAppointment(apt);
+
+        // Send confirmation notification to patient
+        notificationService.sendNotification(apt.getPatientUid(), "Action Required: Confirm Appointment (15 Min)",
+                "Your doctor appointment is scheduled in 15 minutes. Please confirm whether you are available for your consultation.",
+                "CONFIRMATION_REQUEST", apt.getAppointmentId());
+    }
+
+    public synchronized Map<String, Object> confirmAvailability(String appointmentId, String userUid, String response) {
+        Appointment apt = getAppointmentById(appointmentId);
+        boolean isPatient = userUid.equals(apt.getPatientUid());
+        boolean isAdmin = "admin".equalsIgnoreCase(userUid) || "admin_001".equalsIgnoreCase(userUid);
+
+        if (!isPatient && !isAdmin) {
+            throw new UnauthorizedException("Only the scheduled patient can confirm appointment availability.");
+        }
+
+        Map<String, Object> result = new HashMap<>();
+
+        if ("YES".equalsIgnoreCase(response)) {
+            apt.setConfirmationStatus("CONFIRMED");
+            apt.setStatus("CONFIRMED");
+            apt.setConfirmedAt(Instant.now());
+            apt.setUpdatedAt(Instant.now());
+            apt.addAuditLog("PATIENT_CONFIRMED_AVAILABLE", apt.getPatientEmail(), "Patient confirmed availability: YES, I AM AVAILABLE.");
+
+            // Notify Admin
+            notificationService.sendNotification("admin_001", "Appointment Confirmed by Patient",
+                    "Patient " + apt.getPatientName() + " confirmed availability for consultation with Dr. " + apt.getDoctorName() + " on " + apt.getAppointmentDate() + " at " + apt.getAppointmentTime() + ".",
+                    "APPOINTMENT_CONFIRMED", apt.getAppointmentId());
+
+            // Notify Doctor
+            notificationService.sendNotification(apt.getDoctorUid(), "Patient Confirmed Availability",
+                    "Patient " + apt.getPatientName() + " is available and confirmed their appointment for " + apt.getAppointmentTime() + ".",
+                    "APPOINTMENT_CONFIRMED", apt.getAppointmentId());
+
+            db.saveAppointment(apt);
+
+            result.put("message", "Your appointment is confirmed. Please be ready for your consultation.");
+            result.put("status", "CONFIRMED");
+            result.put("appointment", apt);
+            return result;
+
+        } else if ("NO".equalsIgnoreCase(response)) {
+            apt.setConfirmationStatus("DECLINED");
+            apt.setStatus("DECLINED");
+            apt.setDeclinedAt(Instant.now());
+            apt.setSlotReleased(true);
+            apt.setSlotReleasedAt(Instant.now());
+            apt.setSlotReleasedBy("PATIENT");
+            apt.setCancellationReason("Patient unavailable (Selected NO on 15-minute confirmation prompt).");
+            apt.setUpdatedAt(Instant.now());
+            apt.addAuditLog("PATIENT_DECLINED", apt.getPatientEmail(), "Patient declined availability: NO, I AM NOT AVAILABLE. Slot released immediately.");
+
+            // Immediately release appointment slot
+            freeSlot(apt.getDoctorId(), apt.getAppointmentDate(), apt.getAppointmentTime());
+
+            // Notify Admin
+            notificationService.sendNotification("admin_001", "Patient Unavailable - Slot Released",
+                    "Patient " + apt.getPatientName() + " declined appointment for " + apt.getAppointmentTime() + ". Slot has been released and made available to other patients.",
+                    "APPOINTMENT_CANCELLED", apt.getAppointmentId());
+
+            // Notify Doctor
+            notificationService.sendNotification(apt.getDoctorUid(), "Patient Cancelled - Slot Released",
+                    "Patient " + apt.getPatientName() + " is NOT AVAILABLE and declined consultation for " + apt.getAppointmentTime() + ". Slot has been released.",
+                    "APPOINTMENT_CANCELLED", apt.getAppointmentId());
+
+            db.saveAppointment(apt);
+
+            result.put("message", "Your appointment has been cancelled successfully because you are unavailable.");
+            result.put("status", "DECLINED");
+            result.put("appointment", apt);
+            return result;
+        } else {
+            throw new BadRequestException("Invalid response. Allowed values are 'YES' or 'NO'.");
+        }
+    }
+
+    public synchronized Appointment adminReleaseSlot(String appointmentId, String adminUid) {
+        Appointment apt = getAppointmentById(appointmentId);
+
+        if (apt.isSlotReleased()) {
+            throw new BadRequestException("This appointment slot is already released.");
+        }
+
+        if ("COMPLETED".equalsIgnoreCase(apt.getStatus())) {
+            throw new BadRequestException("Cannot release an appointment that is already COMPLETED.");
+        }
+
+        // Release slot atomically
+        freeSlot(apt.getDoctorId(), apt.getAppointmentDate(), apt.getAppointmentTime());
+
+        apt.setSlotReleased(true);
+        apt.setSlotReleasedAt(Instant.now());
+        apt.setSlotReleasedBy(adminUid != null ? adminUid : "ADMIN");
+        apt.setConfirmationStatus("SLOT_RELEASED");
+        apt.setStatus("CANCELLED");
+        apt.setCancellationReason("Slot released by Administrator for reassignment.");
+        apt.setUpdatedAt(Instant.now());
+        apt.addAuditLog("ADMIN_RELEASE_SLOT", adminUid != null ? adminUid : "ADMIN", "Administrator released slot for public booking / reassignment.");
+
+        Appointment saved = db.saveAppointment(apt);
+
+        // Notify Doctor
+        notificationService.sendNotification(apt.getDoctorUid(), "Slot Released by Admin",
+                "Appointment slot for " + apt.getAppointmentDate() + " at " + apt.getAppointmentTime() + " has been released by Admin.",
+                "APPOINTMENT_CANCELLED", saved.getAppointmentId());
+
+        // Notify Patient
+        notificationService.sendNotification(apt.getPatientUid(), "Appointment Slot Released",
+                "Your appointment slot for " + apt.getAppointmentDate() + " at " + apt.getAppointmentTime() + " was released by Admin due to unconfirmed availability.",
+                "APPOINTMENT_CANCELLED", saved.getAppointmentId());
+
+        return saved;
+    }
+
+    public List<Appointment> getAllConfirmations() {
+        return db.findAllAppointments();
+    }
+
+    public synchronized void dispatch15MinConfirmationPrompts() {
+        List<Appointment> all = db.findAllAppointments();
+        LocalDate today = LocalDate.now();
+
+        for (Appointment apt : all) {
+            if (apt.isConfirmationPromptSent()) continue;
+            if ("CANCELLED".equalsIgnoreCase(apt.getStatus()) ||
+                "REJECTED".equalsIgnoreCase(apt.getStatus()) ||
+                "COMPLETED".equalsIgnoreCase(apt.getStatus()) ||
+                "DECLINED".equalsIgnoreCase(apt.getStatus())) {
+                continue;
+            }
+
+            if (!today.toString().equals(apt.getAppointmentDate())) {
+                continue;
+            }
+
+            try {
+                Doctor doc = db.findDoctorById(apt.getDoctorId()).orElse(null);
+                String zone = (doc != null && doc.getTimezone() != null) ? doc.getTimezone() : "Asia/Kolkata";
+                ZoneId zoneId;
+                try {
+                    zoneId = ZoneId.of(zone);
+                } catch (Exception e) {
+                    zoneId = ZoneId.of("Asia/Kolkata");
+                }
+
+                LocalDate aDate = LocalDate.parse(apt.getAppointmentDate());
+                LocalTime aTime = doctorService.parseTimeFlexible(apt.getAppointmentTime(), null);
+                if (aTime != null) {
+                    ZonedDateTime zdt = ZonedDateTime.of(aDate, aTime, zoneId);
+                    long minutesToStart = Duration.between(Instant.now(), zdt.toInstant()).toMinutes();
+
+                    // Exactly 15 minutes before appointment (window: <= 15 and >= -5 mins)
+                    if (minutesToStart <= 15 && minutesToStart >= -5) {
+                        triggerConfirmationPrompt(apt);
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+    }
+
+    public synchronized void checkResponseTimeouts(int timeoutMinutes) {
+        List<Appointment> all = db.findAllAppointments();
+        Instant now = Instant.now();
+
+        for (Appointment apt : all) {
+            if (apt.isConfirmationPromptSent() &&
+                "PENDING_CONFIRMATION".equalsIgnoreCase(apt.getConfirmationStatus()) &&
+                apt.getConfirmationPromptSentAt() != null) {
+
+                long mins = Duration.between(apt.getConfirmationPromptSentAt(), now).toMinutes();
+                if (mins >= timeoutMinutes) {
+                    apt.setConfirmationStatus("NOT_RESPONDED");
+                    apt.setNotRespondedAt(now);
+                    apt.setUpdatedAt(now);
+                    apt.addAuditLog("PATIENT_NOT_RESPONDED", "SYSTEM", "Patient did not respond within configured " + timeoutMinutes + " minute grace window.");
+                    db.saveAppointment(apt);
+
+                    // Notify Admin
+                    notificationService.sendNotification("admin_001", "Action Needed: Patient Not Responded",
+                            "Patient " + apt.getPatientName() + " has NOT RESPONDED to the 15-minute confirmation for slot " + apt.getAppointmentTime() + ". Slot is eligible for release.",
+                            "NOT_RESPONDED", apt.getAppointmentId());
+
+                    // Notify Doctor
+                    notificationService.sendNotification(apt.getDoctorUid(), "Patient Confirmation Timeout",
+                            "Patient " + apt.getPatientName() + " did not respond to the 15-minute confirmation prompt for " + apt.getAppointmentTime() + ".",
+                            "NOT_RESPONDED", apt.getAppointmentId());
+                }
+            }
+        }
     }
 
     public synchronized Appointment reschedule(String appointmentId, String newDate, String newTime) {

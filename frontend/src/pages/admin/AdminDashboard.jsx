@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { adminService } from '../../services/adminService';
+import { appointmentService } from '../../services/appointmentService';
 import {
   Users,
   Stethoscope,
@@ -15,20 +16,31 @@ import {
   ArrowRight,
   Shield,
   Eye,
+  History,
+  Unlock,
+  Radio,
+  X,
+  FileText,
 } from 'lucide-react';
 
 export const AdminDashboard = () => {
   const [stats, setStats] = useState(null);
   const [pendingDoctors, setPendingDoctors] = useState([]);
+  const [confirmations, setConfirmations] = useState([]);
+  const [confirmFilter, setConfirmFilter] = useState('ALL');
+  const [selectedAuditApt, setSelectedAuditApt] = useState(null);
+  const [releasingId, setReleasingId] = useState(null);
+  const [actionSuccess, setActionSuccess] = useState('');
   const [loading, setLoading] = useState(true);
   const [verifyingId, setVerifyingId] = useState(null);
 
   const fetchStats = async () => {
     try {
       setLoading(true);
-      const [statsRes, docRes] = await Promise.all([
+      const [statsRes, docRes, confRes] = await Promise.all([
         adminService.getDashboardStats(),
         adminService.getAllDoctors(),
+        appointmentService.getAdminConfirmations().catch(() => ({ data: [] })),
       ]);
 
       if (statsRes && statsRes.data) {
@@ -36,6 +48,9 @@ export const AdminDashboard = () => {
       }
       if (docRes && docRes.data) {
         setPendingDoctors(docRes.data.filter((d) => d.verificationStatus === 'PENDING'));
+      }
+      if (confRes && confRes.data) {
+        setConfirmations(confRes.data);
       }
     } catch (err) {
       console.error(err);
@@ -46,7 +61,35 @@ export const AdminDashboard = () => {
 
   useEffect(() => {
     fetchStats();
+
+    // Poll live confirmations every 4 seconds
+    const interval = setInterval(async () => {
+      try {
+        const confRes = await appointmentService.getAdminConfirmations();
+        if (confRes && confRes.data) {
+          setConfirmations(confRes.data);
+        }
+      } catch (ignored) {}
+    }, 4000);
+
+    return () => clearInterval(interval);
   }, []);
+
+  const handleReleaseSlot = async (appointmentId) => {
+    try {
+      setReleasingId(appointmentId);
+      setActionSuccess('');
+      const res = await appointmentService.adminReleaseSlot(appointmentId);
+      setActionSuccess(res?.message || 'Slot successfully released and immediately opened for public reallocation!');
+      const confRes = await appointmentService.getAdminConfirmations();
+      if (confRes && confRes.data) setConfirmations(confRes.data);
+      setTimeout(() => setActionSuccess(''), 5000);
+    } catch (err) {
+      alert(err.response?.data?.message || err.message || 'Failed to release slot.');
+    } finally {
+      setReleasingId(null);
+    }
+  };
 
   const handleVerify = async (doctorId, approve) => {
     setVerifyingId(doctorId);
@@ -165,6 +208,227 @@ export const AdminDashboard = () => {
           </span>
         </div>
       </div>
+
+      {/* APPOINTMENT CONFIRMATION MANAGEMENT SECTION */}
+      <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200/80 shadow-md space-y-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+              <h2 className="text-xl font-extrabold text-slate-900">
+                Appointment Confirmation Management
+              </h2>
+            </div>
+            <p className="text-xs text-slate-500">
+              Real-time monitoring of 15-minute patient availability responses, automated slot reallocation, and cancellation handling.
+            </p>
+          </div>
+
+          {/* Filter Tabs */}
+          <div className="flex flex-wrap gap-1.5 p-1 bg-slate-100 rounded-2xl">
+            {['ALL', 'CONFIRMED', 'NOT_RESPONDED', 'DECLINED', 'RELEASED'].map((f) => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => setConfirmFilter(f)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                  confirmFilter === f
+                    ? 'bg-white text-purple-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {f.replace('_', ' ')}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {actionSuccess && (
+          <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs font-bold text-emerald-800 flex items-center gap-2 animate-in fade-in shadow-xs">
+            <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>{actionSuccess}</span>
+          </div>
+        )}
+
+        {/* Confirmation Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-slate-200">
+              <tr>
+                <th className="py-3 px-4">Patient</th>
+                <th className="py-3 px-4">Appointment Time</th>
+                <th className="py-3 px-4">Confirmation Status</th>
+                <th className="py-3 px-4 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {confirmations
+                .filter((apt) => {
+                  if (confirmFilter === 'CONFIRMED') return apt.confirmationStatus === 'CONFIRMED';
+                  if (confirmFilter === 'NOT_RESPONDED') return apt.confirmationStatus === 'NOT_RESPONDED';
+                  if (confirmFilter === 'DECLINED') return apt.confirmationStatus === 'DECLINED';
+                  if (confirmFilter === 'RELEASED') return apt.slotReleased || apt.confirmationStatus === 'SLOT_RELEASED';
+                  return true;
+                })
+                .map((apt) => {
+                  const isReleased = apt.slotReleased || apt.confirmationStatus === 'SLOT_RELEASED';
+                  const isNotResponded = apt.confirmationStatus === 'NOT_RESPONDED';
+                  const isDeclined = apt.confirmationStatus === 'DECLINED';
+                  const isConfirmed = apt.confirmationStatus === 'CONFIRMED';
+                  const isPending = apt.confirmationStatus === 'PENDING_CONFIRMATION';
+
+                  return (
+                    <tr key={apt.appointmentId} className="hover:bg-slate-50/80 transition-colors">
+                      {/* Patient */}
+                      <td className="py-3.5 px-4">
+                        <div className="font-extrabold text-slate-900 text-sm">{apt.patientName}</div>
+                        <div className="text-[11px] text-slate-400">
+                          {apt.patientEmail || apt.patientPhone} • Dr. {apt.doctorName}
+                        </div>
+                      </td>
+
+                      {/* Appointment Time */}
+                      <td className="py-3.5 px-4">
+                        <div className="font-bold text-slate-800 flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-teal-600" />
+                          <span>{apt.appointmentTime}</span>
+                        </div>
+                        <div className="text-[11px] text-slate-400">{apt.appointmentDate}</div>
+                      </td>
+
+                      {/* Confirmation Status */}
+                      <td className="py-3.5 px-4">
+                        {isReleased ? (
+                          <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200 inline-flex items-center gap-1">
+                            <Unlock className="w-3 h-3 text-slate-500" /> Slot Released
+                          </span>
+                        ) : isConfirmed ? (
+                          <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 inline-flex items-center gap-1">
+                            <CheckCircle className="w-3 h-3 text-emerald-600" /> Confirmed
+                          </span>
+                        ) : isNotResponded ? (
+                          <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200 inline-flex items-center gap-1">
+                            <Clock className="w-3 h-3 text-amber-600" /> Not Responded
+                          </span>
+                        ) : isDeclined ? (
+                          <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200 inline-flex items-center gap-1">
+                            <XCircle className="w-3 h-3 text-rose-600" /> Declined
+                          </span>
+                        ) : isPending ? (
+                          <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200 inline-flex items-center gap-1">
+                            <Radio className="w-3 h-3 text-blue-600 animate-pulse" /> Awaiting Confirmation
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-50 text-slate-500 border border-slate-200">
+                            {apt.status || 'Scheduled'}
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Action */}
+                      <td className="py-3.5 px-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          {/* Release Slot Action for Not Responded or Declined */}
+                          {(isNotResponded || isDeclined) && !isReleased && (
+                            <button
+                              type="button"
+                              disabled={releasingId === apt.appointmentId}
+                              onClick={() => handleReleaseSlot(apt.appointmentId)}
+                              className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-2xs transition flex items-center gap-1 active:scale-95"
+                            >
+                              <Unlock className="w-3.5 h-3.5" />
+                              <span>{isDeclined ? 'Reassign Slot' : 'Release Slot'}</span>
+                            </button>
+                          )}
+
+                          {isReleased && (
+                            <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
+                              Open for Rebooking
+                            </span>
+                          )}
+
+                          {/* View Audit History Button */}
+                          <button
+                            type="button"
+                            onClick={() => setSelectedAuditApt(apt)}
+                            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl transition flex items-center gap-1"
+                          >
+                            <History className="w-3.5 h-3.5" />
+                            <span>View</span>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+            </tbody>
+          </table>
+
+          {confirmations.length === 0 && (
+            <div className="p-8 text-center text-xs text-slate-400">
+              No appointments requiring confirmation currently.
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* CONFIRMATION AUDIT HISTORY MODAL */}
+      {selectedAuditApt && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-5 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div>
+                <h3 className="font-extrabold text-base text-slate-900">
+                  Confirmation Audit History
+                </h3>
+                <p className="text-xs text-slate-500">
+                  {selectedAuditApt.patientName} • {selectedAuditApt.appointmentTime} ({selectedAuditApt.appointmentDate})
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedAuditApt(null)}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 max-h-80 overflow-y-auto">
+              {(!selectedAuditApt.auditLogs || selectedAuditApt.auditLogs.length === 0) ? (
+                <div className="p-4 bg-slate-50 rounded-xl text-center text-xs text-slate-400">
+                  No automated audit entries recorded yet for this appointment.
+                </div>
+              ) : (
+                selectedAuditApt.auditLogs.map((log, i) => (
+                  <div key={i} className="p-3 bg-slate-50 border border-slate-100 rounded-xl text-xs space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-extrabold text-purple-900 text-[11px] uppercase tracking-wider">
+                        {log.action}
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        {log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : ''}
+                      </span>
+                    </div>
+                    <p className="text-slate-700 font-medium">{log.details}</p>
+                    <span className="text-[10px] text-slate-400 block">
+                      Actor: {log.performedBy}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                onClick={() => setSelectedAuditApt(null)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Pending Doctor Approvals Queue */}
       <div className="space-y-4">

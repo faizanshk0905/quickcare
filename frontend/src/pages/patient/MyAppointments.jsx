@@ -183,6 +183,7 @@ export const MyAppointments = () => {
               onStatusChange={handleStatusChange}
               onReschedule={(target) => setRescheduleTarget(target)}
               onViewPrescription={handleViewPrescription}
+              onRefresh={fetchAppointments}
             />
           ))}
         </div>

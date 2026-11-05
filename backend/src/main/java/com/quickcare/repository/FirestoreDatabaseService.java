@@ -182,7 +182,9 @@ public class FirestoreDatabaseService {
                 time.equalsIgnoreCase(a.getAppointmentTime()) &&
                 !"CANCELLED".equalsIgnoreCase(a.getStatus()) &&
                 !"REJECTED".equalsIgnoreCase(a.getStatus()) &&
-                !"NO_SHOW".equalsIgnoreCase(a.getStatus())
+                !"DECLINED".equalsIgnoreCase(a.getStatus()) &&
+                !"NO_SHOW".equalsIgnoreCase(a.getStatus()) &&
+                !a.isSlotReleased()
         );
     }
 

@@ -55,4 +55,24 @@ export const appointmentService = {
     const res = await api.get('/appointments/doctor/waiting-queue');
     return res.data;
   },
+
+  async confirmAvailability(appointmentId, response) {
+    const res = await api.post(`/appointments/${appointmentId}/confirm-availability`, { response });
+    return res.data;
+  },
+
+  async adminReleaseSlot(appointmentId) {
+    const res = await api.post(`/appointments/${appointmentId}/admin/release-slot`);
+    return res.data;
+  },
+
+  async getAdminConfirmations() {
+    const res = await api.get('/appointments/admin/confirmations');
+    return res.data;
+  },
+
+  async getAuditLogs(appointmentId) {
+    const res = await api.get(`/appointments/${appointmentId}/audit-logs`);
+    return res.data;
+  },
 };

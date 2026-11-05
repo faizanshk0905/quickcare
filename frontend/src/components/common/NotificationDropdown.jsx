@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bell, Check, Clock, ExternalLink } from 'lucide-react';
+import { Bell, Check, Clock, ExternalLink, CheckCircle, XCircle } from 'lucide-react';
 import { notificationService } from '../../services/notificationService';
+import { appointmentService } from '../../services/appointmentService';
 
 export const NotificationDropdown = () => {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [actionFeedback, setActionFeedback] = useState('');
   const dropdownRef = useRef(null);
 
   const fetchNotifications = async () => {
@@ -51,6 +53,20 @@ export const NotificationDropdown = () => {
       setUnreadCount((prev) => Math.max(0, prev - 1));
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleConfirmationResponse = async (appointmentId, response, notificationId, e) => {
+    e.stopPropagation();
+    try {
+      const res = await appointmentService.confirmAvailability(appointmentId, response);
+      setActionFeedback(res?.message || 'Response recorded successfully.');
+      // Mark notification read
+      await notificationService.markAsRead(notificationId);
+      fetchNotifications();
+      setTimeout(() => setActionFeedback(''), 5000);
+    } catch (err) {
+      alert(err.response?.data?.message || err.message || 'Action failed.');
     }
   };
 
@@ -100,6 +116,12 @@ export const NotificationDropdown = () => {
             )}
           </div>
 
+          {actionFeedback && (
+            <div className="p-2.5 bg-emerald-50 text-emerald-800 text-xs font-semibold text-center border-b border-emerald-100 animate-in fade-in">
+              {actionFeedback}
+            </div>
+          )}
+
           <div className="max-h-80 overflow-y-auto divide-y divide-slate-50">
             {loading && notifications.length === 0 ? (
               <div className="p-6 text-center text-xs text-slate-400">Loading notifications...</div>
@@ -123,9 +145,36 @@ export const NotificationDropdown = () => {
                   />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold text-slate-800 truncate">{n.title}</p>
-                    <p className="text-xs text-slate-600 mt-0.5 leading-relaxed line-clamp-2">
+                    <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">
                       {n.message}
                     </p>
+
+                    {/* 15-MINUTE CONFIRMATION ACTION BUTTONS */}
+                    {n.type === 'CONFIRMATION_REQUEST' && !n.isRead && (
+                      <div className="mt-2 pt-2 border-t border-blue-100 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={(e) =>
+                            handleConfirmationResponse(n.referenceId, 'YES', n.notificationId, e)
+                          }
+                          className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black uppercase rounded-lg shadow-2xs transition flex items-center gap-1 active:scale-95"
+                        >
+                          <CheckCircle className="w-3.5 h-3.5" />
+                          <span>YES, I AM AVAILABLE</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) =>
+                            handleConfirmationResponse(n.referenceId, 'NO', n.notificationId, e)
+                          }
+                          className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-black uppercase rounded-lg shadow-2xs transition flex items-center gap-1 active:scale-95"
+                        >
+                          <XCircle className="w-3.5 h-3.5" />
+                          <span>NO, I AM NOT AVAILABLE</span>
+                        </button>
+                      </div>
+                    )}
+
                     <span className="text-[10px] text-slate-400 flex items-center gap-1 mt-1">
                       <Clock className="w-3 h-3" />
                       {new Date(n.createdAt).toLocaleTimeString([], {

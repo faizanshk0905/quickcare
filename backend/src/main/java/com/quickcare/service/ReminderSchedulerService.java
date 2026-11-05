@@ -26,8 +26,25 @@ public class ReminderSchedulerService {
     @Autowired
     private NotificationService notificationService;
 
+    @Autowired
+    private AppointmentService appointmentService;
+
     // Track notified appointment IDs to prevent duplicate reminders
     private final Set<String> remindedAppointments = new HashSet<>();
+
+    // Process 15-Minute Appointment Confirmations & Slot Timeouts every 30 seconds
+    @Scheduled(fixedRate = 30000)
+    public void process15MinuteConfirmationsAndReallocations() {
+        try {
+            // 1. Dispatch 15-min confirmation prompts to eligible patients
+            appointmentService.dispatch15MinConfirmationPrompts();
+
+            // 2. Check for response timeout (default 5 min grace window) and flag NOT_RESPONDED
+            appointmentService.checkResponseTimeouts(5);
+        } catch (Exception e) {
+            logger.error("Error running 15-minute confirmation scheduler: {}", e.getMessage());
+        }
+    }
 
     // Run every 10 minutes to dispatch intelligent reminders
     @Scheduled(fixedRate = 600000)

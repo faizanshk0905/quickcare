@@ -27,6 +27,19 @@ public class Appointment {
     private Instant admittedAt;
     private Instant consultationStartedAt;
     private Instant consultationEndedAt;
+
+    // 15-Minute Confirmation & Slot Reallocation System
+    private String confirmationStatus; // PENDING_CONFIRMATION, CONFIRMED, DECLINED, NOT_RESPONDED, SLOT_RELEASED
+    private boolean confirmationPromptSent = false;
+    private Instant confirmationPromptSentAt;
+    private Instant confirmedAt;
+    private Instant declinedAt;
+    private Instant notRespondedAt;
+    private boolean slotReleased = false;
+    private Instant slotReleasedAt;
+    private String slotReleasedBy;
+    private java.util.List<java.util.Map<String, Object>> auditLogs = new java.util.ArrayList<>();
+
     private Instant createdAt;
     private Instant updatedAt;
 
@@ -108,6 +121,50 @@ public class Appointment {
 
     public Instant getConsultationEndedAt() { return consultationEndedAt; }
     public void setConsultationEndedAt(Instant consultationEndedAt) { this.consultationEndedAt = consultationEndedAt; }
+
+    public String getConfirmationStatus() { return confirmationStatus; }
+    public void setConfirmationStatus(String confirmationStatus) { this.confirmationStatus = confirmationStatus; }
+
+    public boolean isConfirmationPromptSent() { return confirmationPromptSent; }
+    public void setConfirmationPromptSent(boolean confirmationPromptSent) { this.confirmationPromptSent = confirmationPromptSent; }
+
+    public Instant getConfirmationPromptSentAt() { return confirmationPromptSentAt; }
+    public void setConfirmationPromptSentAt(Instant confirmationPromptSentAt) { this.confirmationPromptSentAt = confirmationPromptSentAt; }
+
+    public Instant getConfirmedAt() { return confirmedAt; }
+    public void setConfirmedAt(Instant confirmedAt) { this.confirmedAt = confirmedAt; }
+
+    public Instant getDeclinedAt() { return declinedAt; }
+    public void setDeclinedAt(Instant declinedAt) { this.declinedAt = declinedAt; }
+
+    public Instant getNotRespondedAt() { return notRespondedAt; }
+    public void setNotRespondedAt(Instant notRespondedAt) { this.notRespondedAt = notRespondedAt; }
+
+    public boolean isSlotReleased() { return slotReleased; }
+    public void setSlotReleased(boolean slotReleased) { this.slotReleased = slotReleased; }
+
+    public Instant getSlotReleasedAt() { return slotReleasedAt; }
+    public void setSlotReleasedAt(Instant slotReleasedAt) { this.slotReleasedAt = slotReleasedAt; }
+
+    public String getSlotReleasedBy() { return slotReleasedBy; }
+    public void setSlotReleasedBy(String slotReleasedBy) { this.slotReleasedBy = slotReleasedBy; }
+
+    public java.util.List<java.util.Map<String, Object>> getAuditLogs() { return auditLogs; }
+    public void setAuditLogs(java.util.List<java.util.Map<String, Object>> auditLogs) {
+        this.auditLogs = auditLogs != null ? auditLogs : new java.util.ArrayList<>();
+    }
+
+    public void addAuditLog(String action, String performedBy, String details) {
+        if (this.auditLogs == null) {
+            this.auditLogs = new java.util.ArrayList<>();
+        }
+        java.util.Map<String, Object> log = new java.util.HashMap<>();
+        log.put("action", action);
+        log.put("performedBy", performedBy);
+        log.put("details", details);
+        log.put("timestamp", Instant.now().toString());
+        this.auditLogs.add(log);
+    }
 
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
