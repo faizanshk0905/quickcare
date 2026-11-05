@@ -33,8 +33,11 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response && (error.response.status === 401 || error.response.status === 403)) {
-      // Clear stale token if unauthorized on non-login pages
-      if (!window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/register')) {
+      const currentToken = localStorage.getItem('quickcare_token');
+      // Do not clear if using active demo session
+      if (currentToken && !currentToken.startsWith('demo-token-') &&
+          !window.location.pathname.startsWith('/login') &&
+          !window.location.pathname.startsWith('/register')) {
         console.warn('Session expired or unauthorized. Clearing stored token.');
         localStorage.removeItem('quickcare_token');
         localStorage.removeItem('quickcare_role');

@@ -6,7 +6,7 @@ import { HeartPulse, Mail, Lock, AlertCircle, ArrowRight, ShieldCheck, Sparkles 
 export const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login } = useAuth();
+  const { login, loginAsDemo } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -35,7 +35,7 @@ export const Login = () => {
       }
     } catch (err) {
       if (!err.response || err.code === 'ERR_NETWORK' || err.response?.status === 500 || err.response?.status === 502) {
-        setError('Cannot connect to the backend server. Please ensure Spring Boot is running on port 8080 (run start-backend.bat).');
+        setError('Backend is initializing. You can click any 1-Click Demo Profile above to explore immediately without waiting.');
       } else {
         setError(err.response?.data?.message || err.message || 'Login failed. Please check your credentials.');
       }
@@ -44,11 +44,24 @@ export const Login = () => {
     }
   };
 
-  // Demo Login Quick-Fill Helpers
-  const fillCredentials = (demoEmail, demoPassword) => {
-    setEmail(demoEmail);
-    setPassword(demoPassword);
+  // Demo Login 1-Click Instant Sign In
+  const handleQuickDemo = async (roleType) => {
     setError('');
+    setLoading(true);
+    try {
+      const data = loginAsDemo(roleType);
+      if (roleType === 'ADMIN') {
+        navigate('/admin', { replace: true });
+      } else if (roleType === 'DOCTOR') {
+        navigate('/doctor', { replace: true });
+      } else {
+        navigate('/patient', { replace: true });
+      }
+    } catch (err) {
+      setError('Could not activate demo session.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -78,22 +91,25 @@ export const Login = () => {
           <div className="grid grid-cols-3 gap-1.5 text-xs">
             <button
               type="button"
-              onClick={() => fillCredentials('patient@quickcare.com', 'patient123')}
-              className="px-2 py-1.5 bg-white hover:bg-blue-100 text-blue-700 font-bold rounded-lg border border-blue-200 shadow-2xs transition"
+              onClick={() => handleQuickDemo('PATIENT')}
+              className="px-2 py-1.5 bg-white hover:bg-blue-100 text-blue-700 font-bold rounded-lg border border-blue-200 shadow-2xs transition active:scale-95 cursor-pointer"
+              title="Instant 1-Click Patient Sign In"
             >
               Patient
             </button>
             <button
               type="button"
-              onClick={() => fillCredentials('priya.deshmukh@quickcare.com', 'doctor123')}
-              className="px-2 py-1.5 bg-white hover:bg-blue-100 text-teal-700 font-bold rounded-lg border border-blue-200 shadow-2xs transition"
+              onClick={() => handleQuickDemo('DOCTOR')}
+              className="px-2 py-1.5 bg-white hover:bg-teal-100 text-teal-700 font-bold rounded-lg border border-teal-200 shadow-2xs transition active:scale-95 cursor-pointer"
+              title="Instant 1-Click Doctor Sign In"
             >
               Doctor
             </button>
             <button
               type="button"
-              onClick={() => fillCredentials('admin@quickcare.com', 'admin123')}
-              className="px-2 py-1.5 bg-white hover:bg-blue-100 text-purple-700 font-bold rounded-lg border border-blue-200 shadow-2xs transition"
+              onClick={() => handleQuickDemo('ADMIN')}
+              className="px-2 py-1.5 bg-white hover:bg-purple-100 text-purple-700 font-bold rounded-lg border border-purple-200 shadow-2xs transition active:scale-95 cursor-pointer"
+              title="Instant 1-Click Admin Sign In"
             >
               Admin
             </button>

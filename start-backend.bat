@@ -4,5 +4,7 @@ cd /d "%~dp0backend"
 echo ========================================================
 echo Starting QuickCare Spring Boot Backend on port 8080...
 echo ========================================================
-java -jar target\quickcare-backend-1.0.0.jar
+set "JAVA_EXE=java"
+if exist "C:\tools\jdk17\bin\java.exe" set "JAVA_EXE=C:\tools\jdk17\bin\java.exe"
+"%JAVA_EXE%" -jar target\quickcare-backend-1.0.0.jar
 pause
