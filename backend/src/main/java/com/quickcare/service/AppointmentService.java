@@ -642,16 +642,13 @@ public class AppointmentService {
     public synchronized Appointment approveAndScheduleGoogleMeet(String appointmentId, String newDate, String newTime, String doctorNotes) {
         Appointment apt = getAppointmentById(appointmentId);
 
-        boolean scheduleChanged = false;
         if (newDate != null && !newDate.trim().isEmpty() && !newDate.equals(apt.getAppointmentDate())) {
             freeSlot(apt.getDoctorId(), apt.getAppointmentDate(), apt.getAppointmentTime());
             apt.setAppointmentDate(newDate.trim());
-            scheduleChanged = true;
         }
         if (newTime != null && !newTime.trim().isEmpty() && !newTime.equals(apt.getAppointmentTime())) {
             freeSlot(apt.getDoctorId(), apt.getAppointmentDate(), apt.getAppointmentTime());
             apt.setAppointmentTime(newTime.trim());
-            scheduleChanged = true;
         }
         if (doctorNotes != null && !doctorNotes.trim().isEmpty()) {
             apt.setDoctorNotes(doctorNotes.trim());

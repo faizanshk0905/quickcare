@@ -13,7 +13,6 @@ import org.springframework.web.client.RestTemplate;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
@@ -28,7 +27,6 @@ public class GoogleMeetService {
     private String credentialsPath;
 
     private final RestTemplate restTemplate = new RestTemplate();
-    private final SecureRandom secureRandom = new SecureRandom();
 
     /**
      * Generates or retrieves an existing Google Meet link for an appointment.

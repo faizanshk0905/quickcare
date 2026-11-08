@@ -524,7 +524,13 @@ public class AiService {
                         "'Currently, we do not have a doctor specializing in this condition. Please check again later or consult an appropriate healthcare provider.' " +
                         "NEVER recommend an unrelated doctor or general physician. DO NOT provide a definitive diagnosis or prescribe medications.";
             } else if (specInfo != null && !matchingDoctors.isEmpty()) {
-                String docNames = matchingDoctors.stream().map(Doctor::getFullName).collect(Collectors.joining(", "));
+                List<String> names = new ArrayList<>();
+                for (Doctor doc : matchingDoctors) {
+                    if (doc != null && doc.getFullName() != null) {
+                        names.add(doc.getFullName());
+                    }
+                }
+                String docNames = String.join(", ", names);
                 systemPrompt = "You are QuickCare AI Medical Assistant. " +
                         "Provide a helpful, structured conversational answer. " +
                         "Quick Care Hospital has the following verified specialist(s) in this exact field: " + docNames + ". " +
@@ -588,12 +594,6 @@ public class AiService {
             logger.warn("External AI call failed: {}. Falling back to clinical rules triaging.", e.getMessage());
         }
         return null;
-    }
-
-    private String getArticle(String word) {
-        if (word == null || word.isEmpty()) return "a";
-        char c = Character.toLowerCase(word.charAt(0));
-        return (c == 'a' || c == 'e' || c == 'i' || c == 'o' || c == 'u') ? "an" : "a";
     }
 
     private String getEmergencyWarning(String lang) {
