@@ -40,6 +40,9 @@ public class DoctorController {
 
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<Doctor>> getMyDoctorProfile(@AuthenticationPrincipal UserPrincipal principal) {
+        if (principal == null) {
+            return ResponseEntity.status(401).body(ApiResponse.error("Authentication required"));
+        }
         Doctor doctor = doctorService.getDoctorByUid(principal.getUid());
         return ResponseEntity.ok(ApiResponse.ok(doctor));
     }
@@ -47,6 +50,9 @@ public class DoctorController {
     @PutMapping("/profile")
     public ResponseEntity<ApiResponse<Doctor>> updateProfile(@AuthenticationPrincipal UserPrincipal principal,
                                                              @RequestBody Doctor updated) {
+        if (principal == null) {
+            return ResponseEntity.status(401).body(ApiResponse.error("Authentication required"));
+        }
         Doctor doctor = doctorService.getDoctorByUid(principal.getUid());
         Doctor saved = doctorService.updateDoctorProfile(doctor.getDoctorId(), updated);
         return ResponseEntity.ok(ApiResponse.ok("Profile updated successfully", saved));
@@ -54,6 +60,9 @@ public class DoctorController {
 
     @GetMapping("/appointments")
     public ResponseEntity<ApiResponse<List<Appointment>>> getDoctorAppointments(@AuthenticationPrincipal UserPrincipal principal) {
+        if (principal == null) {
+            return ResponseEntity.status(401).body(ApiResponse.error("Authentication required"));
+        }
         Doctor doctor = doctorService.getDoctorByUid(principal.getUid());
         List<Appointment> list = doctorService.getDoctorAppointments(doctor.getDoctorId());
         return ResponseEntity.ok(ApiResponse.ok(list));
@@ -71,6 +80,9 @@ public class DoctorController {
     public ResponseEntity<ApiResponse<DoctorAvailability>> updateAvailability(
             @AuthenticationPrincipal UserPrincipal principal,
             @RequestBody AvailabilityUpdateRequest req) {
+        if (principal == null) {
+            return ResponseEntity.status(401).body(ApiResponse.error("Authentication required"));
+        }
         Doctor doctor = doctorService.getDoctorByUid(principal.getUid());
         req.setDoctorId(doctor.getDoctorId());
         DoctorAvailability updated = doctorService.updateAvailability(req);

@@ -74,12 +74,16 @@ public class AdminService {
                 .orElseThrow(() -> new ResourceNotFoundException("Doctor not found: " + doctorId));
 
         String newStatus = approve ? "VERIFIED" : "REJECTED";
+        if ("PENDING".equalsIgnoreCase(feedback)) {
+            newStatus = "PENDING";
+        }
         doctor.setVerificationStatus(newStatus);
         Doctor saved = db.saveDoctor(doctor);
 
         // Update User account status as well
+        final String targetStatus = newStatus;
         db.findUserByUid(doctor.getUid()).ifPresent(u -> {
-            u.setAccountStatus(approve ? "ACTIVE" : "INACTIVE");
+            u.setAccountStatus("VERIFIED".equals(targetStatus) ? "ACTIVE" : ("PENDING".equals(targetStatus) ? "PENDING" : "INACTIVE"));
             db.saveUser(u);
         });
 

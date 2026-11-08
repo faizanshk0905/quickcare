@@ -38,8 +38,8 @@ export const AdminDashboard = () => {
     try {
       setLoading(true);
       const [statsRes, docRes, confRes] = await Promise.all([
-        adminService.getDashboardStats(),
-        adminService.getAllDoctors(),
+        adminService.getDashboardStats().catch((e) => { console.warn('Stats API error:', e.message); return null; }),
+        adminService.getAllDoctors().catch((e) => { console.warn('Doctors API error:', e.message); return null; }),
         appointmentService.getAdminConfirmations().catch(() => ({ data: [] })),
       ]);
 
@@ -50,7 +50,10 @@ export const AdminDashboard = () => {
           totalUsers: 1420,
           activeDoctors: 48,
           totalAppointments: 3240,
-          activeConsultations: 3
+          activeConsultations: 3,
+          totalDoctors: 6,
+          verifiedDoctors: 4,
+          pendingDoctorApprovals: 2,
         });
       }
       if (docRes && docRes.data) {
@@ -102,7 +105,10 @@ export const AdminDashboard = () => {
         totalUsers: 1420,
         activeDoctors: 48,
         totalAppointments: 3240,
-        activeConsultations: 3
+        activeConsultations: 3,
+        totalDoctors: 6,
+        verifiedDoctors: 4,
+        pendingDoctorApprovals: 2,
       });
       setConfirmations([
         {

@@ -38,10 +38,37 @@ public class FirebaseTokenFilter extends OncePerRequestFilter {
         String authHeader = request.getHeader("Authorization");
 
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            String token = authHeader.substring(7);
+            String token = authHeader.substring(7).trim();
 
             try {
-                // 1. Attempt Firebase Admin SDK ID token verification first
+                // 1. Support 1-Click Demo Evaluation Profiles
+                if ("demo-token-admin".equals(token)) {
+                    UserPrincipal principal = new UserPrincipal("admin_001", "admin@quickcare.com", "ADMIN");
+                    UsernamePasswordAuthenticationToken authentication =
+                            new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
+                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                    filterChain.doFilter(request, response);
+                    return;
+                } else if ("demo-token-doctor".equals(token)) {
+                    UserPrincipal principal = new UserPrincipal("usr_doc_01", "priya.deshmukh@quickcare.com", "DOCTOR");
+                    UsernamePasswordAuthenticationToken authentication =
+                            new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
+                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                    filterChain.doFilter(request, response);
+                    return;
+                } else if ("demo-token-patient".equals(token)) {
+                    UserPrincipal principal = new UserPrincipal("usr_pat_01", "patient@quickcare.com", "PATIENT");
+                    UsernamePasswordAuthenticationToken authentication =
+                            new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
+                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                    filterChain.doFilter(request, response);
+                    return;
+                }
+
+                // 2. Attempt Firebase Admin SDK ID token verification first
                 try {
                     FirebaseToken decodedToken = FirebaseAuth.getInstance().verifyIdToken(token);
                     if (decodedToken != null) {

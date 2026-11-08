@@ -95,7 +95,7 @@ public class DataLoader implements CommandLineRunner {
         // Note: Quick Care does NOT currently have a Neurologist, Oncologist, or Gastroenterologist on staff.
         // If a patient asks for a specialist in these fields, the system correctly and strictly informs them.
 
-        // 4. PENDING DOCTOR (for admin approval demonstration)
+        // 4. PENDING DOCTORS (for admin approval demonstration)
         createDoctor(
                 "usr_doc_06", "Dr. Siddharth Verma", "siddharth.verma@quickcare.com", "+91 98200 99887",
                 "doc_006", "General Physician", "MBBS, MD (Internal Medicine)", 5,
@@ -103,6 +103,17 @@ public class DataLoader implements CommandLineRunner {
                 "Primary care physician focusing on family medicine, diabetic management, hypertension, and preventive health screenings.",
                 "Verma Clinic, Hyderabad",
                 "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?auto=format&fit=crop&q=80&w=400",
+                "Male"
+        );
+
+        // 4b. REGISTERED PENDING DOCTOR (Dr. Prasad Kadam from Firestore nam5)
+        createDoctor(
+                "usr_b320c9f9", "Dr.Prasad Kadam", "prasadkadam123@gmail.com", "8766949419",
+                "doc_f3852f3d", "Cardiology", "MBBS, MD", 12,
+                "MCI-123", 500.0, "PENDING", 4.8, 0,
+                "Experienced Senior Cardiologist at Kadam Hospital specializing in comprehensive cardiovascular care and clinical cardiology.",
+                "Kadam Hospital",
+                "https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400",
                 "Male"
         );
 

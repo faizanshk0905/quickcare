@@ -1,13 +1,18 @@
 package com.quickcare.repository;
 
+import com.google.cloud.Timestamp;
+import com.google.cloud.firestore.DocumentSnapshot;
 import com.google.cloud.firestore.Firestore;
+import com.google.cloud.firestore.QueryDocumentSnapshot;
 import com.google.cloud.firestore.SetOptions;
 import com.quickcare.model.*;
+import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
@@ -44,6 +49,145 @@ public class FirestoreDatabaseService {
         }
     }
 
+    @PostConstruct
+    public void syncFromCloudFirestore() {
+        if (firestore == null) {
+            return;
+        }
+        try {
+            logger.info("Initializing Cloud Firestore synchronization with cluster quickcare-hospital...");
+            List<QueryDocumentSnapshot> docList = firestore.collection("doctors").get().get().getDocuments();
+            int docCount = 0;
+            for (QueryDocumentSnapshot snap : docList) {
+                Doctor doc = parseDoctorSnapshot(snap);
+                if (doc != null && doc.getDoctorId() != null) {
+                    doctors.put(doc.getDoctorId(), doc);
+                    docCount++;
+                }
+            }
+            logger.info("Loaded {} doctor records directly from Cloud Firestore.", docCount);
+
+            List<QueryDocumentSnapshot> userList = firestore.collection("users").get().get().getDocuments();
+            int userCount = 0;
+            for (QueryDocumentSnapshot snap : userList) {
+                User u = parseUserSnapshot(snap);
+                if (u != null && u.getUid() != null) {
+                    users.put(u.getUid(), u);
+                    userCount++;
+                }
+            }
+            logger.info("Loaded {} user accounts directly from Cloud Firestore.", userCount);
+        } catch (Exception e) {
+            logger.warn("Cloud Firestore initial sync notice: {}", e.getMessage());
+        }
+    }
+
+    public Doctor parseDoctorSnapshot(DocumentSnapshot snap) {
+        if (snap == null || !snap.exists()) return null;
+        try {
+            Map<String, Object> data = snap.getData();
+            if (data == null) return null;
+
+            Doctor doctor = new Doctor();
+            doctor.setDoctorId(snap.getId());
+            if (data.get("doctorId") != null) doctor.setDoctorId(String.valueOf(data.get("doctorId")));
+            if (data.get("uid") != null) doctor.setUid(String.valueOf(data.get("uid")));
+            if (data.get("fullName") != null) doctor.setFullName(String.valueOf(data.get("fullName")));
+            if (data.get("email") != null) doctor.setEmail(String.valueOf(data.get("email")));
+            if (data.get("phone") != null) doctor.setPhone(String.valueOf(data.get("phone")));
+            if (data.get("specialization") != null) doctor.setSpecialization(String.valueOf(data.get("specialization")));
+            if (data.get("qualification") != null) doctor.setQualification(String.valueOf(data.get("qualification")));
+            if (data.get("experience") instanceof Number) {
+                doctor.setExperience(((Number) data.get("experience")).intValue());
+            }
+            if (data.get("medicalRegistrationNumber") != null) {
+                doctor.setMedicalRegistrationNumber(String.valueOf(data.get("medicalRegistrationNumber")));
+            }
+            if (data.get("consultationFee") instanceof Number) {
+                doctor.setConsultationFee(((Number) data.get("consultationFee")).doubleValue());
+            }
+            if (data.get("workingHours") != null) doctor.setWorkingHours(String.valueOf(data.get("workingHours")));
+            if (data.get("workingStartTime") != null) doctor.setWorkingStartTime(String.valueOf(data.get("workingStartTime")));
+            if (data.get("workingEndTime") != null) doctor.setWorkingEndTime(String.valueOf(data.get("workingEndTime")));
+            if (data.get("breakStartTime") != null) doctor.setBreakStartTime(String.valueOf(data.get("breakStartTime")));
+            if (data.get("breakEndTime") != null) doctor.setBreakEndTime(String.valueOf(data.get("breakEndTime")));
+            if (data.get("slotDurationMinutes") instanceof Number) {
+                doctor.setSlotDurationMinutes(((Number) data.get("slotDurationMinutes")).intValue());
+            }
+            if (data.get("timezone") != null) doctor.setTimezone(String.valueOf(data.get("timezone")));
+            if (data.get("verificationStatus") != null) doctor.setVerificationStatus(String.valueOf(data.get("verificationStatus")));
+            if (data.get("profileImage") != null) doctor.setProfileImage(String.valueOf(data.get("profileImage")));
+            if (data.get("gender") != null) doctor.setGender(String.valueOf(data.get("gender")));
+            if (data.get("rating") instanceof Number) {
+                doctor.setRating(((Number) data.get("rating")).doubleValue());
+            }
+            if (data.get("reviewCount") instanceof Number) {
+                doctor.setReviewCount(((Number) data.get("reviewCount")).intValue());
+            }
+            if (data.get("bio") != null) doctor.setBio(String.valueOf(data.get("bio")));
+            if (data.get("clinicAddress") != null) doctor.setClinicAddress(String.valueOf(data.get("clinicAddress")));
+
+            if (data.get("availableDays") instanceof List) {
+                List<?> days = (List<?>) data.get("availableDays");
+                List<String> list = new ArrayList<>();
+                for (Object o : days) if (o != null) list.add(o.toString());
+                doctor.setAvailableDays(list);
+            }
+            if (data.get("holidays") instanceof List) {
+                List<?> hols = (List<?>) data.get("holidays");
+                List<String> list = new ArrayList<>();
+                for (Object o : hols) if (o != null) list.add(o.toString());
+                doctor.setHolidays(list);
+            }
+
+            Object ca = data.get("createdAt");
+            if (ca instanceof Timestamp) {
+                doctor.setCreatedAt(((Timestamp) ca).toSqlTimestamp().toInstant());
+            } else if (ca instanceof Map) {
+                Map<?, ?> map = (Map<?, ?>) ca;
+                Object es = map.get("epochSecond");
+                Object nano = map.get("nano");
+                if (es instanceof Number) {
+                    long sec = ((Number) es).longValue();
+                    long n = nano instanceof Number ? ((Number) nano).longValue() : 0L;
+                    doctor.setCreatedAt(Instant.ofEpochSecond(sec, n));
+                }
+            } else if (ca instanceof String) {
+                try {
+                    doctor.setCreatedAt(Instant.parse((String) ca));
+                } catch (Exception ignored) {}
+            }
+
+            return doctor;
+        } catch (Exception e) {
+            logger.warn("Error parsing doctor snapshot {}: {}", snap.getId(), e.getMessage());
+            return null;
+        }
+    }
+
+    public User parseUserSnapshot(DocumentSnapshot snap) {
+        if (snap == null || !snap.exists()) return null;
+        try {
+            Map<String, Object> data = snap.getData();
+            if (data == null) return null;
+
+            User user = new User();
+            user.setUid(snap.getId());
+            if (data.get("uid") != null) user.setUid(String.valueOf(data.get("uid")));
+            if (data.get("fullName") != null) user.setFullName(String.valueOf(data.get("fullName")));
+            if (data.get("email") != null) user.setEmail(String.valueOf(data.get("email")));
+            if (data.get("phone") != null) user.setPhone(String.valueOf(data.get("phone")));
+            if (data.get("role") != null) user.setRole(String.valueOf(data.get("role")));
+            if (data.get("accountStatus") != null) user.setAccountStatus(String.valueOf(data.get("accountStatus")));
+            if (data.get("profileImage") != null) user.setProfileImage(String.valueOf(data.get("profileImage")));
+            if (data.get("password") != null) user.setPassword(String.valueOf(data.get("password")));
+            return user;
+        } catch (Exception e) {
+            logger.warn("Error parsing user snapshot {}: {}", snap.getId(), e.getMessage());
+            return null;
+        }
+    }
+
     // USERS
     public User saveUser(User user) {
         if (user.getUid() == null) {
@@ -61,13 +205,51 @@ public class FirestoreDatabaseService {
     }
 
     public Optional<User> findUserByUid(String uid) {
-        return Optional.ofNullable(users.get(uid));
+        if (uid == null) return Optional.empty();
+        User u = users.get(uid);
+        if (u != null) {
+            return Optional.of(u);
+        }
+        if (firestore != null) {
+            try {
+                DocumentSnapshot snap = firestore.collection("users").document(uid).get().get();
+                User parsed = parseUserSnapshot(snap);
+                if (parsed != null) {
+                    users.put(parsed.getUid(), parsed);
+                    return Optional.of(parsed);
+                }
+            } catch (Exception e) {
+                logger.warn("Firestore findUserByUid({}) lookup: {}", uid, e.getMessage());
+            }
+        }
+        return Optional.empty();
     }
 
     public Optional<User> findUserByEmail(String email) {
-        return users.values().stream()
+        if (email == null) return Optional.empty();
+        Optional<User> inMemory = users.values().stream()
                 .filter(u -> u.getEmail() != null && u.getEmail().equalsIgnoreCase(email.trim()))
                 .findFirst();
+        if (inMemory.isPresent()) {
+            return inMemory;
+        }
+        if (firestore != null) {
+            try {
+                List<QueryDocumentSnapshot> list = firestore.collection("users")
+                        .whereEqualTo("email", email.trim().toLowerCase())
+                        .get().get().getDocuments();
+                if (!list.isEmpty()) {
+                    User parsed = parseUserSnapshot(list.get(0));
+                    if (parsed != null) {
+                        users.put(parsed.getUid(), parsed);
+                        return Optional.of(parsed);
+                    }
+                }
+            } catch (Exception e) {
+                logger.warn("Firestore findUserByEmail({}) lookup: {}", email, e.getMessage());
+            }
+        }
+        return Optional.empty();
     }
 
     public List<User> findAllUsers() {
@@ -119,14 +301,63 @@ public class FirestoreDatabaseService {
     }
 
     public Optional<Doctor> findDoctorById(String doctorId) {
-        return Optional.ofNullable(doctors.get(doctorId));
+        if (doctorId == null) return Optional.empty();
+        Doctor doc = doctors.get(doctorId);
+        if (doc != null) {
+            return Optional.of(doc);
+        }
+        if (firestore != null) {
+            try {
+                DocumentSnapshot snap = firestore.collection("doctors").document(doctorId).get().get();
+                Doctor parsed = parseDoctorSnapshot(snap);
+                if (parsed != null) {
+                    doctors.put(parsed.getDoctorId(), parsed);
+                    return Optional.of(parsed);
+                }
+            } catch (Exception e) {
+                logger.warn("Firestore findDoctorById({}) lookup: {}", doctorId, e.getMessage());
+            }
+        }
+        return Optional.empty();
     }
 
     public Optional<Doctor> findDoctorByUid(String uid) {
-        return doctors.values().stream().filter(d -> uid.equals(d.getUid())).findFirst();
+        if (uid == null) return Optional.empty();
+        Optional<Doctor> inMemory = doctors.values().stream().filter(d -> uid.equals(d.getUid())).findFirst();
+        if (inMemory.isPresent()) {
+            return inMemory;
+        }
+        if (firestore != null) {
+            try {
+                List<QueryDocumentSnapshot> list = firestore.collection("doctors").whereEqualTo("uid", uid).get().get().getDocuments();
+                if (!list.isEmpty()) {
+                    Doctor parsed = parseDoctorSnapshot(list.get(0));
+                    if (parsed != null) {
+                        doctors.put(parsed.getDoctorId(), parsed);
+                        return Optional.of(parsed);
+                    }
+                }
+            } catch (Exception e) {
+                logger.warn("Firestore findDoctorByUid({}) lookup: {}", uid, e.getMessage());
+            }
+        }
+        return Optional.empty();
     }
 
     public List<Doctor> findAllDoctors() {
+        if (firestore != null) {
+            try {
+                List<QueryDocumentSnapshot> docList = firestore.collection("doctors").get().get().getDocuments();
+                for (QueryDocumentSnapshot snap : docList) {
+                    Doctor doc = parseDoctorSnapshot(snap);
+                    if (doc != null && doc.getDoctorId() != null) {
+                        doctors.put(doc.getDoctorId(), doc);
+                    }
+                }
+            } catch (Exception e) {
+                logger.warn("Firestore findAllDoctors query: {}", e.getMessage());
+            }
+        }
         return new ArrayList<>(doctors.values());
     }
 
