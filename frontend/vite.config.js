@@ -56,7 +56,7 @@ function autoBackendPlugin() {
 export default defineConfig({
   plugins: [react(), tailwindcss(), autoBackendPlugin()],
   server: {
-    host: 'localhost',
+    host: true, // Listens on all local IP addresses for live mobile device testing
     port: 5173,
     proxy: {
       '/api': {
