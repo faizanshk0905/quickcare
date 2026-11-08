@@ -3,29 +3,43 @@ import { Link } from 'react-router-dom';
 import { Star, MapPin, Calendar, Clock, Award, ShieldCheck } from 'lucide-react';
 
 export const DoctorCard = ({ doctor }) => {
+  const isMale = doctor.gender?.toLowerCase() === 'male';
+  const defaultFallback = isMale
+    ? 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400'
+    : 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=400';
+
   return (
     <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs hover:shadow-xl hover:border-blue-200 transition-all flex flex-col justify-between group">
       <div>
         <div className="relative mb-4">
           <img
-            src={
-              doctor.profileImage ||
-              'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=400'
-            }
+            src={doctor.profileImage || defaultFallback}
             alt={doctor.fullName}
             className="w-full h-48 object-cover rounded-2xl group-hover:scale-[1.02] transition-transform duration-300"
+            onError={(e) => {
+              e.currentTarget.onerror = null;
+              e.currentTarget.src = defaultFallback;
+            }}
           />
           <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-md px-2.5 py-1 rounded-full text-xs font-bold text-slate-800 flex items-center gap-1 shadow-xs">
             <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
             <span>{doctor.rating ? doctor.rating.toFixed(1) : '4.8'}</span>
             <span className="text-slate-400 font-normal">({doctor.reviewCount || 48})</span>
           </div>
-          {doctor.verificationStatus === 'VERIFIED' && (
-            <div className="absolute top-3 right-3 bg-emerald-500 text-white px-2.5 py-1 rounded-full text-[11px] font-bold flex items-center gap-1 shadow-xs">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Verified</span>
-            </div>
-          )}
+
+          <div className="absolute top-3 right-3 flex items-center gap-1.5">
+            {doctor.gender && (
+              <span className="bg-white/90 backdrop-blur-md text-slate-800 px-2 py-0.5 rounded-full text-[10px] font-bold shadow-xs">
+                {doctor.gender === 'Female' ? '👩‍⚕️ Female' : doctor.gender === 'Male' ? '👨‍⚕️ Male' : doctor.gender}
+              </span>
+            )}
+            {doctor.verificationStatus === 'VERIFIED' && (
+              <span className="bg-emerald-500 text-white px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 shadow-xs">
+                <ShieldCheck className="w-3 h-3" />
+                <span>Verified</span>
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="space-y-1.5">

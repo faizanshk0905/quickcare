@@ -58,7 +58,8 @@ public class DataLoader implements CommandLineRunner {
                 "MCI-CARD-88741", 800.0, "VERIFIED", 4.9, 128,
                 "Senior Cardiologist specializing in preventive heart health, coronary artery disease, and cardiac rehabilitation.",
                 "Apex Heart Institute, Mumbai",
-                "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=400"
+                "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=400",
+                "Female"
         );
 
         createDoctor(
@@ -67,7 +68,8 @@ public class DataLoader implements CommandLineRunner {
                 "MCI-DERM-44512", 600.0, "VERIFIED", 4.8, 94,
                 "Consultant Dermatologist & Trichologist focusing on clinical dermatology, eczema, psoriasis, and cosmetic dermatology.",
                 "Skin & Glow Clinic, Pune",
-                "https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400"
+                "https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400",
+                "Male"
         );
 
         createDoctor(
@@ -76,7 +78,8 @@ public class DataLoader implements CommandLineRunner {
                 "MCI-PED-77891", 500.0, "VERIFIED", 4.95, 162,
                 "Compassionate Pediatrician dedicated to neonatal care, child growth monitoring, vaccination, and adolescent care.",
                 "Little Sprouts Children Hospital, Delhi",
-                "https://images.unsplash.com/photo-1594824813583-43efb8e23528?auto=format&fit=crop&q=80&w=400"
+                "https://images.unsplash.com/photo-1594824813583-43efb8e23528?auto=format&fit=crop&q=80&w=400",
+                "Female"
         );
 
         createDoctor(
@@ -85,7 +88,8 @@ public class DataLoader implements CommandLineRunner {
                 "MCI-ORTHO-11923", 900.0, "VERIFIED", 4.75, 87,
                 "Chief Orthopedic & Joint Replacement Surgeon with extensive experience in sports injuries, spine care, and arthroscopy.",
                 "Metro Joint & Spine Hospital, Bengaluru",
-                "https://images.unsplash.com/photo-1537368910025-700350fe46c7?auto=format&fit=crop&q=80&w=400"
+                "https://images.unsplash.com/photo-1537368910025-700350fe46c7?auto=format&fit=crop&q=80&w=400",
+                "Male"
         );
 
         // Note: Quick Care does NOT currently have a Neurologist, Oncologist, or Gastroenterologist on staff.
@@ -98,7 +102,8 @@ public class DataLoader implements CommandLineRunner {
                 "MCI-GEN-33419", 400.0, "PENDING", 4.5, 0,
                 "Primary care physician focusing on family medicine, diabetic management, hypertension, and preventive health screenings.",
                 "Verma Clinic, Hyderabad",
-                "https://images.unsplash.com/photo-1582750433449-648ed127bb54?auto=format&fit=crop&q=80&w=400"
+                "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?auto=format&fit=crop&q=80&w=400",
+                "Male"
         );
 
         // 5. SAMPLE APPOINTMENTS
@@ -225,7 +230,7 @@ public class DataLoader implements CommandLineRunner {
     private void createDoctor(String uid, String name, String email, String phone,
                               String docId, String spec, String qual, int exp,
                               String regNo, double fee, String status, double rating, int reviews,
-                              String bio, String clinic, String img) {
+                              String bio, String clinic, String img, String gender) {
         User u = new User(uid, name, email, phone, "DOCTOR");
         u.setPassword(passwordEncoder.encode("doctor123"));
         u.setAccountStatus("VERIFIED".equals(status) ? "ACTIVE" : "PENDING");
@@ -238,6 +243,7 @@ public class DataLoader implements CommandLineRunner {
         d.setFullName(name);
         d.setEmail(email);
         d.setPhone(phone);
+        d.setGender(gender);
         d.setSpecialization(spec);
         d.setQualification(qual);
         d.setExperience(exp);

@@ -73,6 +73,20 @@ public class AuthService {
             doctor.setBio(req.getBio() != null ? req.getBio() : "Experienced healthcare specialist committed to compassionate patient care.");
             doctor.setVerificationStatus("PENDING");
 
+            String docGender = req.getGender() != null && !req.getGender().trim().isEmpty() ? req.getGender().trim() : "Male";
+            doctor.setGender(docGender);
+
+            String photo = req.getProfileImage();
+            if (photo == null || photo.trim().isEmpty()) {
+                if ("Female".equalsIgnoreCase(docGender)) {
+                    photo = "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=400";
+                } else {
+                    photo = "https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400";
+                }
+            }
+            doctor.setProfileImage(photo);
+            user.setProfileImage(photo);
+
             List<String> days = req.getAvailableDays() != null && !req.getAvailableDays().isEmpty()
                     ? req.getAvailableDays()
                     : Arrays.asList("Monday", "Tuesday", "Wednesday", "Thursday", "Friday");

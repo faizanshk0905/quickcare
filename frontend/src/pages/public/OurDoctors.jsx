@@ -12,6 +12,7 @@ export const OurDoctors = () => {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [specialization, setSpecialization] = useState(initialSpec);
+  const [gender, setGender] = useState('ALL');
   const [minExp, setMinExp] = useState(0);
   const [maxFee, setMaxFee] = useState(2000);
 
@@ -33,6 +34,7 @@ export const OurDoctors = () => {
       const params = {};
       if (query.trim()) params.query = query.trim();
       if (specialization && specialization !== 'ALL') params.specialization = specialization;
+      if (gender && gender !== 'ALL') params.gender = gender;
       if (minExp > 0) params.minExperience = minExp;
       if (maxFee < 2000) params.maxFee = maxFee;
 
@@ -49,7 +51,7 @@ export const OurDoctors = () => {
 
   useEffect(() => {
     fetchDoctors();
-  }, [specialization, minExp, maxFee]);
+  }, [specialization, gender, minExp, maxFee]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -59,6 +61,7 @@ export const OurDoctors = () => {
   const resetFilters = () => {
     setQuery('');
     setSpecialization('ALL');
+    setGender('ALL');
     setMinExp(0);
     setMaxFee(2000);
     setSearchParams({});
@@ -117,6 +120,29 @@ export const OurDoctors = () => {
               }`}
             >
               {spec}
+            </button>
+          ))}
+        </div>
+
+        {/* Gender Filter Pills */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs no-scrollbar">
+          <span className="text-slate-400 font-bold shrink-0">Doctor Gender:</span>
+          {[
+            { val: 'ALL', label: 'All Doctors' },
+            { val: 'Female', label: '👩‍⚕️ Female Doctors' },
+            { val: 'Male', label: '👨‍⚕️ Male Doctors' },
+          ].map((item) => (
+            <button
+              key={item.val}
+              type="button"
+              onClick={() => setGender(item.val)}
+              className={`px-3.5 py-1.5 rounded-full font-semibold transition shrink-0 cursor-pointer ${
+                gender === item.val
+                  ? 'bg-teal-600 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              {item.label}
             </button>
           ))}
         </div>

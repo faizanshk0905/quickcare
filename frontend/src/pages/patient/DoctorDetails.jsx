@@ -169,19 +169,33 @@ export const DoctorDetails = () => {
         <div className="lg:col-span-7 space-y-6">
           <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xs space-y-6">
             <div className="flex flex-col sm:flex-row gap-6 items-start">
-              <img
-                src={
-                  doctor.profileImage ||
-                  'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=400'
-                }
-                alt={doctor.fullName}
-                className="w-32 h-32 rounded-3xl object-cover border border-slate-100 shadow-md shrink-0"
-              />
+              {(() => {
+                const isMale = doctor.gender?.toLowerCase() === 'male';
+                const defaultFallback = isMale
+                  ? 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400'
+                  : 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=400';
+                return (
+                  <img
+                    src={doctor.profileImage || defaultFallback}
+                    alt={doctor.fullName}
+                    className="w-32 h-32 rounded-3xl object-cover border border-slate-100 shadow-md shrink-0"
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = defaultFallback;
+                    }}
+                  />
+                );
+              })()}
               <div className="space-y-2 flex-1">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="px-3 py-1 bg-blue-50 text-blue-700 text-xs font-bold rounded-full">
                     {doctor.specialization}
                   </span>
+                  {doctor.gender && (
+                    <span className="px-2.5 py-1 bg-slate-100 text-slate-700 text-xs font-bold rounded-full">
+                      {doctor.gender === 'Female' ? '👩‍⚕️ Female Doctor' : doctor.gender === 'Male' ? '👨‍⚕️ Male Doctor' : doctor.gender}
+                    </span>
+                  )}
                   {doctor.verificationStatus === 'VERIFIED' && (
                     <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold rounded-full flex items-center gap-1">
                       <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> Verified Practitioner

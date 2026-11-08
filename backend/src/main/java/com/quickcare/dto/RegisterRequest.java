@@ -30,6 +30,7 @@ public class RegisterRequest {
     private String workingHours;
     private String clinicAddress;
     private String bio;
+    private String profileImage;
 
     // Patient specific fields
     private String dateOfBirth;
@@ -79,6 +80,9 @@ public class RegisterRequest {
 
     public String getBio() { return bio; }
     public void setBio(String bio) { this.bio = bio; }
+
+    public String getProfileImage() { return profileImage; }
+    public void setProfileImage(String profileImage) { this.profileImage = profileImage; }
 
     public String getDateOfBirth() { return dateOfBirth; }
     public void setDateOfBirth(String dateOfBirth) { this.dateOfBirth = dateOfBirth; }

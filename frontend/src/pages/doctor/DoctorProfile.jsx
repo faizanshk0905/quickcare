@@ -1,6 +1,54 @@
 import React, { useState, useEffect } from 'react';
 import { doctorService } from '../../services/doctorService';
-import { Stethoscope, Award, MapPin, Clock, DollarSign, CheckCircle2, AlertCircle } from 'lucide-react';
+import {
+  Stethoscope,
+  Award,
+  MapPin,
+  Clock,
+  DollarSign,
+  CheckCircle2,
+  AlertCircle,
+  Camera,
+  Upload,
+  Sparkles,
+  Check,
+} from 'lucide-react';
+
+const FEMALE_AVATARS = [
+  {
+    id: 'f1',
+    label: 'Female Doctor 1',
+    url: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=400',
+  },
+  {
+    id: 'f2',
+    label: 'Female Doctor 2',
+    url: 'https://images.unsplash.com/photo-1594824813583-43efb8e23528?auto=format&fit=crop&q=80&w=400',
+  },
+  {
+    id: 'f3',
+    label: 'Female Doctor 3',
+    url: 'https://images.unsplash.com/photo-1527613426441-4da17471b66d?auto=format&fit=crop&q=80&w=400',
+  },
+];
+
+const MALE_AVATARS = [
+  {
+    id: 'm1',
+    label: 'Male Doctor 1',
+    url: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400',
+  },
+  {
+    id: 'm2',
+    label: 'Male Doctor 2',
+    url: 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?auto=format&fit=crop&q=80&w=400',
+  },
+  {
+    id: 'm3',
+    label: 'Male Doctor 3',
+    url: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?auto=format&fit=crop&q=80&w=400',
+  },
+];
 
 export const DoctorProfile = () => {
   const [profile, setProfile] = useState(null);
@@ -15,7 +63,11 @@ export const DoctorProfile = () => {
         setLoading(true);
         const res = await doctorService.getMyDoctorProfile();
         if (res && res.data) {
-          setProfile(res.data);
+          const docData = res.data;
+          if (!docData.gender) {
+            docData.gender = 'Female';
+          }
+          setProfile(docData);
         }
       } catch (err) {
         console.error(err);
@@ -31,6 +83,41 @@ export const DoctorProfile = () => {
     setProfile((prev) => ({ ...prev, [e.target.name]: val }));
   };
 
+  const handleGenderSelect = (selectedGender) => {
+    setProfile((prev) => {
+      const isCurrentFemale = FEMALE_AVATARS.some((a) => a.url === prev?.profileImage);
+      const isCurrentMale = MALE_AVATARS.some((a) => a.url === prev?.profileImage);
+
+      let nextImage = prev?.profileImage;
+      if (selectedGender === 'Female' && (isCurrentMale || !prev?.profileImage)) {
+        nextImage = FEMALE_AVATARS[0].url;
+      } else if (selectedGender === 'Male' && (isCurrentFemale || !prev?.profileImage)) {
+        nextImage = MALE_AVATARS[0].url;
+      }
+
+      return {
+        ...prev,
+        gender: selectedGender,
+        profileImage: nextImage,
+      };
+    });
+  };
+
+  const handleImageFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        setError('Image file must be under 2MB.');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setProfile((prev) => ({ ...prev, profileImage: reader.result }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMsg('');
@@ -39,7 +126,8 @@ export const DoctorProfile = () => {
     try {
       const res = await doctorService.updateDoctorProfile(profile);
       if (res && res.data) {
-        setMsg('Doctor profile updated successfully.');
+        setProfile(res.data);
+        setMsg('Doctor profile, photo, and practitioner details updated successfully.');
       }
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Failed to update profile.');
@@ -52,12 +140,17 @@ export const DoctorProfile = () => {
     return <div className="py-20 text-center text-slate-400 text-xs">Loading profile...</div>;
   }
 
+  const activePresets = profile?.gender === 'Male' ? MALE_AVATARS : FEMALE_AVATARS;
+  const currentAvatar =
+    profile?.profileImage ||
+    (profile?.gender === 'Male' ? MALE_AVATARS[0].url : FEMALE_AVATARS[0].url);
+
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-6">
       <div>
         <h1 className="text-3xl font-extrabold text-slate-900">Doctor Profile Settings</h1>
         <p className="text-xs sm:text-sm text-slate-500 mt-1">
-          Manage clinical credentials, consultation fees, and public profile details.
+          Manage your photo, gender identity, clinical credentials, and patient-facing consultation details.
         </p>
       </div>
 
@@ -76,22 +169,128 @@ export const DoctorProfile = () => {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="flex items-center gap-4 pb-4 border-b border-slate-100">
-            <img
-              src={
-                profile?.profileImage ||
-                'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=200'
-              }
-              alt=""
-              className="w-16 h-16 rounded-2xl object-cover border border-slate-200 shadow-sm"
-            />
-            <div>
-              <h3 className="font-extrabold text-slate-900 text-base">{profile?.fullName}</h3>
-              <p className="text-xs text-teal-700 font-semibold">{profile?.specialization}</p>
-              <p className="text-[10px] text-slate-400 font-mono">
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* PROFILE PHOTO & GENDER CARD */}
+          <div className="p-5 rounded-2xl bg-gradient-to-br from-blue-50/50 to-teal-50/50 border border-blue-100 space-y-4">
+            <div className="flex items-center justify-between border-b border-blue-100/70 pb-2">
+              <span className="text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
+                <Camera className="w-4 h-4 text-blue-600" />
+                Profile Photo & Gender
+              </span>
+              <span className="text-[10px] font-bold text-slate-500 font-mono">
                 Reg: {profile?.medicalRegistrationNumber} ({profile?.verificationStatus})
-              </p>
+              </span>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center gap-5">
+              <div className="relative group shrink-0">
+                <img
+                  src={currentAvatar}
+                  alt={profile?.fullName}
+                  className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-md ring-2 ring-blue-200"
+                />
+                <label className="absolute -bottom-1 -right-1 bg-blue-600 hover:bg-blue-700 text-white p-1.5 rounded-full shadow-xs cursor-pointer transition">
+                  <Camera className="w-3.5 h-3.5" />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageFileChange}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+
+              <div className="flex-1 w-full space-y-2">
+                <label className="block text-xs font-bold text-slate-700">
+                  Doctor Gender
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { val: 'Female', label: 'Female', icon: '👩‍⚕️' },
+                    { val: 'Male', label: 'Male', icon: '👨‍⚕️' },
+                    { val: 'Other', label: 'Other', icon: '🧑‍⚕️' },
+                  ].map((g) => {
+                    const isSelected = profile?.gender === g.val;
+                    return (
+                      <button
+                        key={g.val}
+                        type="button"
+                        onClick={() => handleGenderSelect(g.val)}
+                        className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                          isSelected
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                        }`}
+                      >
+                        <span>{g.icon}</span>
+                        <span>{g.label}</span>
+                        {isSelected && <Check className="w-3.5 h-3.5 ml-0.5" />}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-slate-500">
+                  Select gender to automatically update doctor badges and gender-tailored default avatars.
+                </p>
+              </div>
+            </div>
+
+            {/* Presets and Upload */}
+            <div className="space-y-2 pt-2 border-t border-blue-100/70">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                  <Sparkles className="w-3 h-3 text-teal-600" />
+                  Select Avatar Preset for {profile?.gender || 'Doctor'}:
+                </span>
+                <label className="text-[11px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer flex items-center gap-1">
+                  <Upload className="w-3 h-3" />
+                  <span>Upload Photo</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageFileChange}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                {activePresets.map((preset) => {
+                  const isPicked = profile?.profileImage === preset.url;
+                  return (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => setProfile((prev) => ({ ...prev, profileImage: preset.url }))}
+                      className={`p-1.5 rounded-xl border flex items-center gap-2 transition cursor-pointer text-left ${
+                        isPicked
+                          ? 'bg-white border-blue-600 ring-2 ring-blue-400'
+                          : 'bg-white/80 border-slate-200 hover:bg-white'
+                      }`}
+                    >
+                      <img
+                        src={preset.url}
+                        alt={preset.label}
+                        className="w-8 h-8 rounded-full object-cover shrink-0"
+                      />
+                      <span className="text-[10px] font-bold text-slate-700 truncate">
+                        {preset.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="pt-1">
+                <input
+                  type="url"
+                  name="profileImage"
+                  value={profile?.profileImage || ''}
+                  onChange={handleChange}
+                  placeholder="Or paste external photo link (https://...)"
+                  className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-[11px] focus:ring-2 focus:ring-teal-500"
+                />
+              </div>
             </div>
           </div>
 
@@ -177,20 +376,6 @@ export const DoctorProfile = () => {
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">
-              Profile Photo URL
-            </label>
-            <input
-              type="url"
-              name="profileImage"
-              value={profile?.profileImage || ''}
-              onChange={handleChange}
-              placeholder="https://..."
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-teal-500"
-            />
-          </div>
-
-          <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">Professional Bio</label>
             <textarea
               rows="3"
@@ -205,7 +390,7 @@ export const DoctorProfile = () => {
             <button
               type="submit"
               disabled={saving}
-              className="px-6 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-md transition"
+              className="px-6 py-2.5 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-md transition cursor-pointer"
             >
               {saving ? 'Saving...' : 'Save Profile Changes'}
             </button>

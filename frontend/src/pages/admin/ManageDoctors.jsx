@@ -161,13 +161,22 @@ export const ManageDoctors = () => {
                         <img
                           src={
                             doc.profileImage ||
-                            'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=100'
+                            (doc.gender?.toLowerCase() === 'male'
+                              ? 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=100'
+                              : 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=100')
                           }
                           alt=""
                           className="w-10 h-10 rounded-xl object-cover shrink-0"
                         />
                         <div>
-                          <p className="font-extrabold text-slate-900 text-xs">{doc.fullName}</p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="font-extrabold text-slate-900 text-xs">{doc.fullName}</p>
+                            {doc.gender && (
+                              <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-600">
+                                {doc.gender === 'Female' ? '♀' : doc.gender === 'Male' ? '♂' : doc.gender}
+                              </span>
+                            )}
+                          </div>
                           <p className="text-[11px] text-slate-400">{doc.email}</p>
                         </div>
                       </div>

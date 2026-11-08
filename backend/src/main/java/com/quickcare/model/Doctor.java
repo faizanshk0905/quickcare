@@ -27,6 +27,7 @@ public class Doctor {
     private String activeConsultationId;
     private String verificationStatus; // PENDING, VERIFIED, REJECTED
     private String profileImage;
+    private String gender; // Male, Female, Other
     private double rating;
     private int reviewCount;
     private String bio;
@@ -105,6 +106,9 @@ public class Doctor {
 
     public String getProfileImage() { return profileImage; }
     public void setProfileImage(String profileImage) { this.profileImage = profileImage; }
+
+    public String getGender() { return gender; }
+    public void setGender(String gender) { this.gender = gender; }
 
     public double getRating() { return rating; }
     public void setRating(double rating) { this.rating = rating; }

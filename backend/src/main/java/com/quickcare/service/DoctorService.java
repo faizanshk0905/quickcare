@@ -23,6 +23,10 @@ public class DoctorService {
     private FirestoreDatabaseService db;
 
     public List<Doctor> searchDoctors(String query, String specialization, Integer minExp, Double maxFee) {
+        return searchDoctors(query, specialization, minExp, maxFee, null);
+    }
+
+    public List<Doctor> searchDoctors(String query, String specialization, Integer minExp, Double maxFee, String gender) {
         return db.findVerifiedDoctors().stream()
                 .filter(d -> {
                     if (query != null && !query.trim().isEmpty()) {
@@ -33,6 +37,11 @@ public class DoctorService {
                     }
                     if (specialization != null && !specialization.trim().isEmpty() && !"ALL".equalsIgnoreCase(specialization)) {
                         if (d.getSpecialization() == null || !d.getSpecialization().equalsIgnoreCase(specialization.trim())) {
+                            return false;
+                        }
+                    }
+                    if (gender != null && !gender.trim().isEmpty() && !"ALL".equalsIgnoreCase(gender.trim())) {
+                        if (d.getGender() == null || !d.getGender().equalsIgnoreCase(gender.trim())) {
                             return false;
                         }
                     }
@@ -69,6 +78,7 @@ public class DoctorService {
         if (updated.getBio() != null) doc.setBio(updated.getBio());
         if (updated.getClinicAddress() != null) doc.setClinicAddress(updated.getClinicAddress());
         if (updated.getProfileImage() != null) doc.setProfileImage(updated.getProfileImage());
+        if (updated.getGender() != null) doc.setGender(updated.getGender());
 
         return db.saveDoctor(doc);
     }

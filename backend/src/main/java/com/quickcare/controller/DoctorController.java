@@ -26,8 +26,9 @@ public class DoctorController {
             @RequestParam(required = false) String query,
             @RequestParam(required = false) String specialization,
             @RequestParam(required = false) Integer minExperience,
-            @RequestParam(required = false) Double maxFee) {
-        List<Doctor> list = doctorService.searchDoctors(query, specialization, minExperience, maxFee);
+            @RequestParam(required = false) Double maxFee,
+            @RequestParam(required = false) String gender) {
+        List<Doctor> list = doctorService.searchDoctors(query, specialization, minExperience, maxFee, gender);
         return ResponseEntity.ok(ApiResponse.ok(list));
     }
 
