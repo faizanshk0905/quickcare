@@ -32,6 +32,12 @@ public class AppointmentService {
     @Autowired
     private DoctorService doctorService;
 
+    @Autowired
+    private GoogleMeetService googleMeetService;
+
+    @Autowired
+    private EmailService emailService;
+
     public synchronized Appointment bookAppointment(String patientUid, AppointmentRequest req) {
         // Validate patient
         Patient patient = db.findPatientByUid(patientUid)
@@ -133,7 +139,9 @@ public class AppointmentService {
         apt.setReason(req.getReason());
         apt.setStatus("PENDING");
         apt.setConsultationFee(doctor.getConsultationFee());
-        apt.setMeetingRoomId("quickcare-room-" + UUID.randomUUID().toString().substring(0, 8));
+        String initialMeet = googleMeetService.getOrCreateGoogleMeetLink(apt);
+        apt.setGoogleMeetLink(initialMeet);
+        apt.setMeetingRoomId(initialMeet);
 
         Appointment saved = db.saveAppointment(apt);
 
@@ -202,20 +210,34 @@ public class AppointmentService {
         }
 
         if ("CONFIRMED".equalsIgnoreCase(newStatus)) {
-            // Ensure WebRTC consultation room is ready
-            videoService.createConsultationRoom(apt.getAppointmentId(), apt.getDoctorId(), apt.getPatientId(), apt.getMeetingRoomId());
+            apt.setApprovedAt(Instant.now());
+            String meetUrl = googleMeetService.getOrCreateGoogleMeetLink(apt);
+            apt.setGoogleMeetLink(meetUrl);
+            apt.setMeetingRoomId(meetUrl);
 
-            notificationService.sendNotification(apt.getPatientUid(), "Appointment Confirmed",
-                    "Dr. " + apt.getDoctorName() + " has confirmed your appointment on " + apt.getAppointmentDate() + " at " + apt.getAppointmentTime() + ". Video consultation link is ready.",
+            // Ensure WebRTC consultation room is ready
+            videoService.createConsultationRoom(apt.getAppointmentId(), apt.getDoctorId(), apt.getPatientId(), meetUrl);
+
+            notificationService.sendNotification(apt.getPatientUid(), "Video Consultation Approved",
+                    "Dr. " + apt.getDoctorName() + " has approved your consultation on " + apt.getAppointmentDate() + " at " + apt.getAppointmentTime() + ". Google Meet link is ready: " + meetUrl,
                     "APPOINTMENT_CONFIRMED", apt.getAppointmentId());
 
+            // Dispatch full approval email with meeting link and instructions to patient
+            emailService.sendConsultationApprovalEmail(apt, meetUrl);
+            apt.addAuditLog("CONSULTATION_APPROVED", apt.getDoctorName(), "Doctor approved consultation. Google Meet link: " + meetUrl);
+
         } else if ("REJECTED".equalsIgnoreCase(newStatus)) {
+            apt.setRejectedAt(Instant.now());
             // Free slot
             freeSlot(apt.getDoctorId(), apt.getAppointmentDate(), apt.getAppointmentTime());
 
-            notificationService.sendNotification(apt.getPatientUid(), "Appointment Declined",
-                    "Dr. " + apt.getDoctorName() + " was unable to accept your appointment on " + apt.getAppointmentDate() + " at " + apt.getAppointmentTime() + ". Please reschedule or choose another slot.",
+            notificationService.sendNotification(apt.getPatientUid(), "Appointment Request Declined",
+                    "Dr. " + apt.getDoctorName() + " was unable to accept your appointment on " + apt.getAppointmentDate() + " at " + apt.getAppointmentTime() + ". Reason: " + (reason != null ? reason : "Doctor schedule emergency"),
                     "APPOINTMENT_REJECTED", apt.getAppointmentId());
+
+            // Dispatch rejection notification email to patient
+            emailService.sendConsultationRejectionEmail(apt, reason);
+            apt.addAuditLog("CONSULTATION_REJECTED", apt.getDoctorName(), "Doctor declined consultation. Reason: " + reason);
 
         } else if ("CANCELLED".equalsIgnoreCase(newStatus)) {
             // Free slot
@@ -600,6 +622,10 @@ public class AppointmentService {
 
         Appointment updated = db.saveAppointment(apt);
 
+        String meetUrl = googleMeetService.getOrCreateGoogleMeetLink(updated);
+        updated.setGoogleMeetLink(meetUrl);
+        updated.setMeetingRoomId(meetUrl);
+
         notificationService.sendNotification(apt.getPatientUid(), "Appointment Rescheduled",
                 "Your appointment with Dr. " + apt.getDoctorName() + " has been rescheduled to " + newDate + " at " + newTime,
                 "APPOINTMENT_CONFIRMED", updated.getAppointmentId());
@@ -608,6 +634,59 @@ public class AppointmentService {
                 "Patient " + apt.getPatientName() + " has rescheduled their appointment to " + newDate + " at " + newTime,
                 "APPOINTMENT_CONFIRMED", updated.getAppointmentId());
 
-        return updated;
+        emailService.sendConsultationRescheduleEmail(updated, newDate, newTime, meetUrl);
+        updated.addAuditLog("APPOINTMENT_RESCHEDULED", "USER", "Rescheduled to " + newDate + " at " + newTime + ". Meet link: " + meetUrl);
+        return db.saveAppointment(updated);
+    }
+
+    public synchronized Appointment approveAndScheduleGoogleMeet(String appointmentId, String newDate, String newTime, String doctorNotes) {
+        Appointment apt = getAppointmentById(appointmentId);
+
+        boolean scheduleChanged = false;
+        if (newDate != null && !newDate.trim().isEmpty() && !newDate.equals(apt.getAppointmentDate())) {
+            freeSlot(apt.getDoctorId(), apt.getAppointmentDate(), apt.getAppointmentTime());
+            apt.setAppointmentDate(newDate.trim());
+            scheduleChanged = true;
+        }
+        if (newTime != null && !newTime.trim().isEmpty() && !newTime.equals(apt.getAppointmentTime())) {
+            freeSlot(apt.getDoctorId(), apt.getAppointmentDate(), apt.getAppointmentTime());
+            apt.setAppointmentTime(newTime.trim());
+            scheduleChanged = true;
+        }
+        if (doctorNotes != null && !doctorNotes.trim().isEmpty()) {
+            apt.setDoctorNotes(doctorNotes.trim());
+        }
+
+        apt.setStatus("CONFIRMED");
+        apt.setApprovedAt(Instant.now());
+        apt.setUpdatedAt(Instant.now());
+
+        // Generate genuine Google Meet link
+        String meetUrl = googleMeetService.getOrCreateGoogleMeetLink(apt);
+        apt.setGoogleMeetLink(meetUrl);
+        apt.setMeetingRoomId(meetUrl);
+
+        // Ensure video consultation entity is created
+        videoService.createConsultationRoom(apt.getAppointmentId(), apt.getDoctorId(), apt.getPatientId(), meetUrl);
+
+        // Reserve doctor's slot if needed
+        DoctorAvailability da = db.findAvailability(apt.getDoctorId(), apt.getAppointmentDate())
+                .orElse(new DoctorAvailability(apt.getDoctorId() + "_" + apt.getAppointmentDate(), apt.getDoctorId(), apt.getAppointmentDate(), null));
+        if (!da.getBookedSlots().contains(apt.getAppointmentTime())) {
+            da.getBookedSlots().add(apt.getAppointmentTime());
+            db.saveAvailability(da);
+        }
+
+        Appointment saved = db.saveAppointment(apt);
+
+        // Dispatch In-App Notification
+        notificationService.sendNotification(apt.getPatientUid(), "Video Consultation Approved",
+                "Dr. " + apt.getDoctorName() + " has approved your video consultation for " + apt.getAppointmentDate() + " at " + apt.getAppointmentTime() + ". Google Meet: " + meetUrl,
+                "APPOINTMENT_CONFIRMED", apt.getAppointmentId());
+
+        // Dispatch Confirmation Email to Patient
+        emailService.sendConsultationApprovalEmail(saved, meetUrl);
+        saved.addAuditLog("CONSULTATION_APPROVED", apt.getDoctorName(), "Doctor approved video consultation with Google Meet: " + meetUrl);
+        return db.saveAppointment(saved);
     }
 }

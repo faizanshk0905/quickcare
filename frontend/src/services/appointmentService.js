@@ -75,4 +75,19 @@ export const appointmentService = {
     const res = await api.get(`/appointments/${appointmentId}/audit-logs`);
     return res.data;
   },
+
+  async approveAppointment(appointmentId, data = {}) {
+    const res = await api.post(`/appointments/${appointmentId}/approve`, data);
+    return res.data;
+  },
+
+  async rejectAppointment(appointmentId, data = {}) {
+    const res = await api.post(`/appointments/${appointmentId}/reject`, data);
+    return res.data;
+  },
+
+  async getGoogleMeetDetails(appointmentId) {
+    const res = await api.get(`/appointments/${appointmentId}/google-meet`);
+    return res.data;
+  },
 };

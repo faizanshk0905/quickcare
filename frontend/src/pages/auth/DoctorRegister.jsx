@@ -198,31 +198,31 @@ export const DoctorRegister = () => {
           <div className="w-12 h-12 bg-teal-600 rounded-2xl flex items-center justify-center text-white mx-auto shadow-md shadow-teal-500/25">
             <Stethoscope className="w-7 h-7" />
           </div>
-          <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">
+          <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
             Doctor Practitioner Registration
           </h2>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
             Join our certified telehealth panel. Set up your medical profile, gender identity, and professional photo.
           </p>
         </div>
 
-        <div className="bg-white p-8 rounded-3xl border border-slate-200/80 shadow-xl space-y-6">
+        <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xl space-y-6">
           {error && (
-            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+            <div className="p-3 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900 rounded-xl text-xs text-rose-700 dark:text-rose-300 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400" />
               <span>{error}</span>
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* 1. PRACTITIONER PHOTO & GENDER IDENTITY CARD */}
-            <div className="p-5 rounded-2xl bg-gradient-to-br from-blue-50/60 to-teal-50/40 border border-blue-100 space-y-4">
-              <div className="flex items-center justify-between border-b border-blue-100/70 pb-2">
-                <span className="text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
-                  <Camera className="w-4 h-4 text-blue-600" />
+            <div className="p-5 rounded-2xl bg-gradient-to-br from-blue-50/60 to-teal-50/40 dark:from-slate-800 dark:to-teal-950/30 border border-blue-100 dark:border-slate-700 space-y-4">
+              <div className="flex items-center justify-between border-b border-blue-100/70 dark:border-slate-700 pb-2">
+                <span className="text-xs font-extrabold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                  <Camera className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                   Practitioner Photo & Gender Identity
                 </span>
-                <span className="text-[10px] font-bold text-blue-700 bg-blue-100/70 px-2 py-0.5 rounded-md">
+                <span className="text-[10px] font-bold text-blue-700 dark:text-blue-300 bg-blue-100/70 dark:bg-blue-900/60 px-2 py-0.5 rounded-md">
                   Required
                 </span>
               </div>

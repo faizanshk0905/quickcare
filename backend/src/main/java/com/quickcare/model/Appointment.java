@@ -21,6 +21,10 @@ public class Appointment {
     private String cancellationReason;
     private double consultationFee;
     private String meetingRoomId;
+    private String googleMeetLink;
+    private String doctorNotes;
+    private Instant approvedAt;
+    private Instant rejectedAt;
     private boolean patientCheckedIn = false;
     private Instant checkedInAt;
     private boolean admitted = false;
@@ -103,6 +107,18 @@ public class Appointment {
 
     public String getMeetingRoomId() { return meetingRoomId; }
     public void setMeetingRoomId(String meetingRoomId) { this.meetingRoomId = meetingRoomId; }
+
+    public String getGoogleMeetLink() { return googleMeetLink; }
+    public void setGoogleMeetLink(String googleMeetLink) { this.googleMeetLink = googleMeetLink; }
+
+    public String getDoctorNotes() { return doctorNotes; }
+    public void setDoctorNotes(String doctorNotes) { this.doctorNotes = doctorNotes; }
+
+    public Instant getApprovedAt() { return approvedAt; }
+    public void setApprovedAt(Instant approvedAt) { this.approvedAt = approvedAt; }
+
+    public Instant getRejectedAt() { return rejectedAt; }
+    public void setRejectedAt(Instant rejectedAt) { this.rejectedAt = rejectedAt; }
 
     public boolean isPatientCheckedIn() { return patientCheckedIn; }
     public void setPatientCheckedIn(boolean patientCheckedIn) { this.patientCheckedIn = patientCheckedIn; }

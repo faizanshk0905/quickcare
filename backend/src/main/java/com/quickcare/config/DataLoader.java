@@ -132,6 +132,9 @@ public class DataLoader implements CommandLineRunner {
         apt1.addAuditLog("PATIENT_CONFIRMED_AVAILABLE", patUser1.getEmail(), "Patient confirmed availability: YES, I AM AVAILABLE.");
         apt1.setConsultationFee(800.0);
         apt1.setMeetingRoomId("quickcare-room-apt101");
+        apt1.setGoogleMeetLink("https://meet.google.com/qck-card-hms");
+        apt1.setDoctorNotes("Please keep your latest ECG, Echo reports, and blood pressure log handy for the consultation.");
+        apt1.setApprovedAt(java.time.Instant.now().minus(java.time.Duration.ofHours(2)));
         db.saveAppointment(apt1);
 
         // Sample Appointment 2: Patient B - NOT_RESPONDED

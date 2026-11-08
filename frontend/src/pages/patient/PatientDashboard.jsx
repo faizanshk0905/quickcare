@@ -95,68 +95,68 @@ export const PatientDashboard = () => {
 
       {/* Statistics Cards Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-        <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs">
+        <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
               Total Bookings
             </span>
-            <div className="w-9 h-9 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-2xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center">
               <Calendar className="w-5 h-5" />
             </div>
           </div>
-          <p className="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-2">{total}</p>
-          <span className="text-[11px] text-slate-400 font-medium">All recorded visits</span>
+          <p className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white mt-2">{total}</p>
+          <span className="text-[11px] text-slate-400 dark:text-slate-500 font-medium">All recorded visits</span>
         </div>
 
-        <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs">
+        <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-emerald-600 uppercase tracking-wider">
+            <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
               Confirmed
             </span>
-            <div className="w-9 h-9 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
               <CheckCircle className="w-5 h-5" />
             </div>
           </div>
-          <p className="text-2xl sm:text-3xl font-extrabold text-emerald-700 mt-2">{confirmed}</p>
-          <span className="text-[11px] text-emerald-600 font-medium">Ready to join</span>
+          <p className="text-2xl sm:text-3xl font-extrabold text-emerald-700 dark:text-emerald-400 mt-2">{confirmed}</p>
+          <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">Ready to join</span>
         </div>
 
-        <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs">
+        <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-amber-600 uppercase tracking-wider">
+            <span className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">
               Pending
             </span>
-            <div className="w-9 h-9 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-2xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center">
               <Clock className="w-5 h-5" />
             </div>
           </div>
-          <p className="text-2xl sm:text-3xl font-extrabold text-amber-700 mt-2">{pending}</p>
-          <span className="text-[11px] text-amber-600 font-medium">Awaiting doctor</span>
+          <p className="text-2xl sm:text-3xl font-extrabold text-amber-700 dark:text-amber-400 mt-2">{pending}</p>
+          <span className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">Awaiting doctor</span>
         </div>
 
-        <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs">
+        <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">
+            <span className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">
               Completed
             </span>
-            <div className="w-9 h-9 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-2xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center">
               <FileText className="w-5 h-5" />
             </div>
           </div>
-          <p className="text-2xl sm:text-3xl font-extrabold text-blue-700 mt-2">{completed}</p>
-          <span className="text-[11px] text-blue-600 font-medium">With prescriptions</span>
+          <p className="text-2xl sm:text-3xl font-extrabold text-blue-700 dark:text-blue-400 mt-2">{completed}</p>
+          <span className="text-[11px] text-blue-600 dark:text-blue-400 font-medium">With prescriptions</span>
         </div>
       </div>
 
       {/* Upcoming Consultations */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-extrabold text-slate-900">
+          <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">
             Upcoming Consultations ({upcomingAppointments.length})
           </h2>
           <Link
             to="/patient/appointments"
-            className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1"
+            className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:text-blue-800 flex items-center gap-1"
           >
             <span>All Appointments</span>
             <ArrowRight className="w-3.5 h-3.5" />
@@ -166,10 +166,10 @@ export const PatientDashboard = () => {
         {loading ? (
           <div className="py-12 text-center text-slate-400 text-xs">Loading appointments...</div>
         ) : upcomingAppointments.length === 0 ? (
-          <div className="bg-white rounded-3xl p-8 text-center border border-slate-200/80 space-y-3">
-            <Calendar className="w-10 h-10 text-slate-300 mx-auto" />
-            <p className="text-sm font-bold text-slate-700">No upcoming consultations</p>
-            <p className="text-xs text-slate-400 max-w-sm mx-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-8 text-center border border-slate-200/80 dark:border-slate-800 space-y-3">
+            <Calendar className="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto" />
+            <p className="text-sm font-bold text-slate-700 dark:text-slate-300">No upcoming consultations</p>
+            <p className="text-xs text-slate-400 dark:text-slate-500 max-w-sm mx-auto">
               Find top specialists in Cardiology, Dermatology, Pediatrics, and more to book your visit.
             </p>
             <Link
@@ -186,6 +186,7 @@ export const PatientDashboard = () => {
                 key={apt.appointmentId}
                 appointment={apt}
                 role="PATIENT"
+                onRefresh={fetchDashboardData}
                 onStatusChange={async (id, status) => {
                   await appointmentService.updateStatus(id, status);
                   fetchDashboardData();
@@ -199,10 +200,10 @@ export const PatientDashboard = () => {
       {/* Recommended Doctors Row */}
       <div className="space-y-4 pt-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-extrabold text-slate-900">Recommended Specialists</h2>
+          <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">Recommended Specialists</h2>
           <Link
             to="/doctors"
-            className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1"
+            className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:text-blue-800 flex items-center gap-1"
           >
             <span>View All</span>
             <ArrowRight className="w-3.5 h-3.5" />

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Bell, Check, Clock, ExternalLink, CheckCircle, XCircle } from 'lucide-react';
 import { notificationService } from '../../services/notificationService';
 import { appointmentService } from '../../services/appointmentService';
@@ -10,6 +11,7 @@ export const NotificationDropdown = () => {
   const [loading, setLoading] = useState(false);
   const [actionFeedback, setActionFeedback] = useState('');
   const dropdownRef = useRef(null);
+  const location = useLocation();
 
   const fetchNotifications = async () => {
     try {
@@ -32,15 +34,30 @@ export const NotificationDropdown = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Close when clicking outside
+  // Close when navigating to another page
+  useEffect(() => {
+    setIsOpen(false);
+  }, [location]);
+
+  // Close when clicking outside or pressing Escape
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
         setIsOpen(false);
       }
     };
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setIsOpen(false);
+      }
+    };
+
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
   }, []);
 
   const handleMarkAsRead = async (id, e) => {

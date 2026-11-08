@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
-import { Type, Eye, Volume2, VolumeX, Globe } from 'lucide-react';
+import { Type, Eye, Volume2, VolumeX, Globe, Sun, Moon } from 'lucide-react';
 
 export const AccessibilityBar = () => {
   const { t } = useTranslation();
@@ -15,6 +15,8 @@ export const AccessibilityBar = () => {
     language,
     changeLanguage,
     speak,
+    theme,
+    toggleTheme,
   } = useTheme();
 
   const [isOpen, setIsOpen] = useState(false);
@@ -116,6 +118,15 @@ export const AccessibilityBar = () => {
           >
             {textToSpeech ? <Volume2 className="w-3.5 h-3.5 animate-pulse" /> : <VolumeX className="w-3.5 h-3.5" />}
             <span className="hidden md:inline">TTS</span>
+          </button>
+
+          <button
+            onClick={toggleTheme}
+            className="flex items-center gap-1 px-2 py-0.5 rounded transition text-slate-300 hover:text-white"
+            title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+          >
+            {theme === 'dark' ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5 text-blue-300" />}
+            <span className="hidden md:inline">{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
           </button>
         </div>
       </div>

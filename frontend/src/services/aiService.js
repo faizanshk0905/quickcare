@@ -144,10 +144,7 @@ function executeStrictFallbackMatching(text, lang = 'en', conversationId = null)
     reply =
       'Hello! I am QuickCare AI Assistant. Please describe your symptoms or medical concern (e.g. chest discomfort, skin rash, or joint pain), and I will guide you to a verified specialist at Quick Care Hospital if available.';
   } else if (!specialistAvailable) {
-    const isVowel = specialistTitle && /^[aeiou]/i.test(specialistTitle);
-    const article = isVowel ? 'an' : 'a';
-    const titleText = specialistTitle ? `${article} ${specialistTitle.toLowerCase()}` : 'a doctor specializing in this medical field';
-    reply = `Sorry, currently we do not have ${titleText} available at Quick Care Hospital. Please consult ${titleText} at another healthcare facility.`;
+    reply = 'Currently, we do not have a doctor specializing in this condition. Please check again later or consult an appropriate healthcare provider.';
   } else {
     const docList = matchingDoctors.map((d) => `• Dr. ${d.fullName} (${d.specialization})`).join('\n');
     reply = `Hello! Based on the symptoms described, we recommend consulting our verified specialist in **${detectedSpec}**.\n\n**Available Specialist(s) at Quick Care:**\n${docList}\n\nYou can review their profile and book a consultation using the doctor card below.`;

@@ -45,10 +45,13 @@ export const MyAppointments = () => {
             doctorSpecialization: 'Cardiologist',
             appointmentDate: new Date().toISOString().split('T')[0],
             appointmentTime: '10:00 AM',
-            status: 'PENDING_CONFIRMATION',
-            confirmationStatus: 'PENDING_CONFIRMATION',
+            status: 'CONFIRMED',
+            confirmationStatus: 'CONFIRMED',
+            consultationType: 'VIDEO',
+            googleMeetLink: 'https://meet.google.com/qck-card-hms',
+            doctorNotes: 'Please have your latest ECG, lipid profile reports, and blood pressure monitor ready.',
             meetingRoomId: 'quickcare-room-101',
-            fee: 800,
+            consultationFee: 800,
             slotReleased: false,
           }
         ]);
@@ -62,10 +65,13 @@ export const MyAppointments = () => {
           doctorSpecialization: 'Cardiologist',
           appointmentDate: new Date().toISOString().split('T')[0],
           appointmentTime: '10:00 AM',
-          status: 'PENDING_CONFIRMATION',
-          confirmationStatus: 'PENDING_CONFIRMATION',
+          status: 'CONFIRMED',
+          confirmationStatus: 'CONFIRMED',
+          consultationType: 'VIDEO',
+          googleMeetLink: 'https://meet.google.com/qck-card-hms',
+          doctorNotes: 'Please have your latest ECG, lipid profile reports, and blood pressure monitor ready.',
           meetingRoomId: 'quickcare-room-101',
-          fee: 800,
+          consultationFee: 800,
           slotReleased: false,
         }
       ]);
@@ -155,9 +161,9 @@ export const MyAppointments = () => {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-extrabold text-slate-900">My Appointments</h1>
-        <p className="text-xs sm:text-sm text-slate-500 mt-1">
-          Review, reschedule, or cancel your consultations, and join your secure video calls.
+        <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white">My Appointments</h1>
+        <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
+          Review, reschedule, or cancel your consultations, and join your secure Google Meet video calls.
         </p>
       </div>
 
@@ -175,13 +181,13 @@ export const MyAppointments = () => {
               className={`px-4 py-2 rounded-2xl font-bold transition shrink-0 flex items-center gap-1.5 ${
                 activeTab === tab
                   ? 'bg-blue-600 text-white shadow-xs'
-                  : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                  : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
               }`}
             >
               <span>{tab.charAt(0) + tab.slice(1).toLowerCase()}</span>
               <span
                 className={`px-1.5 py-0.2 rounded-full text-[10px] ${
-                  activeTab === tab ? 'bg-blue-700 text-white' : 'bg-slate-100 text-slate-600'
+                  activeTab === tab ? 'bg-blue-700 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
                 }`}
               >
                 {count}
@@ -195,10 +201,10 @@ export const MyAppointments = () => {
       {loading ? (
         <div className="py-20 text-center text-slate-400 text-sm">Loading appointments...</div>
       ) : filtered.length === 0 ? (
-        <div className="bg-white rounded-3xl p-12 text-center border border-slate-200">
-          <Calendar className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-          <h3 className="text-base font-bold text-slate-800">No {activeTab.toLowerCase()} appointments</h3>
-          <p className="text-xs text-slate-400 mt-1">
+        <div className="bg-white dark:bg-slate-900 rounded-3xl p-12 text-center border border-slate-200 dark:border-slate-800">
+          <Calendar className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+          <h3 className="text-base font-bold text-slate-800 dark:text-slate-200">No {activeTab.toLowerCase()} appointments</h3>
+          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
             Appointments matching this filter will show up here.
           </p>
         </div>
@@ -221,21 +227,21 @@ export const MyAppointments = () => {
       {/* Reschedule Modal */}
       {rescheduleTarget && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white w-full max-w-md rounded-3xl p-6 shadow-2xl border border-slate-100 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-3xl p-6 shadow-2xl border border-slate-100 dark:border-slate-800 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-2">
-                <RotateCcw className="w-5 h-5 text-blue-600" />
-                <h3 className="font-extrabold text-base text-slate-900">Reschedule Consultation</h3>
+                <RotateCcw className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                <h3 className="font-extrabold text-base text-slate-900 dark:text-white">Reschedule Consultation</h3>
               </div>
               <button
                 onClick={() => setRescheduleTarget(null)}
-                className="p-1 text-slate-400 hover:text-slate-600"
+                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <p className="text-xs text-slate-600">
+            <p className="text-xs text-slate-600 dark:text-slate-400">
               Rescheduling appointment with <strong>Dr. {rescheduleTarget.doctorName}</strong>. Current slot: {rescheduleTarget.appointmentDate} at {rescheduleTarget.appointmentTime}.
             </p>
 

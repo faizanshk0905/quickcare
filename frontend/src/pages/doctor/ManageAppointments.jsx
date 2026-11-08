@@ -49,9 +49,9 @@ export const ManageAppointments = () => {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-extrabold text-slate-900">Manage Appointments</h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            Review incoming consultation requests, conduct telemedicine calls, and manage patient visits.
+          <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white">Manage Appointments</h1>
+          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
+            Review incoming consultation requests, conduct Google Meet telehealth sessions, and manage patient visits.
           </p>
         </div>
         <div className="relative">
@@ -61,7 +61,7 @@ export const ManageAppointments = () => {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by patient name..."
-            className="pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-teal-500 w-64"
+            className="pl-9 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white rounded-xl text-xs focus:ring-2 focus:ring-teal-500 w-64"
           />
         </div>
       </div>
@@ -80,13 +80,13 @@ export const ManageAppointments = () => {
               className={`px-4 py-2 rounded-2xl font-bold transition shrink-0 flex items-center gap-1.5 ${
                 activeTab === tab
                   ? 'bg-teal-700 text-white shadow-xs'
-                  : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                  : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
               }`}
             >
               <span>{tab.charAt(0) + tab.slice(1).toLowerCase()}</span>
               <span
                 className={`px-1.5 py-0.2 rounded-full text-[10px] ${
-                  activeTab === tab ? 'bg-teal-800 text-white' : 'bg-slate-100 text-slate-600'
+                  activeTab === tab ? 'bg-teal-800 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
                 }`}
               >
                 {count}
@@ -99,10 +99,10 @@ export const ManageAppointments = () => {
       {loading ? (
         <div className="py-20 text-center text-slate-400 text-sm">Loading appointments...</div>
       ) : filtered.length === 0 ? (
-        <div className="bg-white rounded-3xl p-12 text-center border border-slate-200">
-          <Calendar className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-          <h3 className="text-base font-bold text-slate-800">No appointments found</h3>
-          <p className="text-xs text-slate-400 mt-1">
+        <div className="bg-white dark:bg-slate-900 rounded-3xl p-12 text-center border border-slate-200 dark:border-slate-800">
+          <Calendar className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+          <h3 className="text-base font-bold text-slate-800 dark:text-slate-200">No appointments found</h3>
+          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
             Appointments matching your filter will be shown here.
           </p>
         </div>
@@ -114,6 +114,7 @@ export const ManageAppointments = () => {
               appointment={apt}
               role="DOCTOR"
               onStatusChange={handleStatusChange}
+              onRefresh={fetchAppointments}
             />
           ))}
         </div>

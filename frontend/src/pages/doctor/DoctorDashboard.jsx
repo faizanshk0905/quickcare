@@ -156,53 +156,53 @@ export const DoctorDashboard = () => {
 
       {/* Statistics Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs">
-          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+        <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
+          <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
             Today's Visits
           </span>
-          <p className="text-2xl font-extrabold text-blue-600 mt-1">{todayApts.length}</p>
-          <span className="text-[10px] text-slate-400">Scheduled for today</span>
+          <p className="text-2xl font-extrabold text-blue-600 dark:text-blue-400 mt-1">{todayApts.length}</p>
+          <span className="text-[10px] text-slate-400 dark:text-slate-500">Scheduled for today</span>
         </div>
 
-        <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs">
-          <span className="text-[11px] font-bold text-amber-600 uppercase tracking-wider block">
+        <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
+          <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider block">
             Pending Requests
           </span>
-          <p className="text-2xl font-extrabold text-amber-600 mt-1">{pendingRequests.length}</p>
-          <span className="text-[10px] text-amber-600">Action needed</span>
+          <p className="text-2xl font-extrabold text-amber-600 dark:text-amber-400 mt-1">{pendingRequests.length}</p>
+          <span className="text-[10px] text-amber-600 dark:text-amber-400">Action needed</span>
         </div>
 
-        <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs">
-          <span className="text-[11px] font-bold text-teal-600 uppercase tracking-wider block">
+        <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
+          <span className="text-[11px] font-bold text-teal-600 dark:text-teal-400 uppercase tracking-wider block">
             Confirmed
           </span>
-          <p className="text-2xl font-extrabold text-teal-600 mt-1">{confirmed.length}</p>
-          <span className="text-[10px] text-slate-400">Upcoming sessions</span>
+          <p className="text-2xl font-extrabold text-teal-600 dark:text-teal-400 mt-1">{confirmed.length}</p>
+          <span className="text-[10px] text-slate-400 dark:text-slate-500">Upcoming sessions</span>
         </div>
 
-        <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs">
-          <span className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider block">
+        <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
+          <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider block">
             Completed
           </span>
-          <p className="text-2xl font-extrabold text-emerald-700 mt-1">{completed.length}</p>
-          <span className="text-[10px] text-slate-400">Prescribed cases</span>
+          <p className="text-2xl font-extrabold text-emerald-700 dark:text-emerald-400 mt-1">{completed.length}</p>
+          <span className="text-[10px] text-slate-400 dark:text-slate-500">Prescribed cases</span>
         </div>
 
-        <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs col-span-2 lg:col-span-1">
-          <span className="text-[11px] font-bold text-purple-600 uppercase tracking-wider block">
+        <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs col-span-2 lg:col-span-1">
+          <span className="text-[11px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider block">
             Total Patients
           </span>
-          <p className="text-2xl font-extrabold text-purple-700 mt-1">{uniquePatients}</p>
-          <span className="text-[10px] text-slate-400">Unique individuals</span>
+          <p className="text-2xl font-extrabold text-purple-700 dark:text-purple-400 mt-1">{uniquePatients}</p>
+          <span className="text-[10px] text-slate-400 dark:text-slate-500">Unique individuals</span>
         </div>
       </div>
 
       {/* LIVE VIRTUAL WAITING QUEUE & ADMISSION */}
-      <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200/80 shadow-md space-y-4">
+      <div className="bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-md space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <span className={`w-3 h-3 rounded-full ${waitingQueue.length > 0 ? 'bg-emerald-500 animate-ping' : 'bg-slate-300'}`} />
-            <h2 className="text-lg font-extrabold text-slate-900">
+            <span className={`w-3 h-3 rounded-full ${waitingQueue.length > 0 ? 'bg-emerald-500 animate-ping' : 'bg-slate-300 dark:bg-slate-700'}`} />
+            <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">
               Live Virtual Waiting Room ({waitingQueue.length} Patient{waitingQueue.length === 1 ? '' : 's'} Waiting)
             </h2>
           </div>
@@ -212,32 +212,32 @@ export const DoctorDashboard = () => {
         </div>
 
         {waitingQueue.length === 0 ? (
-          <div className="p-6 bg-slate-50 border border-slate-200/80 rounded-2xl text-center text-xs text-slate-400">
+          <div className="p-6 bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-800 rounded-2xl text-center text-xs text-slate-400 dark:text-slate-500">
             No patients currently in the waiting room. Patients appear here the moment they check in for today's appointment.
           </div>
         ) : (
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-slate-100 dark:divide-slate-800">
             {waitingQueue.map((apt, index) => (
               <div
                 key={apt.appointmentId}
                 className="py-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-teal-50 border border-teal-200 text-teal-800 font-black text-xs flex items-center justify-center shrink-0">
+                  <div className="w-9 h-9 rounded-xl bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 text-teal-800 dark:text-teal-300 font-black text-xs flex items-center justify-center shrink-0">
                     #{index + 1}
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="font-extrabold text-slate-900 text-sm">{apt.patientName}</span>
-                      <span className="px-2 py-0.5 bg-blue-50 text-blue-700 text-[10px] font-bold rounded-full">
+                      <span className="font-extrabold text-slate-900 dark:text-white text-sm">{apt.patientName}</span>
+                      <span className="px-2 py-0.5 bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 text-[10px] font-bold rounded-full">
                         Slot: {apt.appointmentTime}
                       </span>
-                      <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] font-bold rounded-full">
+                      <span className="px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold rounded-full">
                         Waiting Position {index + 1}
                       </span>
                     </div>
                     {apt.reason && (
-                      <p className="text-xs text-slate-500 mt-0.5 truncate max-w-md">
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate max-w-md">
                         {apt.reason}
                       </p>
                     )}
@@ -261,7 +261,7 @@ export const DoctorDashboard = () => {
       {pendingRequests.length > 0 && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
+            <h2 className="text-lg font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
               <span className="w-2.5 h-2.5 bg-amber-500 rounded-full animate-ping" />
               Pending Patient Requests ({pendingRequests.length})
             </h2>
@@ -274,6 +274,7 @@ export const DoctorDashboard = () => {
                 appointment={apt}
                 role="DOCTOR"
                 onStatusChange={handleStatusChange}
+                onRefresh={fetchDoctorData}
               />
             ))}
           </div>
@@ -283,12 +284,12 @@ export const DoctorDashboard = () => {
       {/* Confirmed Schedule */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-extrabold text-slate-900">
+          <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">
             Confirmed Telehealth & Clinic Schedule ({confirmed.length})
           </h2>
           <Link
             to="/doctor/appointments"
-            className="text-xs font-bold text-teal-700 hover:text-teal-900 flex items-center gap-1"
+            className="text-xs font-bold text-teal-700 dark:text-teal-400 hover:text-teal-900 flex items-center gap-1"
           >
             <span>All Appointments</span>
             <ArrowRight className="w-3.5 h-3.5" />
@@ -296,10 +297,10 @@ export const DoctorDashboard = () => {
         </div>
 
         {confirmed.length === 0 ? (
-          <div className="bg-white rounded-3xl p-8 text-center border border-slate-200/80">
-            <Calendar className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-            <p className="text-sm font-bold text-slate-700">No confirmed appointments scheduled</p>
-            <p className="text-xs text-slate-400 mt-1">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-8 text-center border border-slate-200/80 dark:border-slate-800">
+            <Calendar className="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
+            <p className="text-sm font-bold text-slate-700 dark:text-slate-300">No confirmed appointments scheduled</p>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
               New patient bookings will appear here once approved.
             </p>
           </div>
@@ -311,6 +312,7 @@ export const DoctorDashboard = () => {
                 appointment={apt}
                 role="DOCTOR"
                 onStatusChange={handleStatusChange}
+                onRefresh={fetchDoctorData}
               />
             ))}
           </div>

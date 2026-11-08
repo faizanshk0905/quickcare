@@ -15,6 +15,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -69,6 +70,44 @@ public class AppointmentController {
         String reason = body.get("reason");
         Appointment updated = appointmentService.updateStatus(appointmentId, status, reason);
         return ResponseEntity.ok(ApiResponse.ok("Appointment status updated to " + status, updated));
+    }
+
+    @PostMapping("/{appointmentId}/approve")
+    public ResponseEntity<ApiResponse<Appointment>> approveAppointment(
+            @PathVariable String appointmentId,
+            @RequestBody(required = false) Map<String, String> body) {
+        String newDate = body != null ? body.get("date") : null;
+        String newTime = body != null ? body.get("time") : null;
+        String notes = body != null ? body.get("notes") : null;
+        Appointment updated = appointmentService.approveAndScheduleGoogleMeet(appointmentId, newDate, newTime, notes);
+        return ResponseEntity.ok(ApiResponse.ok("Video consultation approved. Google Meet link generated and dispatched to patient.", updated));
+    }
+
+    @PostMapping("/{appointmentId}/reject")
+    public ResponseEntity<ApiResponse<Appointment>> rejectAppointment(
+            @PathVariable String appointmentId,
+            @RequestBody(required = false) Map<String, String> body) {
+        String reason = body != null ? body.get("reason") : "Doctor unavailable at requested time.";
+        Appointment updated = appointmentService.updateStatus(appointmentId, "REJECTED", reason);
+        return ResponseEntity.ok(ApiResponse.ok("Appointment request declined. Patient notified via in-app alert and email.", updated));
+    }
+
+    @GetMapping("/{appointmentId}/google-meet")
+    public ResponseEntity<ApiResponse<Map<String, String>>> getGoogleMeetDetails(@PathVariable String appointmentId) {
+        Appointment apt = appointmentService.getAppointmentById(appointmentId);
+        String meetLink = apt.getGoogleMeetLink();
+        if (meetLink == null || meetLink.isEmpty()) {
+            meetLink = apt.getMeetingRoomId();
+        }
+        Map<String, String> details = new HashMap<>();
+        details.put("appointmentId", apt.getAppointmentId());
+        details.put("googleMeetLink", meetLink);
+        details.put("doctorName", apt.getDoctorName());
+        details.put("patientName", apt.getPatientName());
+        details.put("appointmentDate", apt.getAppointmentDate());
+        details.put("appointmentTime", apt.getAppointmentTime());
+        details.put("status", apt.getStatus());
+        return ResponseEntity.ok(ApiResponse.ok(details));
     }
 
     @PutMapping("/{appointmentId}/reschedule")
