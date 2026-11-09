@@ -9,6 +9,7 @@ import { AccessibilityBar } from './components/common/AccessibilityBar';
 import { Navbar } from './components/common/Navbar';
 import { Footer } from './components/common/Footer';
 import { AiChatWidget } from './components/ai/AiChatWidget';
+import { InstallPwaPrompt } from './components/common/InstallPwaPrompt';
 import { ProtectedRoute } from './routes/ProtectedRoute';
 
 // Public Pages
@@ -217,6 +218,9 @@ export function App() {
 
             {/* Floating 24/7 AI Healthcare Assistant */}
             <AiChatWidget />
+
+            {/* Mobile PWA Quick-Install Banner */}
+            <InstallPwaPrompt />
           </div>
         </BrowserRouter>
       </AuthProvider>
