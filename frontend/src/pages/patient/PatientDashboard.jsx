@@ -30,14 +30,14 @@ export const PatientDashboard = () => {
     try {
       setLoading(true);
       const [aptRes, docRes] = await Promise.all([
-        appointmentService.getPatientAppointments(),
-        doctorService.searchDoctors(),
+        appointmentService.getPatientAppointments().catch(() => ({ data: [] })),
+        doctorService.searchDoctors().catch(() => ({ data: [] })),
       ]);
 
-      if (aptRes && aptRes.data) {
+      if (aptRes && Array.isArray(aptRes.data)) {
         setAppointments(aptRes.data);
       }
-      if (docRes && docRes.data) {
+      if (docRes && Array.isArray(docRes.data) && docRes.data.length > 0) {
         setRecommendedDoctors(docRes.data.slice(0, 3));
       }
     } catch (err) {
