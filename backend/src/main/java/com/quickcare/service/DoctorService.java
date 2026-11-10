@@ -191,13 +191,15 @@ public class DoctorService {
 
         // 2. Dynamically collect all active booked appointments for this doctor on this date
         List<String> bookedSlots = db.findAppointmentsByDoctorId(doctorId).stream()
+                .filter(Objects::nonNull)
                 .filter(a -> date.equals(a.getAppointmentDate()) &&
                         !"CANCELLED".equalsIgnoreCase(a.getStatus()) &&
                         !"REJECTED".equalsIgnoreCase(a.getStatus()) &&
                         !"DECLINED".equalsIgnoreCase(a.getStatus()) &&
                         !"NO_SHOW".equalsIgnoreCase(a.getStatus()) &&
                         !a.isSlotReleased())
-                .map(Appointment::getAppointmentTime)
+                .map(a -> a.getAppointmentTime())
+                .filter(Objects::nonNull)
                 .collect(Collectors.toList());
 
         DoctorAvailability da = db.findAvailability(doctorId, date)
