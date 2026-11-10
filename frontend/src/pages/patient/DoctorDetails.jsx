@@ -202,9 +202,14 @@ export const DoctorDetails = () => {
     try {
       const res = await appointmentService.bookAppointment({
         doctorId,
+        doctorName: doctor.fullName,
+        doctorSpecialization: doctor.specialization,
+        patientName: user?.fullName || 'Patient Aarav Sharma',
+        patientEmail: user?.email || 'patient@quickcare.com',
         appointmentDate: selectedDate,
         appointmentTime: selectedSlot,
         consultationType,
+        consultationFee: doctor.consultationFee,
         reason,
       });
 

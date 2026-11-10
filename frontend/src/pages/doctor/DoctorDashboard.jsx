@@ -16,6 +16,9 @@ import {
   ArrowRight,
   ShieldAlert,
   AlertCircle,
+  ExternalLink,
+  Copy,
+  Check,
 } from 'lucide-react';
 
 export const DoctorDashboard = () => {
@@ -24,6 +27,14 @@ export const DoctorDashboard = () => {
   const [appointments, setAppointments] = useState([]);
   const [waitingQueue, setWaitingQueue] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [copiedMeetId, setCopiedMeetId] = useState('');
+
+  const handleCopyLink = (meetUrl, id) => {
+    if (!meetUrl) return;
+    navigator.clipboard.writeText(meetUrl);
+    setCopiedMeetId(id);
+    setTimeout(() => setCopiedMeetId(''), 2000);
+  };
 
   const fetchDoctorData = async () => {
     try {
@@ -40,7 +51,7 @@ export const DoctorDashboard = () => {
         setDoctor(docRes.data);
       } else {
         setDoctor({
-          doctorId: 'doc_1',
+          doctorId: 'doc_001',
           fullName: 'Dr. Priya Deshmukh',
           specialization: 'Cardiologist',
           hospitalAffiliation: 'Apollo Hospital',
@@ -58,7 +69,7 @@ export const DoctorDashboard = () => {
     } catch (err) {
       console.warn('Using resilient doctor state:', err.message);
       setDoctor({
-        doctorId: 'doc_1',
+        doctorId: 'doc_001',
         fullName: 'Dr. Priya Deshmukh',
         specialization: 'Cardiologist',
         hospitalAffiliation: 'Apollo Hospital',
@@ -227,6 +238,115 @@ export const DoctorDashboard = () => {
           <p className="text-2xl font-extrabold text-purple-700 dark:text-purple-400 mt-1">{uniquePatients}</p>
           <span className="text-[10px] text-slate-400 dark:text-slate-500">Unique individuals</span>
         </div>
+      </div>
+
+      {/* GOOGLE MEET VIDEO CONSULTATIONS HUB */}
+      <div className="bg-gradient-to-r from-teal-900 via-slate-900 to-blue-950 p-6 sm:p-8 rounded-3xl text-white shadow-xl space-y-5 border border-teal-500/30">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/10">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-teal-500 text-slate-950 flex items-center justify-center font-bold shadow-md shadow-teal-500/20">
+              <Video className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-black tracking-tight">Telemedicine & Google Meet Hub</h2>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-teal-500/20 text-teal-300 border border-teal-400/30">
+                  Live Meeting Links
+                </span>
+              </div>
+              <p className="text-xs text-teal-200/80">
+                Direct authorized Google Meet join links for patient video consultations
+              </p>
+            </div>
+          </div>
+          <span className="text-xs text-teal-300/80 font-mono">
+            {appointments.filter((a) => a.consultationType === 'VIDEO').length} Video Sessions Scheduled
+          </span>
+        </div>
+
+        {(() => {
+          const videoApts = appointments.filter(
+            (a) => a.consultationType === 'VIDEO' && a.status !== 'CANCELLED' && a.status !== 'REJECTED'
+          );
+          if (videoApts.length === 0) {
+            return (
+              <div className="p-6 rounded-2xl bg-white/5 border border-white/10 text-center text-xs text-teal-200/70">
+                No video appointments booked yet. When a patient books a video consultation, their Google Meet link will appear here instantly.
+              </div>
+            );
+          }
+          return (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {videoApts.map((apt) => {
+                const meetUrl =
+                  apt.googleMeetLink ||
+                  `https://meet.google.com/qck-care-${apt.appointmentId?.slice(-3) || 'med'}`;
+                const isPending = apt.status === 'PENDING';
+                return (
+                  <div
+                    key={apt.appointmentId}
+                    className="p-4 rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 space-y-3 hover:border-teal-400/40 transition"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-sm font-extrabold text-white block">
+                          {apt.patientName || 'Patient Consultation'}
+                        </span>
+                        <span className="text-[11px] text-teal-200">
+                          📅 {apt.appointmentDate} at {apt.appointmentTime}
+                        </span>
+                      </div>
+                      <span
+                        className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase border ${
+                          isPending
+                            ? 'bg-amber-400/20 text-amber-300 border-amber-400/40'
+                            : 'bg-emerald-400/20 text-emerald-300 border-emerald-400/40'
+                        }`}
+                      >
+                        {isPending ? 'Pending Review' : 'Live Ready'}
+                      </span>
+                    </div>
+
+                    <div className="p-2 rounded-xl bg-black/30 border border-white/10 font-mono text-[11px] text-teal-300 truncate">
+                      {meetUrl}
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => handleCopyLink(meetUrl, apt.appointmentId)}
+                        className="px-3 py-1.5 text-xs font-bold rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white transition flex items-center gap-1.5"
+                      >
+                        {copiedMeetId === apt.appointmentId ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-400" />
+                            <span className="text-emerald-400">Copied</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5 text-slate-300" />
+                            <span>Copy Link</span>
+                          </>
+                        )}
+                      </button>
+
+                      <a
+                        href={meetUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-1 py-1.5 px-3 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black text-xs rounded-xl shadow-md transition flex items-center justify-center gap-1.5 active:scale-95"
+                      >
+                        <Video className="w-3.5 h-3.5 text-slate-950" />
+                        <span>Join Google Meet</span>
+                        <ExternalLink className="w-3 h-3 text-slate-950" />
+                      </a>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
       </div>
 
       {/* LIVE VIRTUAL WAITING QUEUE & ADMISSION */}

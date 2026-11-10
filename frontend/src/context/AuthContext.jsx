@@ -28,7 +28,7 @@ const DEMO_ACCOUNTS = {
       phone: '+91 98220 12345'
     },
     role: 'DOCTOR',
-    profileId: 'doc_1'
+    profileId: 'doc_001'
   },
   'admin@quickcare.com': {
     token: 'demo-token-admin',
