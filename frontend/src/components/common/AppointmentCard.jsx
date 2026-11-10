@@ -269,8 +269,11 @@ export const AppointmentCard = ({
         </div>
       )}
 
-      {/* GOOGLE MEET INTEGRATION CARD (When Confirmed Video Consultation) */}
-      {appointment.status === 'CONFIRMED' && appointment.consultationType === 'VIDEO' && (
+      {/* GOOGLE MEET INTEGRATION CARD (When Video Consultation) */}
+      {appointment.consultationType === 'VIDEO' &&
+        appointment.status !== 'CANCELLED' &&
+        appointment.status !== 'REJECTED' &&
+        appointment.status !== 'DECLINED' && (
         <div className="p-4 rounded-2xl bg-gradient-to-r from-teal-50/80 via-blue-50/80 to-indigo-50/80 dark:from-slate-800/90 dark:via-teal-950/40 dark:to-slate-800/90 border border-teal-200 dark:border-teal-800/60 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">

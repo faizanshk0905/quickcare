@@ -276,13 +276,24 @@ export const DoctorDashboard = () => {
                   </div>
                 </div>
 
-                <Link
-                  to={`/consultations/${apt.appointmentId}`}
-                  className="px-4 py-2 bg-gradient-to-r from-teal-600 to-blue-600 hover:from-teal-700 hover:to-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 active:scale-95"
-                >
-                  <Video className="w-3.5 h-3.5" />
-                  <span>Admit & Enter Video Room</span>
-                </Link>
+                <div className="flex items-center gap-2">
+                  <a
+                    href={apt.googleMeetLink || `https://meet.google.com/qck-care-${apt.appointmentId?.slice(-3) || 'med'}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 active:scale-95"
+                  >
+                    <Video className="w-3.5 h-3.5" />
+                    <span>Join Google Meet</span>
+                  </a>
+                  <Link
+                    to={`/consultations/${apt.appointmentId}`}
+                    className="px-3.5 py-2 bg-gradient-to-r from-teal-600 to-blue-600 hover:from-teal-700 hover:to-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 active:scale-95"
+                  >
+                    <Video className="w-3.5 h-3.5" />
+                    <span>Internal Room</span>
+                  </Link>
+                </div>
               </div>
             ))}
           </div>
