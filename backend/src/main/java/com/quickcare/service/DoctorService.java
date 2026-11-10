@@ -186,40 +186,53 @@ public class DoctorService {
             localDate = LocalDate.now();
         }
 
-        Optional<DoctorAvailability> existing = db.findAvailability(doctorId, date);
-        if (existing.isPresent()) {
-            DoctorAvailability da = existing.get();
-            // Dynamically filter out past slots if date is today
-            ZoneId zoneId;
-            try {
-                zoneId = ZoneId.of(doctor.getTimezone() != null ? doctor.getTimezone() : "Asia/Kolkata");
-            } catch (Exception e) {
-                zoneId = ZoneId.of("Asia/Kolkata");
-            }
+        // 1. Freshly calculate valid generated future slots for this date
+        List<String> validSlots = generate15MinSlots(doctor, localDate);
 
-            if (localDate.equals(LocalDate.now(zoneId))) {
-                LocalTime now = LocalTime.now(zoneId);
-                List<String> filtered = da.getAvailableSlots().stream()
-                        .filter(s -> {
-                            LocalTime slotTime = parseTimeFlexible(s, null);
-                            return slotTime != null && slotTime.isAfter(now);
-                        })
-                        .collect(Collectors.toList());
-                da.setAvailableSlots(filtered);
-            }
-            return da;
-        }
+        // 2. Dynamically collect all active booked appointments for this doctor on this date
+        List<String> bookedSlots = db.findAppointmentsByDoctorId(doctorId).stream()
+                .filter(a -> date.equals(a.getAppointmentDate()) &&
+                        !"CANCELLED".equalsIgnoreCase(a.getStatus()) &&
+                        !"REJECTED".equalsIgnoreCase(a.getStatus()) &&
+                        !"DECLINED".equalsIgnoreCase(a.getStatus()) &&
+                        !"NO_SHOW".equalsIgnoreCase(a.getStatus()) &&
+                        !a.isSlotReleased())
+                .map(Appointment::getAppointmentTime)
+                .collect(Collectors.toList());
 
-        // Generate 15-minute slots automatically based on doctor configuration
-        List<String> slots = generate15MinSlots(doctor, localDate);
-        DoctorAvailability da = new DoctorAvailability(doctorId + "_" + date, doctorId, date, slots);
+        DoctorAvailability da = db.findAvailability(doctorId, date)
+                .orElse(new DoctorAvailability(doctorId + "_" + date, doctorId, date, new ArrayList<>()));
+
+        da.setDoctorId(doctorId);
+        da.setDate(date);
+        da.setAvailableSlots(validSlots);
+        da.setBookedSlots(bookedSlots);
         da.setWorkingHours(doctor.getWorkingHours());
         da.setSlotDurationMinutes(doctor.getSlotDurationMinutes() > 0 ? doctor.getSlotDurationMinutes() : 15);
         if (doctor.getHolidays() != null && doctor.getHolidays().contains(date)) {
             da.setHoliday(true);
             da.setHolidayReason("Doctor scheduled holiday");
+        } else {
+            da.setHoliday(false);
+            da.setHolidayReason(null);
         }
         return db.saveAvailability(da);
+    }
+
+    public Doctor updateDoctorOnlineStatus(String doctorId, String status) {
+        Doctor doc = getDoctorById(doctorId);
+        if (status != null && !status.trim().isEmpty()) {
+            doc.setOnlineStatus(status.trim().toUpperCase());
+        }
+        return db.saveDoctor(doc);
+    }
+
+    public List<Doctor> find247AvailableDoctors() {
+        return db.findVerifiedDoctors().stream()
+                .filter(d -> d.isVideoConsultationAvailable() &&
+                        ("ONLINE".equalsIgnoreCase(d.getOnlineStatus()) ||
+                         "AVAILABLE_FOR_VIDEO".equalsIgnoreCase(d.getOnlineStatus())))
+                .collect(Collectors.toList());
     }
 
     public DoctorAvailability updateAvailability(AvailabilityUpdateRequest req) {

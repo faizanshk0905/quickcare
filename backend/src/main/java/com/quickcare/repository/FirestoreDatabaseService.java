@@ -38,6 +38,8 @@ public class FirestoreDatabaseService {
     private final Map<String, AiConversation> aiConversations = new ConcurrentHashMap<>();
     // Server-side One Doctor - One Active Video Consultation Concurrency Lock (doctorId -> consultationId)
     private final Map<String, String> activeDoctorConsultationLocks = new ConcurrentHashMap<>();
+    // Real-Time Atomic Concurrency Lock for Appointment Slot Booking (slotKey -> timestamp)
+    private final Map<String, Long> slotReservationLocks = new ConcurrentHashMap<>();
 
     @Autowired
     public FirestoreDatabaseService(@Autowired(required = false) Firestore firestore) {
@@ -115,6 +117,10 @@ public class FirestoreDatabaseService {
                 doctor.setSlotDurationMinutes(((Number) data.get("slotDurationMinutes")).intValue());
             }
             if (data.get("timezone") != null) doctor.setTimezone(String.valueOf(data.get("timezone")));
+            if (data.get("onlineStatus") != null) doctor.setOnlineStatus(String.valueOf(data.get("onlineStatus")));
+            if (data.get("videoConsultationAvailable") instanceof Boolean) {
+                doctor.setVideoConsultationAvailable((Boolean) data.get("videoConsultationAvailable"));
+            }
             if (data.get("verificationStatus") != null) doctor.setVerificationStatus(String.valueOf(data.get("verificationStatus")));
             if (data.get("profileImage") != null) doctor.setProfileImage(String.valueOf(data.get("profileImage")));
             if (data.get("gender") != null) doctor.setGender(String.valueOf(data.get("gender")));
@@ -417,6 +423,25 @@ public class FirestoreDatabaseService {
                 !"NO_SHOW".equalsIgnoreCase(a.getStatus()) &&
                 !a.isSlotReleased()
         );
+    }
+
+    public synchronized boolean tryReserveSlot(String doctorId, String date, String time) {
+        if (isSlotBooked(doctorId, date, time)) {
+            return false;
+        }
+        String slotKey = doctorId + "_" + date + "_" + time.trim().toUpperCase();
+        Long lockTime = slotReservationLocks.get(slotKey);
+        // Lock expires after 20 seconds if booking doesn't complete
+        if (lockTime != null && (System.currentTimeMillis() - lockTime) < 20000) {
+            return false;
+        }
+        slotReservationLocks.put(slotKey, System.currentTimeMillis());
+        return true;
+    }
+
+    public synchronized void releaseSlotLock(String doctorId, String date, String time) {
+        String slotKey = doctorId + "_" + date + "_" + time.trim().toUpperCase();
+        slotReservationLocks.remove(slotKey);
     }
 
     // AVAILABILITY

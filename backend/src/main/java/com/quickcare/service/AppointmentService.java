@@ -103,22 +103,26 @@ public class AppointmentService {
             }
         }
 
-        // Working hours and break validation
-        LocalTime startTime = doctorService.parseTimeFlexible(doctor.getWorkingStartTime(), LocalTime.of(9, 0));
-        LocalTime endTime = doctorService.parseTimeFlexible(doctor.getWorkingEndTime(), LocalTime.of(17, 0));
-        LocalTime breakStart = doctorService.parseTimeFlexible(doctor.getBreakStartTime(), LocalTime.of(13, 0));
-        LocalTime breakEnd = doctorService.parseTimeFlexible(doctor.getBreakEndTime(), LocalTime.of(14, 0));
+        boolean isVideo = "VIDEO".equalsIgnoreCase(req.getConsultationType());
 
-        if (slotTime.isBefore(startTime) || slotTime.compareTo(endTime) >= 0) {
-            throw new BadRequestException("Selected time slot is outside Dr. " + doctor.getFullName() + "'s working hours (" + doctor.getWorkingHours() + ").");
+        // Working hours and break validation (enforced strictly for in-person/clinic visits)
+        if (!isVideo) {
+            LocalTime startTime = doctorService.parseTimeFlexible(doctor.getWorkingStartTime(), LocalTime.of(9, 0));
+            LocalTime endTime = doctorService.parseTimeFlexible(doctor.getWorkingEndTime(), LocalTime.of(17, 0));
+            LocalTime breakStart = doctorService.parseTimeFlexible(doctor.getBreakStartTime(), LocalTime.of(13, 0));
+            LocalTime breakEnd = doctorService.parseTimeFlexible(doctor.getBreakEndTime(), LocalTime.of(14, 0));
+
+            if (slotTime.isBefore(startTime) || slotTime.compareTo(endTime) >= 0) {
+                throw new BadRequestException("Selected time slot is outside Dr. " + doctor.getFullName() + "'s clinic working hours (" + doctor.getWorkingHours() + "). For 24/7 care, select Video Consultation.");
+            }
+
+            if (slotTime.compareTo(breakStart) >= 0 && slotTime.compareTo(breakEnd) < 0) {
+                throw new BadRequestException("Selected time slot falls during Dr. " + doctor.getFullName() + "'s scheduled clinic break (" + doctor.getBreakStartTime() + " - " + doctor.getBreakEndTime() + ").");
+            }
         }
 
-        if (slotTime.compareTo(breakStart) >= 0 && slotTime.compareTo(breakEnd) < 0) {
-            throw new BadRequestException("Selected time slot falls during Dr. " + doctor.getFullName() + "'s scheduled break (" + doctor.getBreakStartTime() + " - " + doctor.getBreakEndTime() + ").");
-        }
-
-        // ATOMIC DOUBLE-BOOKING CHECK
-        if (db.isSlotBooked(req.getDoctorId(), req.getAppointmentDate(), req.getAppointmentTime())) {
+        // ATOMIC DOUBLE-BOOKING CONCURRENCY LOCK
+        if (!db.tryReserveSlot(req.getDoctorId(), req.getAppointmentDate(), req.getAppointmentTime())) {
             throw new BadRequestException("This appointment slot has just been booked. Please select another slot.");
         }
 
@@ -279,6 +283,26 @@ public class AppointmentService {
     }
 
     private void freeSlot(String doctorId, String date, String time) {
+        db.releaseSlotLock(doctorId, date, time);
+        try {
+            LocalDate aptDate = LocalDate.parse(date);
+            ZoneId zoneId = ZoneId.of("Asia/Kolkata");
+            LocalDate todayInZone = LocalDate.now(zoneId);
+
+            // If appointment date is already in the past, never make it available again
+            if (aptDate.isBefore(todayInZone)) {
+                return;
+            }
+
+            // If appointment date is today, only free if the slot is still in the future
+            if (aptDate.equals(todayInZone)) {
+                LocalTime slotTime = doctorService.parseTimeFlexible(time, null);
+                if (slotTime == null || !slotTime.isAfter(LocalTime.now(zoneId))) {
+                    return;
+                }
+            }
+        } catch (Exception ignored) {}
+
         db.findAvailability(doctorId, date).ifPresent(da -> {
             da.getBookedSlots().remove(time);
             db.saveAvailability(da);

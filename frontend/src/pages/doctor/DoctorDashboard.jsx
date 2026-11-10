@@ -136,6 +136,38 @@ export const DoctorDashboard = () => {
           <p className="text-xs sm:text-sm text-teal-100 max-w-xl">
             {doctor?.specialization} • {doctor?.qualification} • Fee: ₹{doctor?.consultationFee}
           </p>
+
+          {/* Real-Time Live Status Toggle */}
+          <div className="flex flex-wrap items-center gap-1.5 bg-black/20 backdrop-blur-md p-1.5 rounded-2xl border border-white/20 mt-3">
+            <span className="text-[10px] uppercase font-extrabold text-teal-200 px-2">Availability:</span>
+            {[
+              { id: 'AVAILABLE_FOR_VIDEO', label: '24/7 Video Available', dot: 'bg-teal-300 animate-pulse' },
+              { id: 'ONLINE', label: 'Online', dot: 'bg-emerald-400' },
+              { id: 'BUSY', label: 'Busy', dot: 'bg-amber-400' },
+              { id: 'OFFLINE', label: 'Offline', dot: 'bg-slate-400' },
+            ].map((st) => (
+              <button
+                key={st.id}
+                type="button"
+                onClick={async () => {
+                  try {
+                    await doctorService.updateDoctorStatus(st.id);
+                    setDoctor((prev) => ({ ...prev, onlineStatus: st.id }));
+                  } catch (err) {
+                    console.error(err);
+                  }
+                }}
+                className={`px-3 py-1 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                  (doctor?.onlineStatus || 'AVAILABLE_FOR_VIDEO') === st.id
+                    ? 'bg-white text-teal-900 shadow-sm font-extrabold'
+                    : 'text-white/80 hover:bg-white/20'
+                }`}
+              >
+                <span className={`w-2 h-2 rounded-full ${st.dot}`} />
+                <span>{st.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-3 shrink-0">

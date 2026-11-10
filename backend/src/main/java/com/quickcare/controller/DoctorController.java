@@ -13,6 +13,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/doctors")
@@ -87,5 +88,27 @@ public class DoctorController {
         req.setDoctorId(doctor.getDoctorId());
         DoctorAvailability updated = doctorService.updateAvailability(req);
         return ResponseEntity.ok(ApiResponse.ok("Availability updated successfully", updated));
+    }
+
+    @PutMapping("/status")
+    public ResponseEntity<ApiResponse<Doctor>> updateStatus(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @RequestBody Map<String, String> body) {
+        if (principal == null) {
+            return ResponseEntity.status(401).body(ApiResponse.error("Authentication required"));
+        }
+        String status = body != null ? body.get("status") : null;
+        if (status == null || status.trim().isEmpty()) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Status is required (ONLINE, AVAILABLE_FOR_VIDEO, BUSY, OFFLINE)"));
+        }
+        Doctor doctor = doctorService.getDoctorByUid(principal.getUid());
+        Doctor updated = doctorService.updateDoctorOnlineStatus(doctor.getDoctorId(), status);
+        return ResponseEntity.ok(ApiResponse.ok("Doctor status updated to " + status, updated));
+    }
+
+    @GetMapping("/247/available")
+    public ResponseEntity<ApiResponse<List<Doctor>>> get247AvailableDoctors() {
+        List<Doctor> list = doctorService.find247AvailableDoctors();
+        return ResponseEntity.ok(ApiResponse.ok(list));
     }
 }

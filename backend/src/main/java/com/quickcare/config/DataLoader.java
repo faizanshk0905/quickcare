@@ -276,6 +276,8 @@ public class DataLoader implements CommandLineRunner {
         d.setBreakEndTime("02:00 PM");
         d.setSlotDurationMinutes(15);
         d.setTimezone("Asia/Kolkata");
+        d.setOnlineStatus("AVAILABLE_FOR_VIDEO");
+        d.setVideoConsultationAvailable(true);
         d.setAvailableDays(Arrays.asList("Monday", "Tuesday", "Wednesday", "Thursday", "Friday"));
         db.saveDoctor(d);
 

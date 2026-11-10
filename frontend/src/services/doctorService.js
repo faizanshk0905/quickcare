@@ -21,6 +21,8 @@ export const DEFAULT_DOCTORS = [
     workingStartTime: '09:00 AM',
     workingEndTime: '05:00 PM',
     slotDurationMinutes: 15,
+    onlineStatus: 'AVAILABLE_FOR_VIDEO',
+    videoConsultationAvailable: true,
     availableDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
   },
   {
@@ -43,6 +45,8 @@ export const DEFAULT_DOCTORS = [
     workingStartTime: '09:00 AM',
     workingEndTime: '05:00 PM',
     slotDurationMinutes: 15,
+    onlineStatus: 'AVAILABLE_FOR_VIDEO',
+    videoConsultationAvailable: true,
     availableDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
   },
   {
@@ -65,6 +69,8 @@ export const DEFAULT_DOCTORS = [
     workingStartTime: '09:00 AM',
     workingEndTime: '05:00 PM',
     slotDurationMinutes: 15,
+    onlineStatus: 'AVAILABLE_FOR_VIDEO',
+    videoConsultationAvailable: true,
     availableDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
   },
   {
@@ -87,6 +93,8 @@ export const DEFAULT_DOCTORS = [
     workingStartTime: '09:00 AM',
     workingEndTime: '05:00 PM',
     slotDurationMinutes: 15,
+    onlineStatus: 'AVAILABLE_FOR_VIDEO',
+    videoConsultationAvailable: true,
     availableDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
   },
   {
@@ -109,6 +117,8 @@ export const DEFAULT_DOCTORS = [
     workingStartTime: '09:00 AM',
     workingEndTime: '05:00 PM',
     slotDurationMinutes: 15,
+    onlineStatus: 'AVAILABLE_FOR_VIDEO',
+    videoConsultationAvailable: true,
     availableDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
   },
   {
@@ -131,6 +141,8 @@ export const DEFAULT_DOCTORS = [
     workingStartTime: '09:00 AM',
     workingEndTime: '05:00 PM',
     slotDurationMinutes: 15,
+    onlineStatus: 'AVAILABLE_FOR_VIDEO',
+    videoConsultationAvailable: true,
     availableDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
   }
 ];
@@ -218,18 +230,46 @@ export const doctorService = {
         return { success: true, data: res.data.data || res.data };
       }
     } catch (err) {
-      console.warn('Backend availability API offline, generating clinical time slots:', err.message);
+      console.warn('Backend availability API offline, calculating dynamic real-time slots:', err.message);
     }
 
-    const defaultSlots = [
-      '09:00 AM', '09:15 AM', '09:30 AM', '09:45 AM',
-      '10:00 AM', '10:15 AM', '10:30 AM', '10:45 AM',
-      '11:00 AM', '11:15 AM', '11:30 AM', '11:45 AM',
-      '12:00 PM', '12:15 PM', '12:30 PM', '12:45 PM',
-      '02:00 PM', '02:15 PM', '02:30 PM', '02:45 PM',
-      '03:00 PM', '03:15 PM', '03:30 PM', '03:45 PM',
-      '04:00 PM', '04:15 PM', '04:30 PM', '04:45 PM'
-    ];
+    // Dynamic fallback generation using real-time system clock in Asia/Kolkata
+    const targetDoc = DEFAULT_DOCTORS.find((d) => d.doctorId === doctorId) || DEFAULT_DOCTORS[0];
+    const duration = targetDoc.slotDurationMinutes || 15;
+
+    // Get current Indian Standard Time (Asia/Kolkata)
+    const now = new Date();
+    const istTimeStr = now.toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour12: false });
+    const [currH, currM] = istTimeStr.split(':').map(Number);
+    const currTotalMinutes = currH * 60 + currM;
+
+    const istDateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(now);
+    const isToday = date === istDateStr;
+
+    // 09:00 AM (540 mins) to 05:00 PM (1020 mins)
+    // Break 01:00 PM (780 mins) to 02:00 PM (840 mins)
+    const startMinutes = 9 * 60; // 09:00 AM
+    const endMinutes = 17 * 60; // 05:00 PM
+    const breakStart = 13 * 60; // 01:00 PM
+    const breakEnd = 14 * 60; // 02:00 PM
+
+    const generatedSlots = [];
+    for (let m = startMinutes; m + duration <= endMinutes; m += duration) {
+      // Check break
+      if ((m >= breakStart && m < breakEnd) || (m + duration > breakStart && m + duration <= breakEnd)) {
+        continue;
+      }
+      // If date is today, strictly hide/omit all past time slots
+      if (isToday && m <= currTotalMinutes) {
+        continue;
+      }
+      const h = Math.floor(m / 60);
+      const min = m % 60;
+      const period = h >= 12 ? 'PM' : 'AM';
+      const displayH = h % 12 === 0 ? 12 : h % 12;
+      const slotString = `${String(displayH).padStart(2, '0')}:${String(min).padStart(2, '0')} ${period}`;
+      generatedSlots.push(slotString);
+    }
 
     return {
       success: true,
@@ -237,9 +277,10 @@ export const doctorService = {
         availabilityId: `${doctorId}_${date}`,
         doctorId,
         date,
-        availableSlots: defaultSlots,
-        slotDurationMinutes: 15,
-        workingHours: '09:00 AM - 05:00 PM',
+        availableSlots: generatedSlots,
+        bookedSlots: [],
+        slotDurationMinutes: duration,
+        workingHours: targetDoc.workingHours || '09:00 AM - 05:00 PM',
       },
     };
   },
@@ -247,5 +288,30 @@ export const doctorService = {
   async updateAvailability(data) {
     const res = await api.put('/doctors/availability', data);
     return res.data;
+  },
+
+  async updateDoctorStatus(status) {
+    try {
+      const res = await api.put('/doctors/status', { status });
+      return res.data;
+    } catch (err) {
+      console.warn('Backend updateDoctorStatus API offline, persisting session status:', err.message);
+      return { success: true, message: `Status updated to ${status}` };
+    }
+  },
+
+  async get247AvailableDoctors() {
+    try {
+      const res = await api.get('/doctors/247/available');
+      if (res && res.data && res.data.data) {
+        return { success: true, data: res.data.data };
+      }
+    } catch (err) {
+      console.warn('Backend 24/7 doctors API offline, resolving active online doctors:', err.message);
+    }
+    const filtered = DEFAULT_DOCTORS.filter(
+      (d) => d.videoConsultationAvailable !== false && d.onlineStatus !== 'OFFLINE'
+    );
+    return { success: true, data: filtered };
   },
 };

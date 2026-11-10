@@ -25,6 +25,25 @@ export const PatientDashboard = () => {
   const [recommendedDoctors, setRecommendedDoctors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedPrescription, setSelectedPrescription] = useState(null);
+  const [istTime, setIstTime] = useState('');
+
+  useEffect(() => {
+    const updateTime = () => {
+      const now = new Date();
+      setIstTime(
+        now.toLocaleTimeString('en-US', {
+          timeZone: 'Asia/Kolkata',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: true,
+        })
+      );
+    };
+    updateTime();
+    const timer = setInterval(updateTime, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const fetchDashboardData = async () => {
     try {
@@ -62,6 +81,27 @@ export const PatientDashboard = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
+      {/* Top IST Live Clock & Date */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs font-semibold text-slate-500">
+        <div className="flex items-center gap-2">
+          <Calendar className="w-4 h-4 text-blue-600" />
+          <span>
+            {new Date().toLocaleDateString('en-US', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+              timeZone: 'Asia/Kolkata',
+            })}
+          </span>
+        </div>
+        <div className="flex items-center gap-2 px-3.5 py-1 bg-slate-900 text-white rounded-full font-mono text-[11px] shadow-xs">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="text-slate-300">IST:</span>
+          <span className="font-bold text-emerald-300 tracking-wider">{istTime || 'Loading...'}</span>
+        </div>
+      </div>
+
       {/* Welcome Hero Banner */}
       <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-teal-600 rounded-3xl p-6 sm:p-8 text-white shadow-xl flex flex-col md:flex-row items-center justify-between gap-6">
         <div className="space-y-2 text-center md:text-left">

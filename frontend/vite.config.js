@@ -54,6 +54,7 @@ function autoBackendPlugin() {
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: '/',
   plugins: [react(), tailwindcss(), autoBackendPlugin()],
   server: {
     host: true, // Listens on all local IP addresses for live mobile device testing

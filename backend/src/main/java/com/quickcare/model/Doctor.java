@@ -25,6 +25,8 @@ public class Doctor {
     private String timezone = "Asia/Kolkata";
     private List<String> holidays = new ArrayList<>();
     private String activeConsultationId;
+    private String onlineStatus = "AVAILABLE_FOR_VIDEO"; // ONLINE, AVAILABLE_FOR_VIDEO, BUSY, OFFLINE
+    private boolean videoConsultationAvailable = true;
     private String verificationStatus; // PENDING, VERIFIED, REJECTED
     private String profileImage;
     private String gender; // Male, Female, Other
@@ -100,6 +102,12 @@ public class Doctor {
 
     public String getActiveConsultationId() { return activeConsultationId; }
     public void setActiveConsultationId(String activeConsultationId) { this.activeConsultationId = activeConsultationId; }
+
+    public String getOnlineStatus() { return onlineStatus != null ? onlineStatus : "AVAILABLE_FOR_VIDEO"; }
+    public void setOnlineStatus(String onlineStatus) { this.onlineStatus = onlineStatus; }
+
+    public boolean isVideoConsultationAvailable() { return videoConsultationAvailable; }
+    public void setVideoConsultationAvailable(boolean videoConsultationAvailable) { this.videoConsultationAvailable = videoConsultationAvailable; }
 
     public String getVerificationStatus() { return verificationStatus; }
     public void setVerificationStatus(String verificationStatus) { this.verificationStatus = verificationStatus; }
