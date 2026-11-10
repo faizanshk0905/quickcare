@@ -710,4 +710,25 @@ public class AppointmentService {
         saved.addAuditLog("CONSULTATION_APPROVED", apt.getDoctorName(), "Doctor approved video consultation with Google Meet: " + meetUrl);
         return db.saveAppointment(saved);
     }
+
+    public Appointment updateMeetingLink(String appointmentId, String meetingLink) {
+        Appointment apt = getAppointmentById(appointmentId);
+        if (meetingLink != null && !meetingLink.trim().isEmpty()) {
+            apt.setGoogleMeetLink(meetingLink.trim());
+            apt.setMeetingRoomId(meetingLink.trim());
+            apt.addAuditLog("MEETING_LINK_UPDATED", "Doctor", "Meeting link updated to: " + meetingLink);
+            Appointment saved = db.saveAppointment(apt);
+            if (apt.getPatientUid() != null) {
+                try {
+                    notificationService.sendNotification(apt.getPatientUid(), "Google Meet Link Updated",
+                            "Dr. " + apt.getDoctorName() + " has shared the video meeting link: " + meetingLink,
+                            "MEETING_LINK_UPDATED", apt.getAppointmentId());
+                } catch (Exception e) {
+                    // ignore notification error
+                }
+            }
+            return saved;
+        }
+        return apt;
+    }
 }

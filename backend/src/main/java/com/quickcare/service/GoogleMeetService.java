@@ -45,13 +45,14 @@ public class GoogleMeetService {
         // 2. Attempt Google Calendar / Google Meet API generation
         String meetUrl = tryCreateGoogleCalendarMeeting(appointment);
 
-        // 3. If API is offline or unconfigured, generate cryptographically authentic Google Meet link
+        // 3. If API is offline or unconfigured, default to official Google Meet creator
         if (meetUrl == null || meetUrl.trim().isEmpty()) {
-            meetUrl = generateAuthenticMeetUrl(appointment.getAppointmentId());
+            meetUrl = "https://meet.google.com/new";
         }
 
+        String cleanId = appointment.getAppointmentId() != null ? appointment.getAppointmentId().replaceAll("[^a-zA-Z0-9]", "") : "session";
         appointment.setGoogleMeetLink(meetUrl);
-        appointment.setMeetingRoomId(meetUrl);
+        appointment.setMeetingRoomId("QuickCare-" + cleanId);
         return meetUrl;
     }
 

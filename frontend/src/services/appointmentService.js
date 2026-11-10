@@ -276,13 +276,31 @@ export const appointmentService = {
     return this.updateStatus(appointmentId, 'REJECTED', data.reason);
   },
 
+  async updateMeetingLink(appointmentId, link) {
+    const list = getLocalAppointments();
+    const idx = list.findIndex((a) => a.appointmentId === appointmentId);
+    if (idx !== -1) {
+      list[idx].googleMeetLink = link;
+      list[idx].meetingRoomId = link;
+      saveLocalAppointments(list);
+    }
+    try {
+      await api.put(`/appointments/${appointmentId}/meeting-link`, { googleMeetLink: link });
+    } catch (err) {
+      console.warn('Backend update meeting link:', err.message);
+    }
+    return { success: true, googleMeetLink: link };
+  },
+
   async getGoogleMeetDetails(appointmentId) {
     const apt = getLocalAppointments().find((a) => a.appointmentId === appointmentId);
+    const cleanId = (appointmentId || 'session').replace(/[^a-zA-Z0-9]/g, '');
     return {
       success: true,
       data: {
-        googleMeetLink: apt?.googleMeetLink || 'https://meet.google.com/qck-card-hms',
-        meetingRoomId: apt?.meetingRoomId || 'quickcare-room-apt101',
+        googleMeetLink: apt?.googleMeetLink || 'https://meet.google.com/new',
+        meetingRoomId: `QuickCare-${cleanId}`,
+        liveVideoUrl: `https://meet.jit.si/QuickCare-${cleanId}`,
       },
     };
   },

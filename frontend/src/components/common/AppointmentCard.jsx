@@ -161,8 +161,14 @@ export const AppointmentCard = ({
     }
   };
 
-  const hasMeetLink = Boolean(appointment.googleMeetLink);
-  const meetUrl = appointment.googleMeetLink || `https://meet.google.com/qck-care-${appointment.appointmentId?.slice(-3) || 'med'}`;
+  const cleanId = (appointment.appointmentId || 'med').replace(/[^a-zA-Z0-9]/g, '');
+  const directLiveUrl = `https://meet.jit.si/QuickCare-${cleanId}`;
+  const isRealMeet = Boolean(
+    appointment.googleMeetLink &&
+      !appointment.googleMeetLink.includes('qck-care') &&
+      !appointment.googleMeetLink.includes('qck-card')
+  );
+  const meetUrl = isRealMeet ? appointment.googleMeetLink : 'https://meet.google.com/new';
 
   return (
     <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs hover:shadow-md transition space-y-4">
@@ -269,66 +275,99 @@ export const AppointmentCard = ({
         </div>
       )}
 
-      {/* GOOGLE MEET INTEGRATION CARD (When Video Consultation) */}
+      {/* TELEHEALTH VIDEO CONSULTATION CARD */}
       {appointment.consultationType === 'VIDEO' &&
         appointment.status !== 'CANCELLED' &&
         appointment.status !== 'REJECTED' &&
         appointment.status !== 'DECLINED' && (
-        <div className="p-4 rounded-2xl bg-gradient-to-r from-teal-50/80 via-blue-50/80 to-indigo-50/80 dark:from-slate-800/90 dark:via-teal-950/40 dark:to-slate-800/90 border border-teal-200 dark:border-teal-800/60 space-y-3">
+        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-teal-50/90 via-blue-50/90 to-indigo-50/90 dark:from-slate-800/90 dark:via-teal-950/40 dark:to-slate-800/90 border border-teal-200 dark:border-teal-800/60 space-y-3.5 shadow-xs">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-teal-600 flex items-center justify-center text-white shadow-xs">
-                <Video className="w-4 h-4" />
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-teal-600 flex items-center justify-center text-white shadow-xs">
+                <Video className="w-5 h-5" />
               </div>
               <div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-black text-slate-900 dark:text-white">Google Meet Video Consultation</span>
-                  <span className="px-2 py-0.5 text-[9px] font-extrabold uppercase rounded-full bg-teal-100 dark:bg-teal-900 text-teal-800 dark:text-teal-200 border border-teal-300 dark:border-teal-700">
-                    Live Session Ready
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-black text-slate-900 dark:text-white">
+                    QuickCare Telehealth Consultation
+                  </span>
+                  <span className="px-2 py-0.5 text-[9px] font-extrabold uppercase rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    100% Connected
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                  Shared securely between Dr. {appointment.doctorName?.replace(/^Dr\.\s*/i, '')} & {appointment.patientName}
+                  Real WebRTC audio, video & screen share between Dr. {appointment.doctorName?.replace(/^Dr\.\s*/i, '')} & {appointment.patientName}
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => handleCopyLink(meetUrl)}
-                className="px-2.5 py-1.5 text-xs font-bold rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition flex items-center gap-1"
-                title="Copy Google Meet Link"
-              >
-                {copiedMeetLink ? (
-                  <>
-                    <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                    <span className="text-emerald-600 dark:text-emerald-400">Copied</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-3.5 h-3.5 text-slate-500" />
-                    <span>Copy Link</span>
-                  </>
-                )}
-              </button>
-
-              <a
-                href={meetUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-3.5 py-1.5 text-xs font-extrabold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition flex items-center gap-1.5 active:scale-95"
+            {/* Quick Action Buttons */}
+            <div className="flex flex-wrap items-center gap-2">
+              <Link
+                to={`/consultations/${appointment.appointmentId}`}
+                className="px-4 py-2 text-xs font-extrabold rounded-xl bg-gradient-to-r from-teal-600 to-blue-600 hover:from-teal-700 hover:to-blue-700 text-white shadow-md transition flex items-center gap-1.5 active:scale-95"
               >
                 <Video className="w-3.5 h-3.5" />
-                <span>Join Google Meet</span>
-                <ExternalLink className="w-3 h-3" />
+                <span>Join Live Video Room</span>
+              </Link>
+              <a
+                href={directLiveUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-2 text-xs font-bold rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition flex items-center gap-1"
+                title="Open in Separate Window"
+              >
+                <ExternalLink className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                <span className="hidden sm:inline">Direct Tab</span>
               </a>
             </div>
           </div>
 
-          <div className="bg-white/80 dark:bg-slate-900/80 p-2.5 rounded-xl border border-teal-100 dark:border-slate-700 text-[11px] font-mono text-slate-700 dark:text-slate-300 flex items-center justify-between">
-            <span className="truncate mr-2 font-bold text-teal-700 dark:text-teal-400">{meetUrl}</span>
-            <span className="text-[10px] text-slate-400 font-sans shrink-0">Encrypted HD Room</span>
+          {/* Secondary Google Meet Option */}
+          <div className="p-3 bg-white/80 dark:bg-slate-900/80 rounded-xl border border-teal-100 dark:border-slate-700 text-xs flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-slate-700 dark:text-slate-300">Google Meet Option:</span>
+              {isRealMeet ? (
+                <span className="text-teal-700 dark:text-teal-400 font-mono text-[11px] font-semibold">
+                  {meetUrl}
+                </span>
+              ) : (
+                <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Ready to launch via Google Meet
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <a
+                href={meetUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-2.5 py-1 text-xs font-bold rounded-lg bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900 transition flex items-center gap-1"
+              >
+                <Video className="w-3 h-3 text-blue-600 dark:text-blue-400" />
+                <span>{isRealMeet ? 'Join Google Meet' : 'Start Google Meet'}</span>
+                <ExternalLink className="w-2.5 h-2.5" />
+              </a>
+              <button
+                type="button"
+                onClick={() => handleCopyLink(directLiveUrl)}
+                className="px-2.5 py-1 text-xs font-bold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition flex items-center gap-1"
+              >
+                {copiedMeetLink ? (
+                  <>
+                    <Check className="w-3 h-3 text-emerald-600" />
+                    <span className="text-emerald-600">Copied</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3 h-3 text-slate-400" />
+                    <span>Copy Room URL</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
 
           {appointment.doctorNotes && (

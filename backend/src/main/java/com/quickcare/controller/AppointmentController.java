@@ -110,6 +110,15 @@ public class AppointmentController {
         return ResponseEntity.ok(ApiResponse.ok(details));
     }
 
+    @PutMapping("/{appointmentId}/meeting-link")
+    public ResponseEntity<ApiResponse<Appointment>> updateMeetingLink(
+            @PathVariable String appointmentId,
+            @RequestBody Map<String, String> body) {
+        String link = body != null ? body.get("googleMeetLink") : null;
+        Appointment updated = appointmentService.updateMeetingLink(appointmentId, link);
+        return ResponseEntity.ok(ApiResponse.ok("Meeting link updated successfully", updated));
+    }
+
     @PutMapping("/{appointmentId}/reschedule")
     public ResponseEntity<ApiResponse<Appointment>> reschedule(
             @PathVariable String appointmentId,
