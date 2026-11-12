@@ -14,12 +14,20 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
 public class AiService {
 
     private static final Logger logger = LoggerFactory.getLogger(AiService.class);
+
+    public static final String MANDATORY_MEDICAL_DISCLAIMER =
+            "⚕️ **Important Medical Advice:** The information provided by Quick Care AI is for educational and informational purposes only. It is not a substitute for professional medical diagnosis, advice, or treatment. If you are experiencing persistent symptoms, worsening health problems, or have any concerns about your health, please consult a qualified doctor. Do not ignore serious symptoms or delay seeking medical attention.";
+
+    public static final String UNAVAILABLE_SPECIALTY_NOTICE =
+            "Sorry, currently we don't have a doctor available for this medical specialty. Please consult a qualified healthcare provider outside Quick Care.";
 
     @Autowired
     private FirestoreDatabaseService db;
@@ -37,29 +45,32 @@ public class AiService {
 
     // Critical Emergency Keywords
     private static final List<String> EMERGENCY_KEYWORDS = Arrays.asList(
-            "chest pain", "heart attack", "can't breathe", "cannot breathe", "shortness of breath",
-            "severe bleeding", "unconscious", "stroke", "paralysis", "coughing blood",
-            "choking", "suicide", "poisoning", "severe head injury", "छाती में दर्द", "सांस लेने में तकलीफ",
-            "छातीत दुखणे", "श्वास घेण्यास त्रास", "बेहोश", "रक्तस्त्राव"
+            "chest pain", "crushing chest", "pressure in chest", "tightness in chest", "heart attack",
+            "can't breathe", "cannot breathe", "difficulty breathing", "shortness of breath", "gasping for air",
+            "stroke", "facial drooping", "face drooping", "arm weakness", "slurred speech", "paralysis", "sudden numbness",
+            "unconscious", "unconsciousness", "passed out", "fainted", "fainting", "unresponsive", "collapsed",
+            "severe bleeding", "heavy bleeding", "coughing blood", "vomiting blood", "hemorrhage",
+            "seizure", "seizures", "convulsion", "convulsions", "fits", "epileptic fit",
+            "anaphylaxis", "severe allergic reaction", "swollen tongue", "swelling of throat", "closing throat",
+            "poisoning", "swallowed poison", "suicide", "overdose", "severe head injury",
+            "छाती में दर्द", "सांस लेने में तकलीफ", "सांस नहीं आ रही", "बेहोश", "दौरा", "लकवा", "खून की उल्टी",
+            "छातीत दुखणे", "श्वास घेण्यास त्रास", "मेंदूचा झटका", "रक्तस्त्राव"
     );
 
     public static class SpecializationInfo {
         private final String specialization;
         private final String specialistTitle;
-        private final String hindiTitle;
-        private final String marathiTitle;
+        private final boolean availableAtQuickCare;
 
-        public SpecializationInfo(String specialization, String specialistTitle, String hindiTitle, String marathiTitle) {
+        public SpecializationInfo(String specialization, String specialistTitle, boolean availableAtQuickCare) {
             this.specialization = specialization;
             this.specialistTitle = specialistTitle;
-            this.hindiTitle = hindiTitle;
-            this.marathiTitle = marathiTitle;
+            this.availableAtQuickCare = availableAtQuickCare;
         }
 
         public String getSpecialization() { return specialization; }
         public String getSpecialistTitle() { return specialistTitle; }
-        public String getHindiTitle() { return hindiTitle; }
-        public String getMarathiTitle() { return marathiTitle; }
+        public boolean isAvailableAtQuickCare() { return availableAtQuickCare; }
     }
 
     public AiChatResponse processMessage(AiChatRequest req) {
@@ -75,13 +86,15 @@ public class AiService {
         // Record user message in session history
         recordHistory(convId, "user", msg);
 
-        // 1. Critical Emergency Check
+        // 1. Critical Emergency Check (Requirement 5)
         boolean isEmergency = checkEmergency(msg);
         response.setEmergency(isEmergency);
 
         if (isEmergency) {
-            response.setEmergencyDisclaimer(getEmergencyWarning(lang));
-            String emergencyReply = getEmergencyReply(lang);
+            String emergencyWarning = "🚨 **CRITICAL MEDICAL EMERGENCY WARNING:** The symptoms described (such as severe chest pain, breathing difficulty, stroke signs, severe bleeding, or unconsciousness) indicate a potentially life-threatening emergency. In India, please immediately call **112** or **108** for emergency ambulance services or proceed to the nearest emergency department / casualty ward immediately. Do not delay seeking urgent in-person medical care.";
+            String emergencyReply = "🚨 **CRITICAL MEDICAL EMERGENCY DETECTED**\n\nThe symptoms you have described indicate a potentially life-threatening medical emergency.\n\n• **Immediate Action Required:** Call **112** or **108** in India immediately for an emergency ambulance.\n• **Go to Casualty:** Proceed to the nearest hospital Emergency Room / Casualty Department right away.\n• **Do Not Wait:** Do not wait for an online appointment or rely on self-care remedies.\n• Have someone stay with you until emergency medical professionals arrive.";
+
+            response.setEmergencyDisclaimer(emergencyWarning);
             response.setReply(emergencyReply);
             response.setRecommendedDoctors(Collections.emptyList());
             response.setSpecialistAvailable(false);
@@ -89,35 +102,39 @@ public class AiService {
             return response;
         }
 
-        // 2. Identify medical specialization from query or symptoms
+        // 2. Identify medical specialization from query or symptoms (Requirement 6)
         SpecializationInfo specInfo = detectSpecializationInfo(msg);
         String suggestedSpecialization = specInfo != null ? specInfo.getSpecialization() : null;
         response.setSuggestedSpecialization(suggestedSpecialization);
 
-        // 3. Strict Doctor Specialization Matching from Firestore Database
+        // 3. Strict Doctor Specialization Matching from Database (Requirement 6)
         List<Doctor> matchingDoctors = Collections.emptyList();
-        if (suggestedSpecialization != null) {
+        if (specInfo != null && specInfo.isAvailableAtQuickCare()) {
             matchingDoctors = db.findVerifiedDoctors().stream()
                     .filter(d -> isSpecializationMatch(d, suggestedSpecialization))
                     .limit(3)
                     .collect(Collectors.toList());
         }
 
-        // Strictly recommend verified specialists only - NEVER recommend unrelated doctors
         response.setRecommendedDoctors(matchingDoctors);
-        response.setSpecialistAvailable(specInfo == null || !matchingDoctors.isEmpty());
+        response.setSpecialistAvailable(!matchingDoctors.isEmpty());
 
-        // 4. Generate conversational healthcare response
+        // 4. Generate comprehensive intelligent medical response
         String replyText = null;
 
-        // Try LLM API (Gemini) if configured
+        // Try Gemini LLM API if configured
         if (apiKey != null && !apiKey.trim().isEmpty()) {
             replyText = callGeminiApi(msg, lang, specInfo, matchingDoctors, convId);
         }
 
-        // If API key is absent, offline, or returns null, use clinical conversational engine
+        // If API key is absent, offline, or returns null, use clinical knowledge engine
         if (replyText == null || replyText.trim().isEmpty()) {
-            replyText = generateConversationalResponse(msg, lang, specInfo, matchingDoctors);
+            replyText = generateComprehensiveMedicalResponse(msg, lang, specInfo, matchingDoctors);
+        }
+
+        // 5. Ensure Mandatory Medical Disclaimer is attached to EVERY medical response (Requirement 4)
+        if (!replyText.contains("Important Medical Advice")) {
+            replyText = replyText.trim() + "\n\n---\n\n" + MANDATORY_MEDICAL_DISCLAIMER;
         }
 
         response.setReply(replyText);
@@ -128,7 +145,6 @@ public class AiService {
     private void recordHistory(String convId, String role, String content) {
         conversationHistories.computeIfAbsent(convId, k -> new ArrayList<>())
                 .add(Map.of("role", role, "content", content));
-        // Keep last 10 messages to maintain clean context window
         List<Map<String, String>> history = conversationHistories.get(convId);
         if (history.size() > 10) {
             conversationHistories.put(convId, new ArrayList<>(history.subList(history.size() - 10, history.size())));
@@ -148,106 +164,99 @@ public class AiService {
     public SpecializationInfo detectSpecializationInfo(String text) {
         String lower = text.toLowerCase();
 
-        // 1. Cardiology (Heart & Vascular)
-        if (lower.contains("cardio") || lower.contains("heart") || lower.contains("chest pain") ||
-                lower.contains("cardiac") || lower.contains("coronary") || lower.contains("palpitation") ||
+        // 1. Cardiology (Heart & Vascular) - Available in Quick Care
+        if (lower.contains("cardio") || lower.contains("heart") || lower.contains("chest") ||
+                lower.contains("coronary") || lower.contains("angina") || lower.contains("palpitation") ||
                 lower.contains("blood pressure") || lower.contains("bp") || lower.contains("hypertension") ||
-                lower.contains("angina") || lower.contains("ecg") || lower.contains("cholesterol") ||
-                lower.contains("दिल") || lower.contains("हृदय") || lower.contains("छाती") || lower.contains("रक्तदाब")) {
-            return new SpecializationInfo("Cardiology", "Cardiologist", "हृदय रोग विशेषज्ञ (Cardiologist)", "हृदयरोग तज्ज्ञ (Cardiologist)");
+                lower.contains("cholesterol") || lower.contains("ecg") || lower.contains("arrhythmia") ||
+                lower.contains("हृदय") || lower.contains("रक्तदाब") || lower.contains("दिल")) {
+            return new SpecializationInfo("Cardiology", "Cardiologist", true);
         }
 
-        // 2. Dermatology (Skin, Hair, Nails)
+        // 2. Dermatology (Skin, Hair, Nails) - Available in Quick Care
         if (lower.contains("dermat") || lower.contains("skin") || lower.contains("rash") ||
-                lower.contains("acne") || lower.contains("eczema") || lower.contains("psoriasis") ||
-                lower.contains("itching") || lower.contains("hair loss") || lower.contains("dandruff") ||
-                lower.contains("hives") || lower.contains("allergy") || lower.contains("skin allergy") ||
-                lower.contains("त्वचा") || lower.contains("खुजली") || lower.contains("खाज") || lower.contains("पिंपल")) {
-            return new SpecializationInfo("Dermatology", "Dermatologist", "त्वचा रोग विशेषज्ञ (Dermatologist)", "त्वचारोग तज्ज्ञ (Dermatologist)");
+                lower.contains("acne") || lower.contains("pimple") || lower.contains("eczema") ||
+                lower.contains("psoriasis") || lower.contains("itching") || lower.contains("hives") ||
+                lower.contains("urticaria") || lower.contains("ringworm") || lower.contains("fungal") ||
+                lower.contains("hair loss") || lower.contains("alopecia") || lower.contains("scabies") ||
+                lower.contains("त्वचा") || lower.contains("खुजली") || lower.contains("खाज")) {
+            return new SpecializationInfo("Dermatology", "Dermatologist", true);
         }
 
-        // 3. Pediatrics (Children & Infants)
+        // 3. Pediatrics (Children & Infants) - Available in Quick Care
         if (lower.contains("pediat") || lower.contains("paediat") || lower.contains("child") ||
-                lower.contains("baby") || lower.contains("infant") || lower.contains("kid") ||
-                lower.contains("toddler") || lower.contains("newborn") || lower.contains("vaccination") ||
-                lower.contains("बच्चा") || lower.contains("शिशु") || lower.contains("बाळ") || lower.contains("लहान मूल")) {
-            return new SpecializationInfo("Pediatrics", "Pediatrician", "बालरोग विशेषज्ञ (Pediatrician)", "बालरोग तज्ज्ञ (Pediatrician)");
+                lower.contains("children") || lower.contains("baby") || lower.contains("infant") ||
+                lower.contains("kid") || lower.contains("colic") || lower.contains("teething") ||
+                lower.contains("बच्चा") || lower.contains("बाळ")) {
+            return new SpecializationInfo("Pediatrics", "Pediatrician", true);
         }
 
-        // 4. Orthopedics (Bones, Joints, Spine)
+        // 4. Orthopedics (Bones, Joints, Spine) - Available in Quick Care
         if (lower.contains("ortho") || lower.contains("bone") || lower.contains("joint") ||
                 lower.contains("fracture") || lower.contains("back pain") || lower.contains("knee") ||
-                lower.contains("spine") || lower.contains("arthritis") || lower.contains("ligament") ||
-                lower.contains("sprain") || lower.contains("spondylosis") || lower.contains("osteoporosis") ||
-                lower.contains("हड्डी") || lower.contains("जोड़") || lower.contains("सांधेदुखी") || lower.contains("हाड")) {
-            return new SpecializationInfo("Orthopedics", "Orthopedic Surgeon", "हड्डी व जोड़ विशेषज्ञ (Orthopedic Surgeon)", "अस्थिरोग व सांधे तज्ज्ञ (Orthopedic Surgeon)");
+                lower.contains("spine") || lower.contains("arthritis") || lower.contains("spondylosis") ||
+                lower.contains("sciatica") || lower.contains("sprain") || lower.contains("ligament") ||
+                lower.contains("हड्डी") || lower.contains("जोड़") || lower.contains("सांधेदुखी")) {
+            return new SpecializationInfo("Orthopedics", "Orthopedic Surgeon", true);
         }
 
-        // 5. Neurology (Brain, Nerves, Spine, Migraine)
+        // 5. Neurology - NOT available in Quick Care
         if (lower.contains("neuro") || lower.contains("brain") || lower.contains("migraine") ||
-                lower.contains("headache") || lower.contains("seizure") || lower.contains("epilepsy") ||
-                lower.contains("stroke") || lower.contains("paralysis") || lower.contains("numbness") ||
-                lower.contains("parkinson") || lower.contains("dementia") || lower.contains("vertigo") ||
-                lower.contains("मस्तिष्क") || lower.contains("दिमाग") || lower.contains("मेंदू") || lower.contains("झटके")) {
-            return new SpecializationInfo("Neurology", "Neurologist", "न्यूरोलॉजिस्ट (Neurologist)", "मेंदू व मज्जारोग तज्ज्ञ (Neurologist)");
+                lower.contains("epilepsy") || lower.contains("seizure") || lower.contains("vertigo") ||
+                lower.contains("parkinson") || lower.contains("alzheimer") || lower.contains("neuropathy") ||
+                lower.contains("मेंदू") || lower.contains("दिमाग")) {
+            return new SpecializationInfo("Neurology", "Neurologist", false);
         }
 
-        // 6. Oncology (Cancer & Tumors)
-        if (lower.contains("oncol") || lower.contains("cancer") || lower.contains("tumor") ||
-                lower.contains("chemotherapy") || lower.contains("malignan") || lower.contains("biopsy") ||
-                lower.contains("lymphoma") || lower.contains("leukemia") || lower.contains("कैंसर") ||
-                lower.contains("ट्यूमर") || lower.contains("कर्करोग")) {
-            return new SpecializationInfo("Oncology", "Oncologist", "कैंसर विशेषज्ञ (Oncologist)", "कर्करोग तज्ज्ञ (Oncologist)");
-        }
-
-        // 7. Gastroenterology (Stomach, Liver, Digestion)
+        // 6. Gastroenterology - NOT available in Quick Care
         if (lower.contains("gastro") || lower.contains("stomach") || lower.contains("liver") ||
-                lower.contains("acid reflux") || lower.contains("gerd") || lower.contains("digestion") ||
-                lower.contains("gastritis") || lower.contains("ulcer") || lower.contains("jaundice") ||
-                lower.contains("constipation") || lower.contains("diarrhea") || lower.contains("acidity") ||
-                lower.contains("पेट") || lower.contains("लिवर") || lower.contains("पोटदुखी") || lower.contains("बद्धकोष्ठता")) {
-            return new SpecializationInfo("Gastroenterology", "Gastroenterologist", "पेट व लिवर विशेषज्ञ (Gastroenterologist)", "पोट व यकृत तज्ज्ञ (Gastroenterologist)");
+                lower.contains("acid reflux") || lower.contains("gerd") || lower.contains("gastritis") ||
+                lower.contains("ulcer") || lower.contains("ibs") || lower.contains("gallstone") ||
+                lower.contains("constipation") || lower.contains("diarrhea") || lower.contains("piles") ||
+                lower.contains("पेट") || lower.contains("लिवर") || lower.contains("पोट")) {
+            return new SpecializationInfo("Gastroenterology", "Gastroenterologist", false);
         }
 
-        // 8. Pulmonology (Lungs & Respiratory)
+        // 7. Pulmonology - NOT available in Quick Care
         if (lower.contains("pulmon") || lower.contains("lung") || lower.contains("asthma") ||
-                lower.contains("copd") || lower.contains("pneumonia") || lower.contains("respiratory") ||
-                lower.contains("wheezing") || lower.contains("bronchitis") || lower.contains("फेफड़े") || lower.contains("फुफ्फुस") || lower.contains("दमा")) {
-            return new SpecializationInfo("Pulmonology", "Pulmonologist", "श्वसन रोग विशेषज्ञ (Pulmonologist)", "श्वसनरोग तज्ज्ञ (Pulmonologist)");
+                lower.contains("copd") || lower.contains("bronchitis") || lower.contains("pneumonia") ||
+                lower.contains("wheezing") || lower.contains("tuberculosis") || lower.contains("tb") ||
+                lower.contains("फेफड़े") || lower.contains("दमा")) {
+            return new SpecializationInfo("Pulmonology", "Pulmonologist", false);
         }
 
-        // 9. Nephrology (Kidneys)
-        if (lower.contains("nephro") || lower.contains("kidney") || lower.contains("renal") ||
-                lower.contains("dialysis") || lower.contains("creatinine") || lower.contains("गुर्दा") || lower.contains("किडनी") || lower.contains("मूत्रपिंड")) {
-            return new SpecializationInfo("Nephrology", "Nephrologist", "गुर्दा रोग विशेषज्ञ (Nephrologist)", "मूत्रपिंड तज्ज्ञ (Nephrologist)");
+        // 8. Endocrinology - NOT available in Quick Care
+        if (lower.contains("endocrin") || lower.contains("diabetes") || lower.contains("thyroid") ||
+                lower.contains("sugar") || lower.contains("glucose") || lower.contains("मधुमेह")) {
+            return new SpecializationInfo("Endocrinology", "Endocrinologist", false);
         }
 
-        // 10. Dentistry (Teeth & Oral)
-        if (lower.contains("dent") || lower.contains("tooth") || lower.contains("teeth") ||
-                lower.contains("gum") || lower.contains("root canal") || lower.contains("cavity") ||
-                lower.contains("दांत") || lower.contains("मसूड़े") || lower.contains("दात")) {
-            return new SpecializationInfo("Dentistry", "Dentist", "दंत चिकित्सक (Dentist)", "दंतवैद्य (Dentist)");
-        }
-
-        // 11. Ophthalmology (Eyes)
-        if (lower.contains("ophthal") || lower.contains("eye") || lower.contains("vision") ||
-                lower.contains("cataract") || lower.contains("glaucoma") || lower.contains("आंख") || lower.contains("दृष्टि") || lower.contains("डोळे")) {
-            return new SpecializationInfo("Ophthalmology", "Ophthalmologist", "नेत्र रोग विशेषज्ञ (Ophthalmologist)", "नेत्ररोग तज्ज्ञ (Ophthalmologist)");
-        }
-
-        // 12. Psychiatry & Mental Health
-        if (lower.contains("psychiat") || lower.contains("mental") || lower.contains("depression") ||
+        // 9. Psychiatry - NOT available in Quick Care
+        if (lower.contains("psychiat") || lower.contains("mental health") || lower.contains("depression") ||
                 lower.contains("anxiety") || lower.contains("panic") || lower.contains("insomnia") ||
-                lower.contains("चिंता") || lower.contains("तनाव") || lower.contains("नैराश्य")) {
-            return new SpecializationInfo("Psychiatry", "Psychiatrist", "मनोचिकित्सक (Psychiatrist)", "मानसोपचार तज्ज्ञ (Psychiatrist)");
+                lower.contains("तनाव") || lower.contains("चिंता")) {
+            return new SpecializationInfo("Psychiatry", "Psychiatrist", false);
         }
 
-        // 13. General Physician (Fever, Cold, Diabetes checkup, General health)
-        if (lower.contains("fever") || lower.contains("cold") || lower.contains("flu") ||
-                lower.contains("cough") || lower.contains("weakness") || lower.contains("diabetes") ||
-                lower.contains("general physician") || lower.contains("checkup") ||
-                lower.contains("बुखार") || lower.contains("ताप") || lower.contains("सर्दी") || lower.contains("मधुमेह")) {
-            return new SpecializationInfo("General Physician", "General Physician", "सामान्य चिकित्सक (General Physician)", "सामान्य चिकित्सक (General Physician)");
+        // 10. Gynecology - NOT available in Quick Care
+        if (lower.contains("gynec") || lower.contains("gynaec") || lower.contains("pcos") ||
+                lower.contains("pcod") || lower.contains("period") || lower.contains("menstrual") ||
+                lower.contains("pregnancy") || lower.contains("menopause")) {
+            return new SpecializationInfo("Gynecology & Obstetrics", "Gynecologist", false);
+        }
+
+        // 11. Nephrology & Urology - NOT available in Quick Care
+        if (lower.contains("nephro") || lower.contains("kidney") || lower.contains("renal") ||
+                lower.contains("urolog") || lower.contains("prostate") || lower.contains("uti") ||
+                lower.contains("गुर्दा") || lower.contains("किडनी")) {
+            return new SpecializationInfo("Nephrology & Urology", "Nephrologist / Urologist", false);
+        }
+
+        // 12. General Medicine (Dengue, Malaria, Typhoid, Viral Fever, Cold) - NOT available in Quick Care
+        if (lower.contains("dengue") || lower.contains("malaria") || lower.contains("typhoid") ||
+                lower.contains("fever") || lower.contains("cold") || lower.contains("flu") ||
+                lower.contains("cough") || lower.contains("infection") || lower.contains("बुखार") || lower.contains("ताप")) {
+            return new SpecializationInfo("General Medicine", "General Physician / Infectious Disease Specialist", false);
         }
 
         return null;
@@ -267,284 +276,322 @@ public class AiService {
         if (req.startsWith("dermat") && docSpec.startsWith("dermat")) return true;
         if (req.startsWith("pediat") && docSpec.startsWith("pediat")) return true;
         if (req.startsWith("ortho") && docSpec.startsWith("ortho")) return true;
-        if (req.startsWith("neuro") && docSpec.startsWith("neuro")) return true;
-        if (req.startsWith("oncol") && docSpec.startsWith("oncol")) return true;
-        if (req.startsWith("gastro") && docSpec.startsWith("gastro")) return true;
-        if (req.startsWith("nephro") && docSpec.startsWith("nephro")) return true;
-        if (req.startsWith("dent") && docSpec.startsWith("dent")) return true;
-        if (req.startsWith("ophthal") && docSpec.startsWith("ophthal")) return true;
-        if (req.startsWith("psych") && docSpec.startsWith("psych")) return true;
-        if (req.startsWith("pulmon") && docSpec.startsWith("pulmon")) return true;
-        if (req.contains("general") && docSpec.contains("general")) return true;
 
         return false;
     }
 
-    private String generateConversationalResponse(String msg, String lang, SpecializationInfo specInfo, List<Doctor> doctors) {
+    private String generateComprehensiveMedicalResponse(String msg, String lang, SpecializationInfo specInfo, List<Doctor> doctors) {
         String lower = msg.toLowerCase().trim();
 
-        // Check if query is about a specific health topic/disease
-        String topicAnswer = getComprehensiveTopicGuidance(lower, lang);
+        // Retrieve structured 8-point medical clinical profile
+        MedicalProfile profile = getMedicalProfile(lower);
 
-        // CASE 1: Query matched a specialization that is NOT AVAILABLE at Quick Care Hospital
-        if (specInfo != null && doctors.isEmpty()) {
-            StringBuilder sb = new StringBuilder();
-            if (topicAnswer != null) {
-                sb.append(topicAnswer).append("\n\n---\n\n");
-            }
-            if ("hi".equalsIgnoreCase(lang)) {
-                sb.append("Currently, we do not have a doctor specializing in this condition. Please check again later or consult an appropriate healthcare provider.\n\n")
-                  .append("*सूचना: सुरक्षा कारणों से क्विककेयर अस्पताल असंबद्ध विभागों के डॉक्टरों की सिफारिश नहीं करता है।*");
-            } else if ("mr".equalsIgnoreCase(lang)) {
-                sb.append("Currently, we do not have a doctor specializing in this condition. Please check again later or consult an appropriate healthcare provider.\n\n")
-                  .append("*टीप: सुरक्षिततेच्या कारणास्तव क्विककेअर असंबंधित विभागाच्या डॉक्टरांची शिफारस करत नाही.*");
+        StringBuilder sb = new StringBuilder();
+        sb.append("### 🩺 Clinical Overview: ").append(profile.condition).append("\n\n");
+        sb.append("**1. Understanding the Condition:**\n").append(profile.explanation).append("\n\n");
+        sb.append("**2. Common Symptoms:**\n").append(profile.symptoms).append("\n\n");
+        sb.append("**3. Possible Causes & Risk Factors:**\n").append(profile.causes).append("\n\n");
+        sb.append("**4. How It Affects the Body:**\n").append(profile.bodyEffects).append("\n\n");
+        sb.append("**5. General Prevention Methods:**\n").append(profile.prevention).append("\n\n");
+        sb.append("**6. Common Treatment Approaches:**\n").append(profile.treatment).append("\n\n");
+        sb.append("**7. Lifestyle & Dietary Precautions:**\n").append(profile.precautions).append("\n\n");
+        sb.append("**8. When Medical Attention is Necessary:**\n").append(profile.whenToSeekCare).append("\n\n");
+
+        sb.append("---\n### 👨‍⚕️ Specialist Consultation Recommendation:\n");
+        if (specInfo != null) {
+            if (specInfo.isAvailableAtQuickCare() && !doctors.isEmpty()) {
+                String docList = doctors.stream()
+                        .map(d -> "• **" + (d.getFullName().startsWith("Dr.") ? "" : "Dr. ") + d.getFullName() + "** — " + d.getSpecialization() + " (" + d.getQualification() + ", Fee: ₹" + Math.round(d.getConsultationFee()) + ")")
+                        .collect(Collectors.joining("\n"));
+
+                sb.append("For this condition, we recommend consulting our verified specialist in **").append(specInfo.getSpecialization()).append("**.\n\n")
+                  .append("**Available Specialist(s) at Quick Care Hospital:**\n")
+                  .append(docList).append("\n\n")
+                  .append("You can review their profile, available 15-minute consultation slots, and book a confirmed appointment using the doctor card below.\n");
             } else {
-                sb.append("Currently, we do not have a doctor specializing in this condition. Please check again later or consult an appropriate healthcare provider.\n\n")
-                  .append("*Notice: To protect clinical safety, QuickCare never recommends doctors from unrelated medical specialties.*");
+                sb.append("Relevant Medical Specialty: **").append(specInfo.getSpecialization()).append("** (").append(specInfo.getSpecialistTitle()).append(")\n\n")
+                  .append(UNAVAILABLE_SPECIALTY_NOTICE).append("\n");
             }
-            return sb.toString();
-        }
-
-        // CASE 2: Query matched a specialization that IS AVAILABLE at Quick Care Hospital
-        if (specInfo != null && !doctors.isEmpty()) {
-            StringBuilder sb = new StringBuilder();
-            if (topicAnswer != null) {
-                sb.append(topicAnswer).append("\n\n---\n\n");
-            }
-
-            String docList = doctors.stream()
-                    .map(d -> "• **" + (d.getFullName().startsWith("Dr.") ? "" : "Dr. ") + d.getFullName() + "** — " + d.getSpecialization() + " (" + d.getQualification() + ", Fee: ₹" + Math.round(d.getConsultationFee()) + ")")
-                    .collect(Collectors.joining("\n"));
-
-            if ("hi".equalsIgnoreCase(lang)) {
-                sb.append("नमस्ते! आपके बताए लक्षणों के आधार पर **").append(specInfo.getHindiTitle()).append("** से परामर्श लेने की सलाह दी जाती है।\n\n")
-                  .append("**क्विककेयर अस्पताल में उपलब्ध सत्यापित विशेषज्ञ:**\n")
-                  .append(docList).append("\n\n")
-                  .append("आप नीचे दिए गए कार्ड से तुरंत 15-मिनट का कन्फर्म वीडियो या क्लिनिक अपॉइंटमेंट बुक कर सकते हैं।\n\n")
-                  .append("*सूचना: यह सामान्य स्वास्थ्य मार्गदर्शन है और चिकित्सीय निदान का विकल्प नहीं है। गंभीर स्थिति में 108 पर संपर्क करें।*");
-            } else if ("mr".equalsIgnoreCase(lang)) {
-                sb.append("नमस्कार! आपल्या लक्षणांनुसार **").append(specInfo.getMarathiTitle()).append("** यांचा सल्ला घेण्याची शिफारस केली जाते.\n\n")
-                  .append("**क्विककेअर हॉस्पिटलमधील उपलब्ध तज्ज्ञ डॉक्टर:**\n")
-                  .append(docList).append("\n\n")
-                  .append("आपण खालील डॉक्टर कार्डवरून त्वरित 15-मिनिटांची ऑनलाइन व्हिडिओ किंवा क्लिनिक अपॉइंटमेंट बुक करू शकता.\n\n")
-                  .append("*टीप: हे केवळ आरोग्य विषयक मार्गदर्शन असून अंतिम वैद्यकीय निदान नाही. आपत्कालीन वेळी 108 वर संपर्क साधा.*");
-            } else {
-                sb.append("Hello! Based on the symptoms described, we recommend consulting a verified specialist in **").append(specInfo.getSpecialization()).append("**.\n\n")
-                  .append("**Available ").append(specInfo.getSpecialistTitle()).append("(s) at Quick Care Hospital:**\n")
-                  .append(docList).append("\n\n")
-                  .append("You can review their profile, available 15-minute consultation slots, and book a confirmed consultation using the doctor card(s) below.\n\n")
-                  .append("*Medical Guidance Disclaimer: QuickCare AI provides healthcare navigation and triaging only and is not a clinical diagnosis. In case of acute or worsening emergency symptoms, please call 108 immediately.*");
-            }
-            return sb.toString();
-        }
-
-        // CASE 3: General healthcare question or conversational query
-        if (topicAnswer != null) {
-            return topicAnswer;
-        }
-
-        // Default welcoming triaging prompt
-        if ("hi".equalsIgnoreCase(lang)) {
-            return "नमस्ते! मैं क्विककेयर एआई स्वास्थ्य सहायक हूं।\n\n" +
-                    "मैं विभिन्न बीमारियों (जैसे मधुमेह, रक्तचाप, हृदय स्वास्थ्य, त्वचा रोग, अस्थमा), उनके लक्षण, दवाइयां, जांच एवं रोकथाम के बारे में आपके प्रश्नों का उत्तर दे सकता हूं।\n\n" +
-                    "कृपया अपने लक्षण या चिकित्सीय प्रश्न का विवरण दें, और मैं आपको विस्तृत जानकारी एवं अस्पताल में उपलब्ध सत्यापित विशेषज्ञ से जोड़ने में सहायता करूंगा।";
-        } else if ("mr".equalsIgnoreCase(lang)) {
-            return "नमस्कार! मी क्विककेअर एआई आरोग्य सहाय्यक आहे.\n\n" +
-                    "मी विविध आजार (उदा. मधुमेह, रक्तदाब, हृदयरोग, त्वचारोग, दमा), त्यांची लक्षणे, प्राथमिक उपचार, तपासण्या आणि प्रतिबंध याविषयी आपल्या प्रश्नांची उत्तरे देऊ शकतो.\n\n" +
-                    "कृपया आपल्या लक्षणांचे किंवा आजाराचे वर्णन करा, जेणेकरून मी आपल्याला योग्य माहिती व उपलब्ध तज्ज्ञ डॉक्टरांशी जोडू शकेन.";
         } else {
-            return "Hello! I am QuickCare AI Clinical Assistant.\n\n" +
-                    "I can help answer questions on a wide range of healthcare topics, including:\n" +
-                    "• Common & chronic diseases (Diabetes, Hypertension, Heart disease, Asthma, Arthritis)\n" +
-                    "• Symptoms and early warning signs\n" +
-                    "• General uses of medications, lifestyle & preventive measures\n" +
-                    "• Diagnostic tests (ECG, Lipid Profile, Blood sugar, CBC, MRI)\n" +
-                    "• First aid and when to consult a specialist\n\n" +
-                    "Please describe your medical question or symptoms, and I will provide structured guidance and connect you with matching verified specialists if available at Quick Care Hospital.";
+            sb.append("If your symptoms are persistent or concerning, please consult a qualified healthcare provider for an in-person medical evaluation.\n");
         }
+
+        return sb.toString();
     }
 
-    private String getComprehensiveTopicGuidance(String lower, String lang) {
-        boolean isHi = "hi".equalsIgnoreCase(lang);
-        boolean isMr = "mr".equalsIgnoreCase(lang);
+    private static class MedicalProfile {
+        String condition;
+        String explanation;
+        String symptoms;
+        String causes;
+        String bodyEffects;
+        String prevention;
+        String treatment;
+        String precautions;
+        String whenToSeekCare;
+    }
 
-        // 1. Diabetes & Blood Sugar
-        if (lower.contains("diabetes") || lower.contains("sugar") || lower.contains("glucose") ||
-            lower.contains("insulin") || lower.contains("hba1c") || lower.contains("मधुमेह")) {
-            if (isHi) {
-                return "### 🩺 मधुमेह (Diabetes) की संपूर्ण जानकारी:\n\n" +
-                        "**प्रकार:**\n" +
-                        "• **टाइप 1 मधुमेह:** शरीर में इंसुलिन का उत्पादन नहीं होता (अक्सर बच्चों या युवाओं में)।\n" +
-                        "• **टाइप 2 मधुमेह:** शरीर इंसुलिन का सही उपयोग नहीं कर पाता (जीवनशैली व आनुवंशिक कारणों से)।\n\n" +
-                        "**मुख्य लक्षण:** अत्यधिक प्यास लगना, बार-बार पेशाब आना, बिना कारण वजन कम होना, थकान, और घावों का देरी से भरना।\n\n" +
-                        "**जांच:** फास्टिंग ब्लड शुगर (सामान्य: <100 mg/dL), पीपी ब्लड शुगर (<140 mg/dL), और HbA1c (सामान्य: <5.7%)।\n\n" +
-                        "**प्रबंधन:** कम कार्बोहाइड्रेट युक्त आहार, नियमित व्यायाम (30 मिनट प्रतिदिन), वजन नियंत्रण, और चिकित्सक की सलाह अनुसार दवाइयां।";
-            } else if (isMr) {
-                return "### 🩺 मधुमेहाविषयी (Diabetes) सविस्तर माहिती:\n\n" +
-                        "**प्रकार:**\n" +
-                        "• **टाइप 1:** शरीरात इन्सुलिन तयार होत नाही.\n" +
-                        "• **टाइप 2:** शरीरातील इन्सुलिनचा योग्य वापर होत नाही (जीवनशैली व आहाराशी संबंधित).\n\n" +
-                        "**लक्षणे:** वारंवार तहान व लघवी लागणे, वजन कमी होणे, थकवा, आणि जखमा लवकर न भरणे.\n\n" +
-                        "**तपासण्या:** उपाशीपोटी साखर (Fasting <100 mg/dL), जेवणानंतर (<140 mg/dL), आणि HbA1c (<5.7%).\n\n" +
-                        "**उपाय:** समतोल आहार, साखर व गोड पदार्थ टाळणे, दररोज ३० मिनिटे चालणे व नियमित वैद्यकीय तपासणी.";
-            } else {
-                return "### 🩺 Overview of Diabetes & Blood Sugar Management:\n\n" +
-                        "**Types of Diabetes:**\n" +
-                        "• **Type 1 Diabetes:** Autoimmune condition where the pancreas produces little or no insulin.\n" +
-                        "• **Type 2 Diabetes:** Metabolic condition characterized by insulin resistance and relative insulin deficiency (most common).\n" +
-                        "• **Gestational Diabetes:** Develops during pregnancy and usually resolves after delivery.\n\n" +
-                        "**Common Symptoms:**\n" +
-                        "• Increased thirst (polydipsia) and frequent urination (polyuria)\n" +
-                        "• Unexplained weight loss, constant fatigue, and blurred vision\n" +
-                        "• Slow-healing sores or recurrent skin and urinary infections\n\n" +
-                        "**Key Diagnostic Tests:**\n" +
-                        "• **Fasting Blood Glucose:** Normal <100 mg/dL; Prediabetes 100–125; Diabetes ≥126 mg/dL\n" +
-                        "• **HbA1c (3-Month Average):** Normal <5.7%; Prediabetes 5.7–6.4%; Diabetes ≥6.5%\n\n" +
-                        "**Lifestyle & Management Recommendations:**\n" +
-                        "1. **Diet:** Prioritize complex carbohydrates, fiber-rich vegetables, lean proteins, and avoid refined sugars.\n" +
-                        "2. **Physical Activity:** Minimum 150 minutes of moderate aerobic exercise weekly.\n" +
-                        "3. **Regular Monitoring:** Track fasting and post-prandial glucose levels as directed by your physician.";
+    private MedicalProfile getMedicalProfile(String lower) {
+        MedicalProfile p = new MedicalProfile();
+
+        // 1. DENGUE
+        if (lower.contains("dengue") || lower.contains("platelet")) {
+            p.condition = "Dengue Fever";
+            p.explanation = "Dengue is a mosquito-borne viral infection caused by the dengue virus and transmitted to humans through the bites of infected female Aedes aegypti mosquitoes. It is common in tropical and subtropical regions.";
+            p.symptoms = "Sudden high fever (up to 104°F / 40°C), retro-orbital eye pain (pain behind the eyes), intense joint and muscle pain ('breakbone fever'), fatigue, nausea, vomiting, and a flat red skin rash.";
+            p.causes = "Infection by the dengue virus transmitted by day-biting Aedes mosquitoes. Mosquitoes breed in stagnant clean water stored in open tanks, flower pots, tires, and coolers.";
+            p.bodyEffects = "The virus infects white blood cells and temporarily suppresses bone marrow function, causing a rapid decrease in blood platelet count (thrombocytopenia) and increased capillary permeability.";
+            p.prevention = "Eliminate standing water in and around homes. Apply DEET/picaridin mosquito repellents, wear long sleeves, install window screens, and use bed nets.";
+            p.treatment = "Supportive care: complete bed rest, adequate hydration with oral rehydration salts (ORS), and paracetamol for fever. Avoid Aspirin, Ibuprofen, and other NSAIDs as they increase bleeding risks.";
+            p.precautions = "Monitor platelet counts and hematocrit via regular CBC tests every 24–48 hours. Drink coconut water, clear soups, and fresh juices. Avoid dark-colored foods that might mimic internal bleeding.";
+            p.whenToSeekCare = "Seek emergency hospital admission immediately if warning signs develop: severe continuous abdominal pain, persistent vomiting, bleeding gums or nose, blood in stool, or extreme fatigue.";
+            return p;
+        }
+
+        // 2. MALARIA
+        if (lower.contains("malaria") || lower.contains("plasmodium")) {
+            p.condition = "Malaria";
+            p.explanation = "Malaria is a serious, life-threatening infection caused by microscopic Plasmodium parasites transmitted to humans through the bites of infected female Anopheles mosquitoes.";
+            p.symptoms = "Recurrent cycles of severe shivering chills (rigors) followed by high fever, intense sweating, headache, body aches, nausea, vomiting, and mild jaundice.";
+            p.causes = "Infection by Plasmodium parasites (P. falciparum, P. vivax, P. malariae, P. ovale) transmitted by night-biting Anopheles mosquitoes.";
+            p.bodyEffects = "Parasites invade liver cells, multiply, and subsequently enter and rupture red blood cells, causing acute anemia, spleen enlargement, and microvascular blockages.";
+            p.prevention = "Sleep under insecticide-treated bed nets (ITNs), use indoor mosquito sprays, clear open puddles and drainage channels, and take preventive antimalarial medications if traveling to endemic areas.";
+            p.treatment = "Prescription antimalarial therapies such as Artemisinin-based Combination Therapy (ACT) or chloroquine, prescribed by a doctor after blood smear or rapid diagnostic test (RDT) confirmation.";
+            p.precautions = "Do not take antimalarial medications without confirmed laboratory testing. Ensure complete hydration and rest during recovery.";
+            p.whenToSeekCare = "Consult a physician promptly upon experiencing shivering chills and fever. Seek emergency medical care for disorientation, difficulty breathing, yellow skin/eyes, or dark urine.";
+            return p;
+        }
+
+        // 3. TYPHOID
+        if (lower.contains("typhoid") || lower.contains("enteric fever") || lower.contains("salmonella")) {
+            p.condition = "Typhoid Fever";
+            p.explanation = "Typhoid fever is an acute systemic bacterial infection caused by Salmonella enterica serotype Typhi. It is primarily contracted through contaminated drinking water and unhygienic food.";
+            p.symptoms = "Prolonged high fever rising in a 'step-ladder' pattern, persistent dull headache, generalized weakness, stomach pain, loss of appetite, constipation or diarrhea, and faint rose-colored chest spots.";
+            p.causes = "Ingestion of water or food contaminated with feces or urine from an infected individual or carrier, typically due to poor sanitation and hand hygiene.";
+            p.bodyEffects = "Bacteria penetrate the small intestine lining, multiply in the bloodstream, and spread to the liver, spleen, and gallbladder, carrying risks of intestinal bleeding or perforation if untreated.";
+            p.prevention = "Drink clean, boiled or purified water. Avoid raw street food and unpeeled fruits. Wash hands thoroughly before eating. Consider typhoid vaccination.";
+            p.treatment = "Prescription antibiotics (such as azithromycin, cefixime, or ceftriaxone) targeted by a doctor after Widal test or blood culture confirmation.";
+            p.precautions = "Complete the entire antibiotic course even if fever abates. Consume soft, easily digestible foods (khichdi, porridge, boiled vegetables) and avoid oily, spicy, high-fiber meals.";
+            p.whenToSeekCare = "Consult a physician if fever lasts beyond 3 days. Seek emergency medical attention immediately for severe sharp abdominal pain, blood in stool, or delirium.";
+            return p;
+        }
+
+        // 4. DIABETES
+        if (lower.contains("diabet") || lower.contains("blood sugar") || lower.contains("glucose") || lower.contains("insulin") || lower.contains("hba1c") || lower.contains("मधुमेह")) {
+            p.condition = "Diabetes Mellitus";
+            p.explanation = "Diabetes is a chronic metabolic condition where the body either cannot produce sufficient insulin (Type 1) or cannot effectively utilize the insulin it produces (Type 2), leading to elevated blood glucose levels.";
+            p.symptoms = "Excessive thirst (polydipsia), frequent urination (polyuria), constant hunger, unexplained weight loss, chronic fatigue, blurred vision, slow wound healing, and recurrent infections.";
+            p.causes = "Type 1 is an autoimmune destruction of pancreatic beta cells. Type 2 is driven by insulin resistance linked to genetic factors, obesity, physical inactivity, and poor diet.";
+            p.bodyEffects = "Chronic high blood sugar damages blood vessels and nerves throughout the body, leading to diabetic retinopathy (eyes), nephropathy (kidneys), neuropathy (nerves), and cardiovascular disease.";
+            p.prevention = "For Type 2: maintain a healthy weight, perform 150 minutes of weekly moderate aerobic exercise, consume fiber-rich whole foods, and avoid refined sugars and processed foods.";
+            p.treatment = "Type 1 requires lifelong daily insulin injections. Type 2 is managed with lifestyle modifications, oral antidiabetic drugs (e.g. metformin), GLP-1 receptor agonists, or supplemental insulin under medical guidance.";
+            p.precautions = "Regularly test fasting glucose, post-prandial glucose, and HbA1c (target <7% for most adults). Inspect feet daily for cuts or blisters. Keep glucose tablets accessible for hypoglycemia (<70 mg/dL).";
+            p.whenToSeekCare = "Consult an endocrinologist or physician for routine management. Seek immediate emergency care for symptoms of diabetic ketoacidosis: fruity breath, rapid deep breathing, persistent vomiting, or confusion.";
+            return p;
+        }
+
+        // 5. HYPERTENSION / BLOOD PRESSURE
+        if (lower.contains("hypertension") || lower.contains("high bp") || lower.contains("blood pressure") || lower.contains("bp") || lower.contains("रक्तदाब") || lower.contains("रक्तचाप")) {
+            p.condition = "Hypertension (High Blood Pressure)";
+            p.explanation = "Hypertension is a chronic cardiovascular condition in which the long-term force of blood flowing against artery walls is consistently elevated (systolic ≥130 mmHg or diastolic ≥80 mmHg).";
+            p.symptoms = "Often asymptomatic for years ('silent killer'). Severe elevation can cause morning headaches, dizziness, nosebleeds, blurred vision, shortness of breath, and chest palpitations.";
+            p.causes = "Primary hypertension is linked to genetic predisposition, high dietary salt, sedentary lifestyle, obesity, chronic stress, and age. Secondary hypertension arises from kidney disorders or endocrine conditions.";
+            p.bodyEffects = "Stiffens and damages arterial walls, forcing the heart to work harder. Over time, it increases risks of heart attack, stroke, kidney failure, and vision loss.";
+            p.prevention = "Adopt the DASH diet, limit sodium intake to under 2,000 mg/day (less than one teaspoon of salt), exercise regularly, stop smoking, manage stress, and limit alcohol.";
+            p.treatment = "Antihypertensive medications (ACE inhibitors, ARBs, Calcium Channel Blockers, diuretics) prescribed and adjusted by a doctor in combination with lifestyle changes.";
+            p.precautions = "Monitor blood pressure regularly at home with a validated digital monitor. Never stop or reduce prescribed blood pressure medications abruptly without consulting your doctor.";
+            p.whenToSeekCare = "Seek emergency medical care immediately if blood pressure exceeds 180/120 mmHg, or if high blood pressure is accompanied by chest pain, shortness of breath, back pain, or vision/speech changes.";
+            return p;
+        }
+
+        // 6. ASTHMA
+        if (lower.contains("asthma") || lower.contains("wheez") || lower.contains("bronchitis") || lower.contains("दमा")) {
+            p.condition = "Bronchial Asthma";
+            p.explanation = "Asthma is a chronic inflammatory disorder of the airways (bronchial tubes) that causes them to swell, narrow, and produce excess mucus in response to various triggers.";
+            p.symptoms = "Recurrent episodes of wheezing (whistling sound when breathing out), dry or chesty cough (worse at night and early morning), shortness of breath, and chest tightness.";
+            p.causes = "Genetic predisposition combined with environmental triggers: dust mites, pet dander, pollen, smoke, air pollution, cold air, exercise, or viral respiratory infections.";
+            p.bodyEffects = "Chronic airway inflammation leads to bronchial hyper-responsiveness, bronchospasm, mucus plugging, and restricted airflow into and out of the lungs.";
+            p.prevention = "Identify and avoid known environmental triggers, maintain low indoor humidity, use allergen-proof mattress covers, avoid smoking and secondhand smoke, and get an annual flu vaccine.";
+            p.treatment = "Inhaled corticosteroids (daily controller inhalers) to reduce chronic airway inflammation, and short-acting beta-agonists (rescue inhalers like albuterol) for acute symptom relief.";
+            p.precautions = "Always carry your prescribed rescue inhaler. Practice using an inhaler spacer device correctly. Follow your physician's written Asthma Action Plan.";
+            p.whenToSeekCare = "Seek immediate emergency hospital care if rescue inhalers do not relieve symptoms, lips or fingernails turn bluish, breathing is labored, or speaking in full sentences is difficult.";
+            return p;
+        }
+
+        // 7. THYROID
+        if (lower.contains("thyroid") || lower.contains("hypothyroid") || lower.contains("hyperthyroid") || lower.contains("tsh")) {
+            p.condition = "Thyroid Disorder (Hypothyroidism & Hyperthyroidism)";
+            p.explanation = "Thyroid disorders occur when the butterfly-shaped thyroid gland produces either insufficient thyroid hormones (Hypothyroidism) or excessive thyroid hormones (Hyperthyroidism), disrupting metabolism.";
+            p.symptoms = "Hypothyroidism: unexplained weight gain, chronic fatigue, cold intolerance, dry skin, hair loss, constipation, and memory fog. Hyperthyroidism: rapid weight loss, heat intolerance, heart palpitations, tremors, anxiety, and insomnia.";
+            p.causes = "Autoimmune diseases (Hashimoto thyroiditis for hypothyroidism; Graves disease for hyperthyroidism), iodine deficiency, thyroiditis, or thyroid nodules.";
+            p.bodyEffects = "Thyroid hormones regulate heart rate, body temperature, digestive motility, cholesterol metabolism, and energy consumption throughout the body.";
+            p.prevention = "Ensure adequate dietary iodine intake using iodized table salt. Undergo regular screening if there is a family history of thyroid or autoimmune conditions.";
+            p.treatment = "Hypothyroidism: daily oral synthetic thyroid hormone replacement (Levothyroxine). Hyperthyroidism: antithyroid medications (methimazole), radioactive iodine, or beta-blockers under endocrinologist guidance.";
+            p.precautions = "Take levothyroxine first thing in the morning on an empty stomach with plain water, 30–60 minutes before breakfast. Get TSH and thyroid levels tested every 6–12 months.";
+            p.whenToSeekCare = "Consult an endocrinologist for dosage titration. Seek urgent medical attention for high fever, rapid irregular heartbeat, or extreme agitation (thyroid storm).";
+            return p;
+        }
+
+        // 8. MIGRAINE
+        if (lower.contains("migraine") || (lower.contains("headache") && (lower.contains("one side") || lower.contains("nausea") || lower.contains("light")))) {
+            p.condition = "Migraine Headache";
+            p.explanation = "Migraine is a complex neurological disorder characterized by recurrent attacks of moderate-to-severe throbbing or pulsating head pain, commonly affecting one side of the head.";
+            p.symptoms = "Intense throbbing head pain, sensitivity to light (photophobia) and sound (phonophobia), nausea, vomiting, and occasional visual aura (flashes of light or blind spots).";
+            p.causes = "Neurochemical imbalances involving the trigeminal nerve and fluctuating serotonin levels. Triggers include emotional stress, irregular sleep, skipped meals, hormonal shifts, and weather changes.";
+            p.bodyEffects = "Neurogenic inflammation and abnormal vascular dilation in brain coverings lead to central nervous system pain sensitization.";
+            p.prevention = "Maintain consistent sleep and meal schedules, stay well-hydrated, practice stress management, limit caffeine, and identify individual dietary triggers (e.g. aged cheese, processed meats).";
+            p.treatment = "Acute abortive medications (triptans, NSAIDs) taken at the earliest onset of attack, and preventive daily medications (beta-blockers, topiramate, CGRP antagonists) for frequent attacks.";
+            p.precautions = "Rest in a quiet, dark, cool room during an attack with a cold pack on your forehead. Keep a headache diary to identify recurring triggers.";
+            p.whenToSeekCare = "Consult a neurologist for frequent headaches. Seek emergency care immediately for sudden explosive 'thunderclap' headaches, or headache with fever, stiff neck, or weakness.";
+            return p;
+        }
+
+        // 9. SKIN INFECTIONS & ALLERGIES
+        if (lower.contains("eczema") || lower.contains("psoriasis") || lower.contains("skin infection") || lower.contains("acne") || lower.contains("rash") || lower.contains("fungal")) {
+            p.condition = "Dermatological Condition / Skin Infection";
+            p.explanation = "Skin disorders encompass inflammatory conditions (eczema, psoriasis, acne) and infectious conditions (fungal ringworm, bacterial impetigo) that compromise the skin barrier.";
+            p.symptoms = "Skin redness, intense itching, flaking, peeling, scaling plaques, fluid-filled blisters, pustules/pimples, or circular ring-shaped lesions.";
+            p.causes = "Immune dysregulation, compromised skin moisture barrier, bacterial overgrowth (C. acnes), dermatophyte fungal infections, or contact with allergens and irritants.";
+            p.bodyEffects = "Breaks down epidermal protective barrier, promoting local inflammation, discomfort, and risks of secondary bacterial superinfections from repeated scratching.";
+            p.prevention = "Moisturize skin with fragrance-free emollients, bathe in lukewarm water, avoid harsh chemical soaps, wear breathable cotton fabrics, and maintain personal hygiene.";
+            p.treatment = "Targeted therapy: topical corticosteroids or calcineurin inhibitors for eczema; salicylic acid/retinoids for acne; topical/oral antifungals (clotrimazole, terbinafine) for fungal infections.";
+            p.precautions = "Do not apply over-the-counter steroid creams to undiagnosed skin rashes without a dermatologist's confirmation. Avoid scratching to prevent scarring.";
+            p.whenToSeekCare = "Consult a verified dermatologist for proper diagnosis. Seek urgent medical attention if a skin rash spreads rapidly, blisters extensively, or is accompanied by high fever or skin pain.";
+            return p;
+        }
+
+        // 10. ACID REFLUX / GERD
+        if (lower.contains("acid reflux") || lower.contains("gerd") || lower.contains("acidity") || lower.contains("gastritis") || lower.contains("heartburn")) {
+            p.condition = "GERD (Acid Reflux) & Gastritis";
+            p.explanation = "GERD is a chronic digestive condition where stomach acid repeatedly flows backward into the esophagus because the lower esophageal sphincter relaxes abnormally or weakens.";
+            p.symptoms = "Burning pain in the chest (heartburn) usually after meals and worse when lying down, acid regurgitation (sour taste in mouth), chest discomfort, chronic dry cough, and difficulty swallowing.";
+            p.causes = "Weakened lower esophageal sphincter, hiatal hernia, obesity, smoking, pregnancy, late-night eating, and trigger foods (fatty/fried foods, caffeine, chocolate, spicy items).";
+            p.bodyEffects = "Acid repeatedly irritates and inflames the delicate esophageal lining (esophagitis), which over time can lead to strictures, ulcers, or cellular changes (Barrett esophagus).";
+            p.prevention = "Eat smaller, frequent meals. Avoid lying down for at least 3 hours after eating. Elevate the head of your bed by 6 inches. Maintain a healthy weight and avoid tight clothing.";
+            p.treatment = "Antacids for quick symptom relief, H2-receptor blockers (famotidine), or Proton Pump Inhibitors (PPIs like omeprazole, pantoprazole) prescribed by a doctor.";
+            p.precautions = "Limit caffeine, alcohol, and carbonated beverages. Do not use over-the-counter PPIs indefinitely without clinical supervision.";
+            p.whenToSeekCare = "Consult a gastroenterologist if symptoms occur multiple times weekly. Seek emergency care for difficulty swallowing, vomiting blood, black tarry stools, or chest pain radiating to arm or jaw.";
+            return p;
+        }
+
+        // 11. ARTHRITIS
+        if (lower.contains("arthritis") || lower.contains("osteoarthritis") || lower.contains("rheumatoid") || lower.contains("joint pain") || lower.contains("gout")) {
+            p.condition = "Arthritis & Joint Disorder";
+            p.explanation = "Arthritis refers to inflammation, swelling, and degenerative wear in one or more joints. The two main forms are Osteoarthritis (cartilage wear-and-tear) and Rheumatoid Arthritis (an autoimmune joint disease).";
+            p.symptoms = "Joint pain, stiffness (especially in the morning), swelling, tenderness, reduced range of motion, and cracking sounds (crepitus) during movement.";
+            p.causes = "Osteoarthritis is caused by mechanical cartilage wear, prior joint injuries, aging, and obesity. Rheumatoid arthritis occurs when the immune system attacks joint linings.";
+            p.bodyEffects = "Degradation of smooth protective cartilage leads to bone-on-bone friction, bone spurs, joint deformity, chronic pain, and mobility restrictions.";
+            p.prevention = "Maintain a healthy body weight to minimize mechanical stress on knees and hips. Perform regular low-impact exercises (swimming, walking) to strengthen joint-supporting muscles.";
+            p.treatment = "Analgesics, topical anti-inflammatory gels, structured physical therapy, assistive walking aids, DMARDs for rheumatoid arthritis, and joint replacement surgery for severe cases.";
+            p.precautions = "Avoid repetitive high-impact jumping during acute flare-ups. Use warm compresses for stiffness and cold packs for acute swelling. Wear cushioned supportive shoes.";
+            p.whenToSeekCare = "Consult an orthopedic surgeon or rheumatologist for evaluation. Seek prompt medical care if a joint becomes red, hot to touch, severely swollen, or accompanied by fever.";
+            return p;
+        }
+
+        // 12. PEDIATRIC FEVER
+        if (lower.contains("child has fever") || lower.contains("baby has fever") || lower.contains("pediatric") || lower.contains("colic") || lower.contains("teething")) {
+            p.condition = "Pediatric Illness & Childhood Fever";
+            p.explanation = "Fever in infants and children is an immune defense mechanism indicating the body is combating a viral or bacterial infection. Young children require careful evaluation due to developing physiology.";
+            p.symptoms = "Body temperature above 100.4°F (38°C), irritability, fussiness, decreased appetite, crying, runny nose, cough, or unusual drowsiness.";
+            p.causes = "Common viral respiratory infections, childhood viral exanthems (chickenpox, measles, roseola), teething, or post-vaccination immune responses.";
+            p.bodyEffects = "The body raises its internal temperature to stimulate white blood cells and hinder viral and bacterial replication.";
+            p.prevention = "Ensure all scheduled pediatric vaccinations are up to date, encourage hand hygiene, avoid exposure to sick contacts, and provide balanced nutrition.";
+            p.treatment = "Child-appropriate, weight-based paracetamol or ibuprofen syrups prescribed by a pediatrician. Never give Aspirin to children due to the risk of Reye syndrome.";
+            p.precautions = "Dress the child in light, comfortable clothing. Offer frequent fluids (breast milk, formula, ORS, water) to avoid dehydration. Sponge with lukewarm water if fever is high.";
+            p.whenToSeekCare = "Consult a pediatrician immediately for any infant under 3 months with fever ≥100.4°F (38°C), fever lasting over 3 days, extreme lethargy, stiff neck, continuous crying, or seizures.";
+            return p;
+        }
+
+        // 13. COMMON COLD, COUGH & INFECTIONS
+        if (lower.contains("cold") || lower.contains("cough") || lower.contains("flu") || lower.contains("fever") || lower.contains("sore throat") || lower.contains("infection")) {
+            p.condition = "Acute Respiratory Infection (Cold & Flu)";
+            p.explanation = "The common cold and seasonal flu are acute viral infections of the upper respiratory tract involving the nasal passages, throat, sinuses, and bronchial tubes.";
+            p.symptoms = "Runny or blocked nose, sneezing, sore throat, cough, mild to moderate fever, muscle aches, mild headache, and general fatigue.";
+            p.causes = "Infection by respiratory viruses (primarily Rhinoviruses for colds; Influenza viruses A and B for flu) transmitted through airborne droplets or hand-to-surface contact.";
+            p.bodyEffects = "Viruses inflame respiratory epithelial linings, triggering mucosal swelling, increased mucus production, and immune cytokine release.";
+            p.prevention = "Wash hands frequently with soap and water, avoid touching the face, disinfect common surfaces, practice cough etiquette, and get an annual influenza vaccination.";
+            p.treatment = "Supportive therapy: warm saline gargles for sore throat, steam inhalation for nasal congestion, adequate hydration, honey for cough (in individuals >1 year), and paracetamol for fever and aches.";
+            p.precautions = "Antibiotics do not treat viral colds or flu and should never be used without a doctor diagnosing a secondary bacterial infection. Rest adequately and stay home while feverish.";
+            p.whenToSeekCare = "Consult a physician if fever lasts more than 3 days, cough persists beyond 2 weeks, phlegm is rust-colored or bloody, or you develop chest pain or breathing difficulty.";
+            return p;
+        }
+
+        // 14. DYNAMIC PARSER FOR ANY OTHER DISEASE / SYMPTOM
+        String conditionName = extractConditionName(lower);
+        p.condition = conditionName;
+        p.explanation = conditionName + " is a clinical health condition. In medical practice, it involves specific physiological alterations that warrant professional diagnostic evaluation by a licensed healthcare provider.";
+        p.symptoms = "Symptoms vary based on the stage and individual health factors, but commonly include localized discomfort, fatigue, functional impairment, and constitutional symptoms.";
+        p.causes = "Potential causes include genetic predisposition, immune dysregulation, environmental exposures, lifestyle factors, or underlying microbial pathogens.";
+        p.bodyEffects = "It disrupts normal physiological cellular homeostasis, triggering inflammatory and biochemical cascades that require clinical management to avoid complications.";
+        p.prevention = "Maintain a nutrient-dense diet, engage in regular physical activity, manage stress, avoid smoking and alcohol, and attend scheduled health screenings.";
+        p.treatment = "Treatment is customized to the specific clinical diagnosis and may include targeted medications, physical therapy, lifestyle changes, or procedures supervised by a doctor.";
+        p.precautions = "Avoid unverified home remedies or self-medicating with prescription drugs. Maintain a symptom diary and follow professional clinical guidance.";
+        p.whenToSeekCare = "Consult a qualified physician for clinical and diagnostic evaluation. Seek emergency care immediately for sudden severe pain, high fever, breathing difficulties, or neurological symptoms.";
+        return p;
+    }
+
+    private String extractConditionName(String lower) {
+        Map<String, String> map = new LinkedHashMap<>();
+        map.put("lupus", "Systemic Lupus Erythematosus (Lupus)");
+        map.put("celiac", "Celiac Disease");
+        map.put("crohn", "Crohn's Disease");
+        map.put("fibromyalgia", "Fibromyalgia");
+        map.put("vitiligo", "Vitiligo");
+        map.put("anemia", "Anemia");
+        map.put("jaundice", "Jaundice / Liver Impairment");
+        map.put("gout", "Gout (Uric Acid Arthritis)");
+        map.put("parkinson", "Parkinson's Disease");
+        map.put("alzheimer", "Alzheimer's Disease");
+        map.put("sciatica", "Sciatica");
+        map.put("pcos", "Polycystic Ovary Syndrome (PCOS)");
+        map.put("uti", "Urinary Tract Infection (UTI)");
+        map.put("kidney stone", "Kidney Stones (Renal Calculi)");
+        map.put("sinus", "Sinusitis");
+        map.put("pneumonia", "Pneumonia");
+        map.put("rabies", "Rabies Infection");
+
+        for (Map.Entry<String, String> e : map.entrySet()) {
+            if (lower.contains(e.getKey())) {
+                return e.getValue();
             }
         }
 
-        // 2. Hypertension / High Blood Pressure
-        if (lower.contains("blood pressure") || lower.contains("hypertension") || lower.contains("high bp") ||
-            lower.contains("low bp") || lower.contains("रक्तचाप") || lower.contains("रक्तदाब")) {
-            if (isHi) {
-                return "### 🩺 उच्च रक्तचाप (Hypertension) की जानकारी:\n\n" +
-                        "**सामान्य श्रेणियां:**\n" +
-                        "• सामान्य बीपी: 120/80 mmHg से कम\n" +
-                        "• उच्च रक्तचाप (Stage 1): 130–139 / 80–89 mmHg\n" +
-                        "• उच्च रक्तचाप (Stage 2): 140/90 mmHg या अधिक\n\n" +
-                        "**लक्षण:** इसे 'साइलेंट किलर' कहा जाता है क्योंकि अक्सर लक्षण नहीं होते। गंभीर स्थिति में सिरदर्द, चक्कर आना, और सीने में भारीपन हो सकता है।\n\n" +
-                        "**नियंत्रण के उपाय:** नमक (Sodium) का सेवन 5 ग्राम प्रतिदिन से कम करें, DASH डाइट अपनाएं, तनाव कम करें, और नियमित जांच करवाएं।";
-            } else if (isMr) {
-                return "### 🩺 उच्च रक्तदाबाविषयी (Hypertension) माहिती:\n\n" +
-                        "**रक्तदाब श्रेणी:**\n" +
-                        "• सामान्य: 120/80 mmHg\n" +
-                        "• हायपरटेंशन: 140/90 mmHg किंवा त्याहून अधिक\n\n" +
-                        "**लक्षणे:** अनेकदा कोणतीही लक्षणे दिसत नाहीत, म्हणून याला 'सायलेंट किलर' म्हणतात. तीव्र स्थितीत डोकेदुखी व चक्कर येऊ शकते.\n\n" +
-                        "**काळजी:** जेवणात मिठाचे प्रमाण कमी करा, पालेभाज्या व फळांचे सेवन वाढवा, नियमित व्यायाम करा व तणाव टाळा.";
-            } else {
-                return "### 🩺 Clinical Overview of Blood Pressure & Hypertension:\n\n" +
-                        "**Blood Pressure Categories (AHA Guidelines):**\n" +
-                        "• **Normal:** Less than 120/80 mmHg\n" +
-                        "• **Elevated:** Systolic 120–129 and Diastolic <80 mmHg\n" +
-                        "• **Stage 1 Hypertension:** Systolic 130–139 or Diastolic 80–89 mmHg\n" +
-                        "• **Stage 2 Hypertension:** Systolic ≥140 or Diastolic ≥90 mmHg\n\n" +
-                        "**Why It Matters:** Uncontrolled high blood pressure is a leading cause of heart disease, stroke, and kidney impairment.\n\n" +
-                        "**Evidence-Based Management:**\n" +
-                        "• **DASH Diet:** Focus on fruits, vegetables, whole grains, and low-fat dairy.\n" +
-                        "• **Sodium Restriction:** Limit dietary sodium to less than 2,000 mg per day.\n" +
-                        "• **Weight & Stress Management:** Maintain a healthy BMI (18.5–24.9) and practice mindfulness or aerobic exercise.";
+        Pattern pattern = Pattern.compile("(?:what is|what are|symptoms of|cause of|treatment for|about)\\s+([a-zA-Z\\s]{3,30})", Pattern.CASE_INSENSITIVE);
+        Matcher matcher = pattern.matcher(lower);
+        if (matcher.find()) {
+            String match = matcher.group(1).trim().replaceAll("\\b(the|a|an|my|our)\\b", "").trim();
+            if (match.length() > 2) {
+                return Character.toUpperCase(match.charAt(0)) + match.substring(1);
             }
         }
 
-        // 3. Heart Health & Coronary Conditions
-        if (lower.contains("heart disease") || lower.contains("cardiovascular") || lower.contains("cholesterol") ||
-            lower.contains("angina") || lower.contains("ecg") || lower.contains("हार्ट")) {
-            return "### ❤️ Heart Health & Preventive Cardiology:\n\n" +
-                    "**Early Warning Signs of Heart Issues:**\n" +
-                    "• Chest tightness, fullness, or squeezing pressure (angina)\n" +
-                    "• Shortness of breath during mild exertion\n" +
-                    "• Palpitations (irregular or pounding heartbeats)\n" +
-                    "• Pain radiating to left arm, neck, jaw, or upper back\n\n" +
-                    "**Key Preventive Measures:**\n" +
-                    "• Keep LDL cholesterol below 100 mg/dL (or <70 mg/dL for high-risk patients)\n" +
-                    "• Control blood pressure and blood glucose levels\n" +
-                    "• Avoid all tobacco products and limit saturated fats\n\n" +
-                    "*Note: For severe central chest pain radiating to arm or jaw with cold sweats, call emergency 108 immediately.*";
-        }
-
-        // 4. Diagnostic Tests (MRI, CT, CBC, Ultrasound, ECG)
-        if (lower.contains("mri") || lower.contains("ct scan") || lower.contains("ultrasound") ||
-            lower.contains("cbc") || lower.contains("test") || lower.contains("lipid profile") || lower.contains("जांच")) {
-            return "### 🔬 Medical Diagnostic Tests & Clinical Indications:\n\n" +
-                    "• **CBC (Complete Blood Count):** Evaluates red blood cells, white blood cells, and platelets. Used to detect anemia, infections, and clotting disorders.\n" +
-                    "• **Lipid Profile:** Measures Total Cholesterol, HDL ('good'), LDL ('bad'), and Triglycerides to evaluate cardiovascular risk.\n" +
-                    "• **ECG / EKG (Electrocardiogram):** Records the electrical signals of the heart to diagnose arrhythmias, ischemia, and previous infarctions.\n" +
-                    "• **MRI (Magnetic Resonance Imaging):** Uses magnetic fields and radio waves to generate detailed imaging of soft tissues, brain, spine, and joints without radiation.\n" +
-                    "• **CT Scan (Computed Tomography):** Detailed cross-sectional X-ray imaging for bone fractures, internal bleeding, and chest/abdominal diagnostics.\n" +
-                    "• **Ultrasound (Sonography):** High-frequency sound waves safe for imaging abdominal organs, kidneys, gallbladder, and obstetric care.";
-        }
-
-        // 5. Medicines & General Pharmacology Guidance
-        if (lower.contains("medicine") || lower.contains("paracetamol") || lower.contains("antibiotic") ||
-            lower.contains("painkiller") || lower.contains("ibuprofen") || lower.contains("antacid") || lower.contains("दवा")) {
-            return "### 💊 General Healthcare Guidance on Common Medications:\n\n" +
-                    "• **Paracetamol / Acetaminophen:** Commonly used for mild-to-moderate fever and pain. Safe when used within recommended dosage (max 3,000 mg/day in adults). Avoid excessive use to protect liver function.\n" +
-                    "• **NSAIDs (e.g. Ibuprofen, Naproxen):** Reduce inflammation and pain; should be taken after meals to avoid gastric irritation. Avoid in severe kidney disease or active peptic ulcers.\n" +
-                    "• **Antacids & PPIs (e.g. Omeprazole, Pantoprazole):** Reduce stomach acid for heartburn and GERD; PPIs are best taken 30 minutes before breakfast.\n" +
-                    "• **Antibiotic Safety:** Antibiotics treat bacterial infections only, NOT viral colds or flu. Always complete the prescribed duration to prevent antimicrobial resistance.\n\n" +
-                    "*Clinical Rule: QuickCare AI does not prescribe specific prescription dosages. Consult a licensed physician for tailored pharmacological regimens.*";
-        }
-
-        // 6. First Aid Basics
-        if (lower.contains("first aid") || lower.contains("burn") || lower.contains("sprain") ||
-            lower.contains("choking") || lower.contains("nosebleed") || lower.contains("प्राथमिक उपचार")) {
-            return "### 🩹 Essential First Aid Guidance:\n\n" +
-                    "• **Minor Burns:** Immediately run cool (not ice cold) tap water over the burn for 10–15 minutes. Do not apply ice, butter, or oil. Cover with a sterile non-stick bandage.\n" +
-                    "• **Sprains & Strains (R.I.C.E. Protocol):**\n" +
-                    "  - **R**est the injured limb\n" +
-                    "  - **I**ce application for 15-20 minutes wrapped in cloth\n" +
-                    "  - **C**ompression with an elastic bandage\n" +
-                    "  - **E**levation above heart level\n" +
-                    "• **Nosebleeds:** Sit upright and lean slightly forward. Pinch the soft part of your nose firmly for 10 minutes. Breathe through your mouth. Do not tilt your head back.\n" +
-                    "• **Choking:** If the person cannot speak or cough, perform the Heimlich maneuver (abdominal thrusts) or seek urgent help immediately.";
-        }
-
-        // 7. Mental Health, Anxiety & Sleep
-        if (lower.contains("anxiety") || lower.contains("depression") || lower.contains("stress") ||
-            lower.contains("insomnia") || lower.contains("sleep") || lower.contains("तनाव")) {
-            return "### 🧠 Mental Wellness, Stress & Sleep Support:\n\n" +
-                    "**Managing Daily Anxiety & Stress:**\n" +
-                    "• Practice **Box Breathing:** Inhale for 4 seconds, hold for 4 seconds, exhale for 4 seconds, hold for 4 seconds.\n" +
-                    "• Engage in regular physical activity to stimulate endorphin release.\n" +
-                    "• Connect with supportive family, friends, or a counselor.\n\n" +
-                    "**Sleep Hygiene Protocol:**\n" +
-                    "• Maintain a consistent sleep-wake schedule, including weekends.\n" +
-                    "• Avoid blue-light screens (smartphones, laptops) 60 minutes before bedtime.\n" +
-                    "• Keep the bedroom dark, quiet, and cool.\n" +
-                    "• Limit caffeine after 2:00 PM.";
-        }
-
-        return null;
+        return "Health Condition / Symptom Pattern";
     }
 
     private String callGeminiApi(String message, String lang, SpecializationInfo specInfo, List<Doctor> matchingDoctors, String convId) {
         try {
             String endpoint = "https://generativelanguage.googleapis.com/v1beta/models/" + modelName + ":generateContent?key=" + apiKey;
 
-            String systemPrompt;
-            if (specInfo != null && matchingDoctors.isEmpty()) {
-                systemPrompt = "You are QuickCare AI Medical Assistant. " +
-                        "The user asked about a condition related to " + specInfo.getSpecialistTitle() + ". " +
-                        "CRITICAL REQUIREMENT: Quick Care Hospital DOES NOT have a " + specInfo.getSpecialistTitle() + " on staff. " +
-                        "Explain the medical condition in an informative, empathetic way, BUT YOU MUST CONCLUDE WITH THIS EXACT MANDATORY STATEMENT: " +
-                        "'Currently, we do not have a doctor specializing in this condition. Please check again later or consult an appropriate healthcare provider.' " +
-                        "NEVER recommend an unrelated doctor or general physician. DO NOT provide a definitive diagnosis or prescribe medications.";
+            String doctorSectionPrompt;
+            if (specInfo != null && !specInfo.isAvailableAtQuickCare()) {
+                doctorSectionPrompt = "CRITICAL: Quick Care Hospital DOES NOT have a doctor available in " + specInfo.getSpecialization() + ". " +
+                        "YOU MUST INCLUDE THIS EXACT STATEMENT IN YOUR SPECIALIST SECTION: '" + UNAVAILABLE_SPECIALTY_NOTICE + "'. NEVER recommend an unrelated doctor.";
             } else if (specInfo != null && !matchingDoctors.isEmpty()) {
-                List<String> names = new ArrayList<>();
-                for (Doctor doc : matchingDoctors) {
-                    if (doc != null && doc.getFullName() != null) {
-                        names.add(doc.getFullName());
-                    }
-                }
-                String docNames = String.join(", ", names);
-                systemPrompt = "You are QuickCare AI Medical Assistant. " +
-                        "Provide a helpful, structured conversational answer. " +
-                        "Quick Care Hospital has the following verified specialist(s) in this exact field: " + docNames + ". " +
-                        "Recommend ONLY these verified specialists. DO NOT prescribe prescription dosages or make definitive diagnoses.";
+                String docNames = matchingDoctors.stream().map(Doctor::getFullName).collect(Collectors.joining(", "));
+                doctorSectionPrompt = "Quick Care Hospital has the following verified specialist(s) in " + specInfo.getSpecialization() + ": " + docNames + ". Recommend ONLY these verified specialists.";
             } else {
-                systemPrompt = "You are QuickCare AI Medical Assistant, a friendly, professional clinical chatbot for a healthcare appointment platform. " +
-                        "Answer patient queries about diseases, symptoms, diagnostic tests, medications, diet, and lifestyle with clear, structured markdown. " +
-                        "Always include appropriate disclaimers and advise emergency services (108) for critical symptoms.";
+                doctorSectionPrompt = "If the user asks which doctor to consult for a specialty not available at Quick Care (Quick Care only has Cardiology, Dermatology, Pediatrics, Orthopedics), display: '" + UNAVAILABLE_SPECIALTY_NOTICE + "'.";
             }
+
+            String systemPrompt = "You are QuickCare AI Healthcare Assistant, an intelligent, empathetic medical assistant. " +
+                    "Answer questions about any disease, illness, symptom, or health condition using simple, clear language. " +
+                    "Structure your answer with: 1. Understanding the condition, 2. Common symptoms, 3. Causes & risk factors, 4. How it affects the body, 5. General prevention methods, 6. Common treatment approaches, 7. Lifestyle & dietary precautions, and 8. When medical attention is necessary. " +
+                    doctorSectionPrompt + " " +
+                    "YOU MUST CONCLUDE WITH THIS EXACT MANDATORY DISCLAIMER AT THE VERY END:\n" + MANDATORY_MEDICAL_DISCLAIMER;
 
             Map<String, Object> body = new HashMap<>();
             List<Map<String, Object>> contents = new ArrayList<>();
 
-            // Add previous context if available
             List<Map<String, String>> history = conversationHistories.get(convId);
             if (history != null && history.size() > 1) {
                 for (int i = Math.max(0, history.size() - 4); i < history.size() - 1; i++) {
@@ -556,7 +603,6 @@ public class AiService {
                 }
             }
 
-            // Current prompt
             contents.add(Map.of(
                     "role", "user",
                     "parts", List.of(Map.of("text", systemPrompt + "\n\nUser Question (" + lang + "): " + message))
@@ -582,8 +628,8 @@ public class AiService {
                         if (parts != null && !parts.isEmpty()) {
                             Map<String, Object> p = parts.get(0);
                             String resText = (String) p.get("text");
-                            if (specInfo != null && matchingDoctors.isEmpty() && !resText.contains("do not have a doctor specializing")) {
-                                resText += "\n\nCurrently, we do not have a doctor specializing in this condition. Please check again later or consult an appropriate healthcare provider.";
+                            if (specInfo != null && !specInfo.isAvailableAtQuickCare() && !resText.contains("don't have a doctor available")) {
+                                resText += "\n\n" + UNAVAILABLE_SPECIALTY_NOTICE;
                             }
                             return resText;
                         }
@@ -591,28 +637,8 @@ public class AiService {
                 }
             }
         } catch (Exception e) {
-            logger.warn("External AI call failed: {}. Falling back to clinical rules triaging.", e.getMessage());
+            logger.warn("Gemini API call failed: {}. Utilizing comprehensive clinical knowledge engine.", e.getMessage());
         }
         return null;
-    }
-
-    private String getEmergencyWarning(String lang) {
-        if ("hi".equalsIgnoreCase(lang)) {
-            return "⚠️ आपातकालीन चेतावनी: आपके लक्षण संभावित रूप से गंभीर स्थिति का संकेत दे सकते हैं। तुरंत नजदीकी आपातकालीन अस्पताल (108 / 112) से संपर्क करें!";
-        } else if ("mr".equalsIgnoreCase(lang)) {
-            return "⚠️ तातडीची चेतावणी: तुमची लक्षणे गंभीर स्थिती दर्शवू शकतात. कृपया त्वरित जवळच्या रुग्णालयाशी किंवा आपत्कालीन क्रमांकाशी (108 / 112) संपर्क साधा!";
-        } else {
-            return "⚠️ MEDICAL EMERGENCY WARNING: The symptoms described may indicate an urgent or life-threatening medical emergency. Please immediately call emergency services (108 / 911 / 112) or proceed to the nearest emergency casualty hospital!";
-        }
-    }
-
-    private String getEmergencyReply(String lang) {
-        if ("hi".equalsIgnoreCase(lang)) {
-            return "कृपया तुरंत आपातकालीन सहायता प्राप्त करें। किसी भी ऑनलाइन चैट पर निर्भर न रहें और तुरंत नजदीकी अस्पताल के आपातकालीन कक्ष (Casualty) में जाएं या 108 पर कॉल करें।";
-        } else if ("mr".equalsIgnoreCase(lang)) {
-            return "कृपया त्वरित वैद्यकीय मदत घ्या. ऑनलाइन चॅटवर अवलंबून न राहता ताबडतोब नजीकच्या हॉस्पिटलच्या इमर्जन्सी वॉर्डमध्ये जा किंवा 108 वर कॉल करा.";
-        } else {
-            return "Please seek immediate emergency medical care. Do not wait for an online appointment. Call an ambulance (108 / 112) or proceed to the nearest emergency casualty ward immediately.";
-        }
     }
 }

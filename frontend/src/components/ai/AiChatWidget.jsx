@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
-import { aiService } from '../../services/aiService';
+import { aiService, MANDATORY_MEDICAL_DISCLAIMER } from '../../services/aiService';
 import {
   Bot,
   X,
@@ -12,15 +12,112 @@ import {
   Sparkles,
   PhoneCall,
   User,
-  ArrowRight,
   Volume2,
   Square,
-  Minimize2,
+  Mic,
+  MicOff,
+  ShieldCheck,
+  Stethoscope,
+  Info,
 } from 'lucide-react';
+
+/**
+ * Formats clinical markdown text into styled, readable JSX elements
+ */
+const FormattedMedicalContent = ({ content }) => {
+  if (!content) return null;
+
+  // Separate mandatory disclaimer if present to render in a dedicated advisory card
+  const disclaimerMarker = '⚕️ **Important Medical Advice:**';
+  let mainBody = content;
+  let disclaimerText = null;
+
+  if (content.includes(disclaimerMarker)) {
+    const parts = content.split(disclaimerMarker);
+    mainBody = parts[0].trim().replace(/---\s*$/, '').trim();
+    disclaimerText = `Important Medical Advice:${parts[1]}`.trim();
+  }
+
+  // Parse lines into structured headings, bullet points, and paragraphs
+  const lines = mainBody.split('\n');
+
+  return (
+    <div className="space-y-2.5 text-xs leading-relaxed text-slate-800 dark:text-slate-100">
+      {lines.map((line, idx) => {
+        const trimmed = line.trim();
+        if (!trimmed) return null;
+
+        // Divider
+        if (trimmed === '---') {
+          return <hr key={idx} className="my-2 border-slate-200 dark:border-slate-700" />;
+        }
+
+        // Section Heading (###)
+        if (trimmed.startsWith('###')) {
+          const headingText = trimmed.replace(/^###\s*/, '');
+          return (
+            <h4
+              key={idx}
+              className="font-extrabold text-[13px] text-blue-700 dark:text-teal-400 mt-2 flex items-center gap-1.5"
+            >
+              {headingText}
+            </h4>
+          );
+        }
+
+        // Bullet point
+        if (trimmed.startsWith('•') || trimmed.startsWith('-')) {
+          const itemText = trimmed.replace(/^[•\-]\s*/, '');
+          return (
+            <div key={idx} className="flex items-start gap-2 ml-1 text-slate-700 dark:text-slate-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-teal-500 mt-1.5 shrink-0" />
+              <span>{renderBoldSpans(itemText)}</span>
+            </div>
+          );
+        }
+
+        // Standard line / Bold item
+        return (
+          <p key={idx} className="leading-relaxed">
+            {renderBoldSpans(trimmed)}
+          </p>
+        );
+      })}
+
+      {/* Dedicated Mandatory Medical Advice Card (Requirement 4) */}
+      {disclaimerText && (
+        <div className="mt-3 p-3 rounded-2xl bg-gradient-to-r from-blue-50/90 to-teal-50/90 dark:from-slate-800/90 dark:to-slate-900/90 border border-blue-200/80 dark:border-teal-900/60 shadow-2xs space-y-1">
+          <div className="flex items-center gap-1.5 text-blue-800 dark:text-teal-300 font-extrabold text-[11px]">
+            <ShieldCheck className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
+            <span>Important Medical Advice</span>
+          </div>
+          <p className="text-[10px] sm:text-[11px] text-slate-600 dark:text-slate-300 leading-normal">
+            {disclaimerText.replace(/^Important Medical Advice:\s*/i, '').replace(/\*\*/g, '')}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+};
+
+function renderBoldSpans(text) {
+  if (!text) return null;
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return (
+        <strong key={i} className="font-extrabold text-slate-900 dark:text-white">
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    return part;
+  });
+}
 
 export const AiChatWidget = () => {
   const { t } = useTranslation();
-  const { language, isDark } = useTheme();
+  const { language } = useTheme();
   const location = useLocation();
 
   const [isOpen, setIsOpen] = useState(false);
@@ -28,20 +125,29 @@ export const AiChatWidget = () => {
   const [loading, setLoading] = useState(false);
   const [conversationId, setConversationId] = useState(null);
   const [speakingIndex, setSpeakingIndex] = useState(null);
+  const [isListening, setIsListening] = useState(false);
+  const [contextualPills, setContextualPills] = useState([
+    'What is diabetes?',
+    'What are the symptoms of dengue?',
+    'Why am I experiencing chest pain?',
+    'How can I prevent high blood pressure?',
+    'Which doctor should I consult for a skin infection?',
+    'What causes acute migraine?',
+  ]);
+
   const messagesEndRef = useRef(null);
+  const recognitionRef = useRef(null);
 
   const [messages, setMessages] = useState([
     {
       sender: 'assistant',
       text:
-        language === 'hi'
-          ? 'नमस्ते! मैं क्विककेयर एआई स्वास्थ्य सहायक हूं। आप विभिन्न बीमारियों (जैसे मधुमेह, उच्च रक्तचाप, हृदय रोग, त्वचा रोग, अस्थमा), उनके लक्षण, दवाइयां, जांच या किसी भी स्वास्थ्य प्रश्न के बारे में पूछ सकते हैं।'
-          : language === 'mr'
-          ? 'नमस्कार! मी क्विककेअर एआई आरोग्य सहाय्यक आहे. आपण कोणत्याही आजारांबद्दल (उदा. मधुमेह, उच्च रक्तदाब, हृदयरोग, त्वचारोग, दमा), त्यांची लक्षणे, औषधे, तपासण्या किंवा वैद्यकीय सल्ल्याबद्दल विचारू शकता.'
-          : 'Hello! I am QuickCare AI Assistant. You can ask me any health or disease-related questions (e.g. diabetes, hypertension, heart disease, skin conditions, asthma, first aid, diagnostic tests), describe your symptoms, or find verified specialists at Quick Care.',
+        'Hello! I am QuickCare AI Healthcare Assistant.\n\nYou can ask me questions about any disease, illness, symptom, or health condition (e.g. dengue, diabetes, hypertension, asthma, thyroid, skin infections, arthritis, digestive issues, children’s health, or heart care). I will explain the condition, symptoms, causes, prevention, treatments, precautions, and recommend verified specialists when available.\n\n---\n\n' +
+        MANDATORY_MEDICAL_DISCLAIMER,
       isEmergency: false,
       recommendedDoctors: [],
       suggestedSpecialization: null,
+      specialistAvailable: true,
     },
   ]);
 
@@ -53,56 +159,86 @@ export const AiChatWidget = () => {
     if (isOpen) {
       scrollToBottom();
     }
-  }, [messages, isOpen]);
+  }, [messages, isOpen, loading]);
 
-  // Stop speech when navigating to another page or unmounting
+  // Stop speech when navigating or closing
   useEffect(() => {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }
     setSpeakingIndex(null);
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    }
   }, [location.pathname]);
 
   const handleToggleSpeech = (idx, text) => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
 
-    // If currently speaking this message: stop immediately
     if (speakingIndex === idx) {
       window.speechSynthesis.cancel();
       setSpeakingIndex(null);
       return;
     }
 
-    // If speaking any other message or inactive: cancel previous and start current
     window.speechSynthesis.cancel();
 
-    // Clean text: strip markdown symbols (*, #, _, •) for smooth synthesized speech
+    // Clean text for smooth TTS reading
     const cleanText = text
       .replace(/[*#_~`•]/g, ' ')
+      .replace(/⚕️/g, '')
       .replace(/\s+/g, ' ')
       .trim();
 
     if (!cleanText) return;
 
     const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.lang = language === 'hi' ? 'hi-IN' : language === 'mr' ? 'mr-IN' : 'en-US';
 
-    if (language === 'hi') utterance.lang = 'hi-IN';
-    else if (language === 'mr') utterance.lang = 'mr-IN';
-    else utterance.lang = 'en-US';
-
-    utterance.onstart = () => {
-      setSpeakingIndex(idx);
-    };
-
-    utterance.onend = () => {
-      setSpeakingIndex(null);
-    };
-
-    utterance.onerror = () => {
-      setSpeakingIndex(null);
-    };
+    utterance.onstart = () => setSpeakingIndex(idx);
+    utterance.onend = () => setSpeakingIndex(null);
+    utterance.onerror = () => setSpeakingIndex(null);
 
     window.speechSynthesis.speak(utterance);
+  };
+
+  const toggleVoiceInput = () => {
+    const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRec) {
+      alert('Voice recognition is not supported in this browser. Please use Google Chrome or Microsoft Edge.');
+      return;
+    }
+
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRec();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = language === 'hi' ? 'hi-IN' : language === 'mr' ? 'mr-IN' : 'en-US';
+
+      recognition.onstart = () => setIsListening(true);
+      recognition.onend = () => setIsListening(false);
+      recognition.onerror = () => setIsListening(false);
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        if (transcript) {
+          setInput((prev) => (prev ? `${prev} ${transcript}` : transcript));
+        }
+        setIsListening(false);
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
+    } catch (err) {
+      console.warn('Voice input error:', err);
+      setIsListening(false);
+    }
   };
 
   const handleClose = () => {
@@ -110,6 +246,10 @@ export const AiChatWidget = () => {
       window.speechSynthesis.cancel();
     }
     setSpeakingIndex(null);
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    }
     setIsOpen(false);
   };
 
@@ -121,11 +261,69 @@ export const AiChatWidget = () => {
     setMessages([
       {
         sender: 'assistant',
-        text: 'Chat cleared. How else may I assist you with your health or disease-related questions today?',
+        text:
+          'Chat history cleared. How else may I assist you with your health or disease-related questions today?\n\n---\n\n' +
+          MANDATORY_MEDICAL_DISCLAIMER,
         isEmergency: false,
         recommendedDoctors: [],
+        suggestedSpecialization: null,
+        specialistAvailable: true,
       },
     ]);
+  };
+
+  const updateFollowUpPills = (query) => {
+    const lower = (query || '').toLowerCase();
+    if (lower.includes('dengue')) {
+      setContextualPills([
+        'What are warning signs of severe dengue?',
+        'How to prevent mosquito bites?',
+        'What foods help recovery in dengue?',
+        'Which doctor treats dengue?',
+      ]);
+    } else if (lower.includes('diabet') || lower.includes('sugar')) {
+      setContextualPills([
+        'What is a normal HbA1c level?',
+        'What diet is recommended for Type 2 diabetes?',
+        'Early symptoms of high blood sugar',
+        'Which doctor should I consult for diabetes?',
+      ]);
+    } else if (lower.includes('blood pressure') || lower.includes('hypertension') || lower.includes('bp')) {
+      setContextualPills([
+        'What foods lower blood pressure?',
+        'How is Stage 1 hypertension managed?',
+        'Signs of hypertensive crisis',
+        'Book consultation with a cardiologist',
+      ]);
+    } else if (lower.includes('skin') || lower.includes('rash') || lower.includes('acne') || lower.includes('eczema')) {
+      setContextualPills([
+        'Which doctor should I consult for a skin infection?',
+        'Home care for eczema and dry skin',
+        'When is a skin rash dangerous?',
+        'Book appointment with Dr. Rajesh Kulkarni',
+      ]);
+    } else if (lower.includes('heart') || lower.includes('chest')) {
+      setContextualPills([
+        'Warning signs of a heart attack',
+        'What is an ECG test used for?',
+        'How to lower bad LDL cholesterol?',
+        'Book consultation with Dr. Priya Deshmukh',
+      ]);
+    } else if (lower.includes('child') || lower.includes('baby') || lower.includes('pediat')) {
+      setContextualPills([
+        'Safe home care for infant fever',
+        'When to take a child to the emergency room?',
+        'How to manage colic in babies?',
+        'Book appointment with Dr. Ananya Roy',
+      ]);
+    } else {
+      setContextualPills([
+        'What are common symptoms of this condition?',
+        'What prevention methods are recommended?',
+        'When should I seek medical attention?',
+        'Which doctor should I consult?',
+      ]);
+    }
   };
 
   const handleSend = async (messageToSend = null) => {
@@ -136,6 +334,7 @@ export const AiChatWidget = () => {
     setMessages((prev) => [...prev, userMsg]);
     setInput('');
     setLoading(true);
+    updateFollowUpPills(text);
 
     try {
       const res = await aiService.chat(text, language, conversationId);
@@ -161,8 +360,11 @@ export const AiChatWidget = () => {
         {
           sender: 'assistant',
           text:
-            'Sorry, our AI service is experiencing high demand. Please try again or consult our verified specialists directly.',
+            'Sorry, our AI service is currently unavailable. If you have urgent health concerns, please consult a qualified healthcare provider directly.\n\n---\n\n' +
+            MANDATORY_MEDICAL_DISCLAIMER,
           isEmergency: false,
+          recommendedDoctors: [],
+          specialistAvailable: true,
         },
       ]);
     } finally {
@@ -170,50 +372,41 @@ export const AiChatWidget = () => {
     }
   };
 
-  const suggestedPills = [
-    'What causes diabetes and how is it managed?',
-    'What are common symptoms of hypertension?',
-    'Chest discomfort and shortness of breath',
-    'Diet and lifestyle tips for heart health',
-    'Child has high fever and sore throat',
-    'What are warning signs of migraine?',
-  ];
-
   return (
     <>
       {/* Floating Action Button */}
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3.5 rounded-full bg-gradient-to-r from-blue-600 via-blue-700 to-teal-500 text-white font-semibold shadow-xl shadow-blue-500/30 hover:scale-105 active:scale-95 transition-all group cursor-pointer"
-          aria-label="Open QuickCare AI Assistant"
+          className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3.5 rounded-full bg-gradient-to-r from-blue-600 via-blue-700 to-teal-500 text-white font-bold shadow-xl shadow-blue-500/30 hover:scale-105 active:scale-95 transition-all group cursor-pointer"
+          aria-label="Open QuickCare AI Healthcare Assistant"
         >
           <div className="relative">
             <Bot className="w-6 h-6 group-hover:rotate-12 transition-transform" />
             <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full animate-ping" />
             <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full" />
           </div>
-          <span className="text-sm tracking-wide hidden sm:inline">Ask QuickCare AI</span>
+          <span className="text-xs sm:text-sm tracking-wide">Ask QuickCare AI</span>
         </button>
       )}
 
-      {/* Chat Window */}
+      {/* Main Chatbot Window */}
       {isOpen && (
-        <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 w-[95vw] sm:w-[460px] h-[620px] max-h-[85vh] bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200/90 dark:border-slate-800 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-200">
-          {/* Header */}
-          <div className="bg-gradient-to-r from-blue-600 to-teal-600 p-4 text-white flex items-center justify-between shadow-sm shrink-0">
+        <div className="fixed bottom-3 right-3 sm:bottom-6 sm:right-6 z-50 w-[95vw] sm:w-[480px] h-[640px] max-h-[88vh] bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200/90 dark:border-slate-800 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-200">
+          {/* Top Header */}
+          <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-teal-600 p-4 text-white flex items-center justify-between shadow-xs shrink-0">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center">
+              <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center">
                 <Bot className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h3 className="font-bold text-sm leading-tight flex items-center gap-1.5">
-                  QuickCare AI Clinical Assistant
+                <h3 className="font-extrabold text-sm leading-tight flex items-center gap-1.5">
+                  QuickCare AI Healthcare Assistant
                   <Sparkles className="w-3.5 h-3.5 text-amber-300" />
                 </h3>
-                <p className="text-[11px] text-blue-100 flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-300" />
-                  Healthcare & Disease Intelligence • Doctor Matching
+                <p className="text-[11px] text-blue-100 flex items-center gap-1 mt-0.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                  All Diseases • Clinical Guidance • Doctor Matching
                 </p>
               </div>
             </div>
@@ -221,14 +414,14 @@ export const AiChatWidget = () => {
             <div className="flex items-center gap-1">
               <button
                 onClick={clearChat}
-                className="p-1.5 hover:bg-white/10 rounded-lg text-white/80 hover:text-white transition cursor-pointer"
+                className="p-1.5 hover:bg-white/10 rounded-xl text-white/80 hover:text-white transition cursor-pointer"
                 title="Clear Conversation"
               >
                 <Trash2 className="w-4 h-4" />
               </button>
               <button
                 onClick={handleClose}
-                className="p-1.5 hover:bg-white/10 rounded-lg text-white/80 hover:text-white transition cursor-pointer"
+                className="p-1.5 hover:bg-white/10 rounded-xl text-white/80 hover:text-white transition cursor-pointer"
                 title="Close Window"
               >
                 <X className="w-5 h-5" />
@@ -236,15 +429,23 @@ export const AiChatWidget = () => {
             </div>
           </div>
 
-          {/* Safety Disclaimer */}
-          <div className="bg-amber-50 dark:bg-amber-950/40 px-3.5 py-1.5 border-b border-amber-200/60 dark:border-amber-900/40 text-[11px] text-amber-800 dark:text-amber-200 flex items-center gap-2 shrink-0">
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
-            <span className="leading-tight">
-              Informational tool. For severe emergencies, call <strong>108 / 112</strong> immediately.
-            </span>
+          {/* Quick Notice Banner */}
+          <div className="bg-amber-50 dark:bg-amber-950/40 px-3.5 py-1.5 border-b border-amber-200/60 dark:border-amber-900/40 text-[11px] text-amber-800 dark:text-amber-200 flex items-center justify-between gap-2 shrink-0">
+            <div className="flex items-center gap-1.5">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+              <span className="leading-tight">
+                For life-threatening emergencies, call <strong>112 / 108</strong> in India immediately.
+              </span>
+            </div>
+            <a
+              href="tel:112"
+              className="text-[10px] font-bold text-rose-600 dark:text-rose-400 hover:underline shrink-0 flex items-center gap-1"
+            >
+              <PhoneCall className="w-3 h-3" /> Call 112
+            </a>
           </div>
 
-          {/* Messages Area */}
+          {/* Messages Scroll Area */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/70 dark:bg-slate-950/60">
             {messages.map((m, idx) => (
               <div
@@ -257,101 +458,122 @@ export const AiChatWidget = () => {
                   </div>
                 )}
 
-                <div className="max-w-[85%] space-y-2">
-                  {/* Emergency Banner */}
+                <div className="max-w-[88%] space-y-2">
+                  {/* PROMINENT EMERGENCY WARNING BANNER (Requirement 5) */}
                   {m.isEmergency && (
-                    <div className="p-3 rounded-2xl bg-rose-50 dark:bg-rose-950/50 border border-rose-300 dark:border-rose-800 text-rose-800 dark:text-rose-200 text-xs shadow-xs animate-pulse">
-                      <p className="font-bold flex items-center gap-1.5 text-rose-700 dark:text-rose-300">
-                        <AlertTriangle className="w-4 h-4 text-rose-600" />
-                        CRITICAL MEDICAL EMERGENCY WARNING
+                    <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/70 border-2 border-rose-400 dark:border-rose-700 text-rose-900 dark:text-rose-100 text-xs shadow-md space-y-2.5 animate-pulse">
+                      <div className="flex items-center gap-2 text-rose-700 dark:text-rose-300 font-black text-xs uppercase tracking-wider">
+                        <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                        <span>Critical Medical Emergency Warning</span>
+                      </div>
+                      <p className="text-[11px] leading-relaxed text-rose-800 dark:text-rose-200">
+                        {m.emergencyDisclaimer ||
+                          'The symptoms described indicate an urgent life-threatening emergency. In India, please call 112 or 108 immediately or go to the nearest emergency department right away.'}
                       </p>
-                      <p className="mt-1 leading-relaxed text-[11px]">{m.emergencyDisclaimer}</p>
-                      <a
-                        href="tel:108"
-                        className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 text-white text-xs font-bold rounded-lg shadow-sm hover:bg-rose-700 transition"
-                      >
-                        <PhoneCall className="w-3.5 h-3.5" /> Call Emergency (108 / 112)
-                      </a>
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        <a
+                          href="tel:112"
+                          className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-black rounded-xl shadow-md transition active:scale-95"
+                        >
+                          <PhoneCall className="w-3.5 h-3.5" />
+                          <span>Call 112 (National Emergency)</span>
+                        </a>
+                        <a
+                          href="tel:108"
+                          className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-rose-700 hover:bg-rose-800 text-white text-xs font-black rounded-xl shadow-md transition active:scale-95"
+                        >
+                          <PhoneCall className="w-3.5 h-3.5" />
+                          <span>Call 108 (Ambulance)</span>
+                        </a>
+                      </div>
                     </div>
                   )}
 
-                  {/* Bubble text */}
+                  {/* Message Bubble */}
                   <div
-                    className={`p-3.5 rounded-2xl text-xs leading-relaxed ${
+                    className={`p-4 rounded-3xl text-xs leading-relaxed shadow-xs ${
                       m.sender === 'user'
-                        ? 'bg-blue-600 text-white rounded-br-none shadow-sm'
-                        : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200/80 dark:border-slate-700 rounded-bl-none shadow-xs'
+                        ? 'bg-blue-600 text-white rounded-br-none shadow-md font-medium'
+                        : 'bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 rounded-bl-none text-slate-800 dark:text-slate-100'
                     }`}
                   >
-                    <p className="whitespace-pre-line">{m.text}</p>
+                    {m.sender === 'assistant' ? (
+                      <FormattedMedicalContent content={m.text} />
+                    ) : (
+                      <p className="whitespace-pre-line">{m.text}</p>
+                    )}
 
-                    {/* READ ALOUD TOGGLE BUTTON */}
+                    {/* Speech / TTS Toggle */}
                     {m.sender === 'assistant' && (
-                      <div className="pt-2 border-t border-slate-100 dark:border-slate-700/60 mt-2 flex items-center justify-between">
+                      <div className="pt-2 border-t border-slate-100 dark:border-slate-700/60 mt-3 flex items-center justify-between">
                         <button
                           type="button"
                           onClick={() => handleToggleSpeech(idx, m.text)}
-                          className={`text-[11px] font-bold flex items-center gap-1.5 px-2.5 py-1 rounded-lg transition cursor-pointer ${
+                          className={`text-[11px] font-bold flex items-center gap-1.5 px-2.5 py-1 rounded-xl transition cursor-pointer ${
                             speakingIndex === idx
                               ? 'bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-800 animate-pulse'
                               : 'text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-700/60'
                           }`}
-                          title={speakingIndex === idx ? 'Stop Reading' : 'Read Aloud'}
-                          aria-label={speakingIndex === idx ? 'Stop Reading' : 'Read Aloud'}
+                          title={speakingIndex === idx ? 'Stop Reading' : 'Read Aloud (TTS)'}
                         >
                           {speakingIndex === idx ? (
                             <>
                               <Square className="w-3 h-3 fill-rose-600 text-rose-600 dark:fill-rose-400 dark:text-rose-400" />
-                              <span>Stop Reading</span>
+                              <span>Stop Voice</span>
                             </>
                           ) : (
                             <>
                               <Volume2 className="w-3.5 h-3.5" />
-                              <span>Read Aloud</span>
+                              <span>Listen Aloud</span>
                             </>
                           )}
                         </button>
 
-                        <span className="text-[10px] text-slate-400 dark:text-slate-500">
-                          {language.toUpperCase()} Voice
+                        <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">
+                          QuickCare AI Medical Engine
                         </span>
                       </div>
                     )}
                   </div>
 
-                  {/* Notice when specialist is not available at Quick Care */}
-                  {m.sender === 'assistant' && m.specialistAvailable === false && m.suggestedSpecialization && !m.isEmergency && (
-                    <div className="p-3 bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 rounded-2xl shadow-2xs space-y-1">
-                      <div className="flex items-center gap-1.5 text-amber-800 dark:text-amber-300 font-bold text-xs">
-                        <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
-                        <span>Specialist Not Available at Quick Care</span>
+                  {/* Unavailable Medical Specialty Warning (Requirement 6) */}
+                  {m.sender === 'assistant' &&
+                    m.specialistAvailable === false &&
+                    m.suggestedSpecialization &&
+                    !m.isEmergency && (
+                      <div className="p-3.5 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-900/60 rounded-2xl shadow-2xs space-y-1.5">
+                        <div className="flex items-center gap-1.5 text-amber-800 dark:text-amber-300 font-extrabold text-xs">
+                          <Info className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                          <span>Specialty: {m.suggestedSpecialization}</span>
+                        </div>
+                        <p className="text-[11px] text-amber-800 dark:text-amber-200 leading-relaxed font-semibold">
+                          Sorry, currently we don't have a doctor available for this medical specialty. Please consult a qualified healthcare provider outside Quick Care.
+                        </p>
                       </div>
-                      <p className="text-[11px] text-amber-700 dark:text-amber-300 leading-relaxed">
-                        Currently, we do not have a doctor specializing in <strong>{m.suggestedSpecialization}</strong> at Quick Care Hospital. Please check again later or consult an appropriate healthcare provider.
-                      </p>
-                    </div>
-                  )}
+                    )}
 
-                  {/* Specialization & Recommended Doctors */}
-                  {m.recommendedDoctors && m.recommendedDoctors.length > 0 && (
-                    <div className="p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xs space-y-2">
+                  {/* Matching Verified Doctor Cards (Requirement 6) */}
+                  {m.recommendedDoctors && m.recommendedDoctors.length > 0 && !m.isEmergency && (
+                    <div className="p-3.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-sm space-y-2.5">
                       <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
-                          Suggested Specialists
+                        <span className="text-[11px] font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1">
+                          <Stethoscope className="w-3.5 h-3.5 text-teal-600" />
+                          <span>Matching Verified Specialist(s)</span>
                         </span>
                         {m.suggestedSpecialization && (
-                          <span className="px-2 py-0.5 text-[10px] font-semibold bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 rounded-full">
+                          <span className="px-2 py-0.5 text-[10px] font-bold bg-teal-50 dark:bg-teal-950 text-teal-700 dark:text-teal-300 rounded-full border border-teal-200 dark:border-teal-800">
                             {m.suggestedSpecialization}
                           </span>
                         )}
                       </div>
-                      <div className="space-y-1.5">
+
+                      <div className="space-y-2">
                         {m.recommendedDoctors.map((doc) => (
                           <div
                             key={doc.doctorId}
-                            className="p-2 rounded-xl bg-slate-50 dark:bg-slate-700/60 border border-slate-100 dark:border-slate-600 flex items-center justify-between gap-2"
+                            className="p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-700/60 border border-slate-100 dark:border-slate-600 flex items-center justify-between gap-3"
                           >
-                            <div className="flex items-center gap-2 min-w-0">
+                            <div className="flex items-center gap-2.5 min-w-0">
                               <img
                                 src={
                                   doc.profileImage ||
@@ -360,23 +582,25 @@ export const AiChatWidget = () => {
                                     : 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=100')
                                 }
                                 alt=""
-                                className="w-8 h-8 rounded-full object-cover shrink-0"
+                                className="w-10 h-10 rounded-xl object-cover shrink-0 border border-slate-200 dark:border-slate-600"
                               />
                               <div className="truncate">
-                                <p className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">
+                                <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
                                   {doc.fullName}
                                 </p>
-                                <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
-                                  {doc.specialization} • ₹{doc.consultationFee}
+                                <p className="text-[10px] text-teal-600 dark:text-teal-400 font-semibold truncate">
+                                  {doc.specialization} • {doc.experience || 10}+ yrs exp
+                                </p>
+                                <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                                  Fee: ₹{doc.consultationFee}
                                 </p>
                               </div>
                             </div>
+
                             <Link
                               to={`/doctors/${doc.doctorId}`}
-                              onClick={() => {
-                                handleClose();
-                              }}
-                              className="px-2.5 py-1 text-[11px] font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 shrink-0 transition"
+                              onClick={handleClose}
+                              className="px-3 py-1.5 text-xs font-bold bg-gradient-to-r from-blue-600 to-teal-600 text-white rounded-xl hover:from-blue-700 hover:to-teal-700 shrink-0 transition active:scale-95 shadow-xs"
                             >
                               Book
                             </Link>
@@ -395,23 +619,24 @@ export const AiChatWidget = () => {
               </div>
             ))}
 
+            {/* Typing Indicator */}
             {loading && (
               <div className="flex gap-2 items-center text-slate-400 text-xs py-2">
                 <div className="w-7 h-7 rounded-xl bg-blue-600 text-white flex items-center justify-center">
                   <Bot className="w-4 h-4 animate-spin" />
                 </div>
-                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 py-2 rounded-2xl flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 bg-blue-600 rounded-full animate-bounce" />
+                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-4 py-2.5 rounded-2xl flex items-center gap-2 shadow-xs">
+                  <span className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" />
                   <span
-                    className="w-1.5 h-1.5 bg-blue-600 rounded-full animate-bounce"
+                    className="w-2 h-2 bg-blue-600 rounded-full animate-bounce"
                     style={{ animationDelay: '0.2s' }}
                   />
                   <span
-                    className="w-1.5 h-1.5 bg-blue-600 rounded-full animate-bounce"
+                    className="w-2 h-2 bg-blue-600 rounded-full animate-bounce"
                     style={{ animationDelay: '0.4s' }}
                   />
-                  <span className="text-[11px] text-slate-500 dark:text-slate-400 ml-1">
-                    Analyzing clinical query...
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 ml-1 font-medium">
+                    QuickCare AI is formulating comprehensive medical guidance...
                   </span>
                 </div>
               </div>
@@ -420,22 +645,21 @@ export const AiChatWidget = () => {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Suggested Quick Questions */}
-          {messages.length <= 2 && (
-            <div className="p-2 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex gap-1.5 overflow-x-auto text-[11px] no-scrollbar shrink-0">
-              {suggestedPills.map((pill, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => handleSend(pill)}
-                  className="px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition whitespace-nowrap shrink-0 border border-slate-200 dark:border-slate-700 cursor-pointer"
-                >
-                  {pill}
-                </button>
-              ))}
-            </div>
-          )}
+          {/* Contextual Follow-Up Suggestions / Pills (Requirement 3 & 7) */}
+          <div className="px-3 py-2 bg-slate-100/90 dark:bg-slate-800/90 border-t border-slate-200/80 dark:border-slate-800 flex gap-2 overflow-x-auto text-[11px] no-scrollbar shrink-0">
+            {contextualPills.map((pill, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => handleSend(pill)}
+                className="px-3 py-1.5 rounded-full bg-white dark:bg-slate-700 hover:bg-blue-50 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-300 transition whitespace-nowrap shrink-0 border border-slate-200/80 dark:border-slate-600 font-medium cursor-pointer shadow-2xs"
+              >
+                {pill}
+              </button>
+            ))}
+          </div>
 
-          {/* Input Bar */}
+          {/* Message Input Bar with Voice Input (Requirement 7) */}
           <div className="p-3 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 shrink-0">
             <form
               onSubmit={(e) => {
@@ -444,17 +668,32 @@ export const AiChatWidget = () => {
               }}
               className="flex items-center gap-2"
             >
+              <button
+                type="button"
+                onClick={toggleVoiceInput}
+                className={`w-10 h-10 rounded-2xl flex items-center justify-center transition shrink-0 cursor-pointer ${
+                  isListening
+                    ? 'bg-rose-600 text-white animate-pulse shadow-md shadow-rose-600/30'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                }`}
+                title={isListening ? 'Stop listening' : 'Voice input (Speak to ask)'}
+                aria-label="Voice input"
+              >
+                {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+              </button>
+
               <input
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask about diseases, symptoms, tests, or doctors..."
-                className="flex-1 px-3.5 py-2.5 bg-slate-100 dark:bg-slate-800 border border-transparent dark:border-slate-700 rounded-2xl text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-slate-900 transition"
+                placeholder="Ask about any disease, symptoms, causes, or doctors..."
+                className="flex-1 px-4 py-2.5 bg-slate-100 dark:bg-slate-800 border border-transparent dark:border-slate-700 rounded-2xl text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-slate-900 transition"
               />
+
               <button
                 type="submit"
                 disabled={!input.trim() || loading}
-                className="w-10 h-10 rounded-2xl bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white flex items-center justify-center transition shadow-sm shrink-0 cursor-pointer"
+                className="w-10 h-10 rounded-2xl bg-gradient-to-r from-blue-600 to-teal-600 hover:from-blue-700 hover:to-teal-700 disabled:opacity-40 text-white flex items-center justify-center transition shadow-md shrink-0 cursor-pointer active:scale-95"
                 aria-label="Send message"
               >
                 <Send className="w-4 h-4" />
