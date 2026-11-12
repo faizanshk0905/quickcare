@@ -24,7 +24,7 @@ import {
 export const DoctorDetails = () => {
   const { doctorId } = useParams();
   const navigate = useNavigate();
-  const { isAuthenticated, role } = useAuth();
+  const { user, isAuthenticated, role } = useAuth();
 
   const [doctor, setDoctor] = useState(null);
   const [loading, setLoading] = useState(true);
