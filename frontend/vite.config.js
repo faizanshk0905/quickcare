@@ -64,6 +64,17 @@ export default defineConfig({
         target: 'http://127.0.0.1:8080',
         changeOrigin: true,
         secure: false,
+        configure: (proxy) => {
+          proxy.on('error', (_err, _req, res) => {
+            if (res.writeHead && !res.headersSent) {
+              res.writeHead(502, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({
+                success: false,
+                message: 'QuickCare backend server is currently starting up (502). Please ensure the backend is running on port 8080.'
+              }));
+            }
+          });
+        }
       }
     }
   }
