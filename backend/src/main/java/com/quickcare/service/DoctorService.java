@@ -190,17 +190,23 @@ public class DoctorService {
         List<String> validSlots = generate15MinSlots(doctor, localDate);
 
         // 2. Dynamically collect all active booked appointments for this doctor on this date
-        List<String> bookedSlots = db.findAppointmentsByDoctorId(doctorId).stream()
-                .filter(Objects::nonNull)
-                .filter(a -> date.equals(a.getAppointmentDate()) &&
+        List<String> bookedSlots = new ArrayList<>();
+        List<Appointment> doctorAppointments = db.findAppointmentsByDoctorId(doctorId);
+        if (doctorAppointments != null) {
+            for (Appointment a : doctorAppointments) {
+                if (a != null && date.equals(a.getAppointmentDate()) &&
                         !"CANCELLED".equalsIgnoreCase(a.getStatus()) &&
                         !"REJECTED".equalsIgnoreCase(a.getStatus()) &&
                         !"DECLINED".equalsIgnoreCase(a.getStatus()) &&
                         !"NO_SHOW".equalsIgnoreCase(a.getStatus()) &&
-                        !a.isSlotReleased())
-                .map(a -> a.getAppointmentTime())
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
+                        !a.isSlotReleased()) {
+                    String time = a.getAppointmentTime();
+                    if (time != null && !time.trim().isEmpty()) {
+                        bookedSlots.add(time.trim());
+                    }
+                }
+            }
+        }
 
         DoctorAvailability da = db.findAvailability(doctorId, date)
                 .orElse(new DoctorAvailability(doctorId + "_" + date, doctorId, date, new ArrayList<>()));
@@ -230,11 +236,18 @@ public class DoctorService {
     }
 
     public List<Doctor> find247AvailableDoctors() {
-        return db.findVerifiedDoctors().stream()
-                .filter(d -> d.isVideoConsultationAvailable() &&
+        List<Doctor> result = new ArrayList<>();
+        List<Doctor> verified = db.findVerifiedDoctors();
+        if (verified != null) {
+            for (Doctor d : verified) {
+                if (d != null && d.isVideoConsultationAvailable() &&
                         ("ONLINE".equalsIgnoreCase(d.getOnlineStatus()) ||
-                         "AVAILABLE_FOR_VIDEO".equalsIgnoreCase(d.getOnlineStatus())))
-                .collect(Collectors.toList());
+                         "AVAILABLE_FOR_VIDEO".equalsIgnoreCase(d.getOnlineStatus()))) {
+                    result.add(d);
+                }
+            }
+        }
+        return result;
     }
 
     public DoctorAvailability updateAvailability(AvailabilityUpdateRequest req) {

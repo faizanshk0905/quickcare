@@ -24,7 +24,8 @@ import {
 export const DoctorDetails = () => {
   const { doctorId } = useParams();
   const navigate = useNavigate();
-  const { user, isAuthenticated, role } = useAuth();
+  const authContext = useAuth() || {};
+  const { user = null, isAuthenticated = false, role = null } = authContext;
 
   const [doctor, setDoctor] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -199,17 +200,32 @@ export const DoctorDetails = () => {
   const handleConfirmBooking = async () => {
     setBookingLoading(true);
     setBookingError('');
+    let patientFullName = user?.fullName;
+    let patientEmail = user?.email;
+    if (!patientFullName || !patientEmail) {
+      try {
+        const storedDemo = localStorage.getItem('quickcare_demo_user');
+        if (storedDemo) {
+          const parsed = JSON.parse(storedDemo);
+          patientFullName = patientFullName || parsed?.fullName;
+          patientEmail = patientEmail || parsed?.email;
+        }
+      } catch (e) {
+        // fallback ignored
+      }
+    }
+
     try {
       const res = await appointmentService.bookAppointment({
         doctorId,
-        doctorName: doctor.fullName,
-        doctorSpecialization: doctor.specialization,
-        patientName: user?.fullName || 'Patient Aarav Sharma',
-        patientEmail: user?.email || 'patient@quickcare.com',
+        doctorName: doctor?.fullName || 'Doctor',
+        doctorSpecialization: doctor?.specialization || 'General',
+        patientName: patientFullName || 'Patient Aarav Sharma',
+        patientEmail: patientEmail || 'patient@quickcare.com',
         appointmentDate: selectedDate,
         appointmentTime: selectedSlot,
         consultationType,
-        consultationFee: doctor.consultationFee,
+        consultationFee: doctor?.consultationFee || 500,
         reason,
       });
 

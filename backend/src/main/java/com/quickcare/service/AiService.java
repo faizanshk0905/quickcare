@@ -108,12 +108,19 @@ public class AiService {
         response.setSuggestedSpecialization(suggestedSpecialization);
 
         // 3. Strict Doctor Specialization Matching from Database (Requirement 6)
-        List<Doctor> matchingDoctors = Collections.emptyList();
+        List<Doctor> matchingDoctors = new ArrayList<>();
         if (specInfo != null && specInfo.isAvailableAtQuickCare()) {
-            matchingDoctors = db.findVerifiedDoctors().stream()
-                    .filter(d -> isSpecializationMatch(d, suggestedSpecialization))
-                    .limit(3)
-                    .collect(Collectors.toList());
+            List<Doctor> verified = db.findVerifiedDoctors();
+            if (verified != null) {
+                for (Doctor d : verified) {
+                    if (d != null && isSpecializationMatch(d, suggestedSpecialization)) {
+                        matchingDoctors.add(d);
+                        if (matchingDoctors.size() >= 3) {
+                            break;
+                        }
+                    }
+                }
+            }
         }
 
         response.setRecommendedDoctors(matchingDoctors);
@@ -300,9 +307,17 @@ public class AiService {
         sb.append("---\n### 👨‍⚕️ Specialist Consultation Recommendation:\n");
         if (specInfo != null) {
             if (specInfo.isAvailableAtQuickCare() && !doctors.isEmpty()) {
-                String docList = doctors.stream()
-                        .map(d -> "• **" + (d.getFullName().startsWith("Dr.") ? "" : "Dr. ") + d.getFullName() + "** — " + d.getSpecialization() + " (" + d.getQualification() + ", Fee: ₹" + Math.round(d.getConsultationFee()) + ")")
-                        .collect(Collectors.joining("\n"));
+                List<String> docLines = new ArrayList<>();
+                for (Doctor d : doctors) {
+                    if (d != null) {
+                        String name = d.getFullName() != null ? d.getFullName() : "Specialist";
+                        String prefix = name.startsWith("Dr.") ? "" : "Dr. ";
+                        String spec = d.getSpecialization() != null ? d.getSpecialization() : "";
+                        String qual = d.getQualification() != null ? d.getQualification() : "Specialist";
+                        docLines.add("• **" + prefix + name + "** — " + spec + " (" + qual + ", Fee: ₹" + Math.round(d.getConsultationFee()) + ")");
+                    }
+                }
+                String docList = String.join("\n", docLines);
 
                 sb.append("For this condition, we recommend consulting our verified specialist in **").append(specInfo.getSpecialization()).append("**.\n\n")
                   .append("**Available Specialist(s) at Quick Care Hospital:**\n")
@@ -577,7 +592,13 @@ public class AiService {
                 doctorSectionPrompt = "CRITICAL: Quick Care Hospital DOES NOT have a doctor available in " + specInfo.getSpecialization() + ". " +
                         "YOU MUST INCLUDE THIS EXACT STATEMENT IN YOUR SPECIALIST SECTION: '" + UNAVAILABLE_SPECIALTY_NOTICE + "'. NEVER recommend an unrelated doctor.";
             } else if (specInfo != null && !matchingDoctors.isEmpty()) {
-                String docNames = matchingDoctors.stream().map(Doctor::getFullName).collect(Collectors.joining(", "));
+                List<String> docNamesList = new ArrayList<>();
+                for (Doctor doc : matchingDoctors) {
+                    if (doc != null && doc.getFullName() != null) {
+                        docNamesList.add(doc.getFullName());
+                    }
+                }
+                String docNames = String.join(", ", docNamesList);
                 doctorSectionPrompt = "Quick Care Hospital has the following verified specialist(s) in " + specInfo.getSpecialization() + ": " + docNames + ". Recommend ONLY these verified specialists.";
             } else {
                 doctorSectionPrompt = "If the user asks which doctor to consult for a specialty not available at Quick Care (Quick Care only has Cardiology, Dermatology, Pediatrics, Orthopedics), display: '" + UNAVAILABLE_SPECIALTY_NOTICE + "'.";
