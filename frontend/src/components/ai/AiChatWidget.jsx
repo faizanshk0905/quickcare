@@ -127,12 +127,12 @@ export const AiChatWidget = () => {
   const [speakingIndex, setSpeakingIndex] = useState(null);
   const [isListening, setIsListening] = useState(false);
   const [contextualPills, setContextualPills] = useState([
+    'Which doctors are available on our website?',
     'What is diabetes?',
     'What are the symptoms of dengue?',
     'Why am I experiencing chest pain?',
-    'How can I prevent high blood pressure?',
     'Which doctor should I consult for a skin infection?',
-    'What causes acute migraine?',
+    'Suggest available doctors',
   ]);
 
   const messagesEndRef = useRef(null);
@@ -350,6 +350,7 @@ export const AiChatWidget = () => {
           suggestedSpecialization: data.suggestedSpecialization,
           specialistAvailable: data.specialistAvailable,
           recommendedDoctors: data.recommendedDoctors || [],
+          unavailableReasons: data.unavailableReasons || [],
         };
 
         setMessages((prev) => [...prev, assistantMsg]);
@@ -536,29 +537,72 @@ export const AiChatWidget = () => {
                     )}
                   </div>
 
-                  {/* Unavailable Medical Specialty Warning (Requirement 6) */}
+                  {/* Unavailable Medical Specialty Warning with Detailed Reasons */}
                   {m.sender === 'assistant' &&
                     m.specialistAvailable === false &&
                     m.suggestedSpecialization &&
                     !m.isEmergency && (
-                      <div className="p-3.5 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-900/60 rounded-2xl shadow-2xs space-y-1.5">
-                        <div className="flex items-center gap-1.5 text-amber-800 dark:text-amber-300 font-extrabold text-xs">
-                          <Info className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
-                          <span>Specialty: {m.suggestedSpecialization}</span>
+                      <div className="p-4 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-900/60 rounded-3xl shadow-xs space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 text-amber-800 dark:text-amber-300 font-extrabold text-xs">
+                            <Info className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                            <span>Specialty: {m.suggestedSpecialization}</span>
+                          </div>
+                          <span className="text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/80 px-2 py-0.5 rounded-full border border-amber-200 dark:border-amber-800">
+                            Currently Unavailable
+                          </span>
                         </div>
-                        <p className="text-[11px] text-amber-800 dark:text-amber-200 leading-relaxed font-semibold">
-                          Sorry, currently we don't have a doctor available for this medical specialty. Please consult a qualified healthcare provider outside Quick Care.
+
+                        <p className="text-[11px] text-amber-900 dark:text-amber-200 leading-relaxed font-semibold">
+                          Sorry, currently we don't have a doctor available for this medical specialty on the Quick Care website.
                         </p>
+
+                        {/* Detailed Reasons Why Doctor is Unavailable */}
+                        <div className="pt-2 border-t border-amber-200/70 dark:border-amber-900/40 space-y-2">
+                          <span className="text-[11px] font-black text-amber-900 dark:text-amber-200 block uppercase tracking-wider">
+                            Why is a doctor not currently available on our website?
+                          </span>
+                          <ul className="space-y-1.5 text-[11px] text-amber-800 dark:text-amber-300/90 leading-snug">
+                            {(m.unavailableReasons && m.unavailableReasons.length > 0
+                              ? m.unavailableReasons
+                              : [
+                                  `Panel Onboarding in Progress: Quick Care currently features verified doctors in Cardiology, Dermatology, Pediatrics, and Orthopedics. Specialists in ${m.suggestedSpecialization} are undergoing clinical credentialing before joining our digital platform.`,
+                                  `In-Person Diagnostic Safety Requirements: Conditions in this field typically require hands-on physical clinical examinations, diagnostic imaging (MRI/CT/Endoscopy), or lab tests that cannot be performed safely via telemedicine alone.`,
+                                  `NMC Telemedicine Prescription Guidelines: Telehealth regulations restrict online prescription of specific controlled, high-potency, or acute medications without prior physical in-person clinical evaluation.`,
+                                  `Specialist Shifts & Capacity: Any affiliated visiting specialists may currently be off-duty, performing surgeries, or all daily appointment slots may be occupied.`
+                                ]
+                            ).map((reasonText, rIdx) => (
+                              <li key={rIdx} className="flex items-start gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 mt-1.5 shrink-0" />
+                                <span>{reasonText}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        {/* Quick Action: View Available Website Doctors */}
+                        <div className="pt-2 border-t border-amber-200/70 dark:border-amber-900/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <span className="text-[10px] text-amber-700 dark:text-amber-400">
+                            Looking to consult one of our active doctors?
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleSend('Which doctors are available on our website?')}
+                            className="px-3 py-1.5 text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white rounded-xl shadow-xs transition active:scale-95 cursor-pointer text-center"
+                          >
+                            View Available Doctors on Website
+                          </button>
+                        </div>
                       </div>
                     )}
 
-                  {/* Matching Verified Doctor Cards (Requirement 6) */}
+                  {/* Matching Verified Doctor Cards on Website */}
                   {m.recommendedDoctors && m.recommendedDoctors.length > 0 && !m.isEmergency && (
-                    <div className="p-3.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-sm space-y-2.5">
+                    <div className="p-3.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-sm space-y-3">
                       <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1">
+                        <span className="text-[11px] font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
                           <Stethoscope className="w-3.5 h-3.5 text-teal-600" />
-                          <span>Matching Verified Specialist(s)</span>
+                          <span>Doctor(s) Available on Quick Care Website</span>
                         </span>
                         {m.suggestedSpecialization && (
                           <span className="px-2 py-0.5 text-[10px] font-bold bg-teal-50 dark:bg-teal-950 text-teal-700 dark:text-teal-300 rounded-full border border-teal-200 dark:border-teal-800">
@@ -571,7 +615,7 @@ export const AiChatWidget = () => {
                         {m.recommendedDoctors.map((doc) => (
                           <div
                             key={doc.doctorId}
-                            className="p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-700/60 border border-slate-100 dark:border-slate-600 flex items-center justify-between gap-3"
+                            className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-700/60 border border-slate-100 dark:border-slate-600 flex items-center justify-between gap-3 hover:border-blue-200 transition"
                           >
                             <div className="flex items-center gap-2.5 min-w-0">
                               <img
@@ -582,27 +626,38 @@ export const AiChatWidget = () => {
                                     : 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=100')
                                 }
                                 alt=""
-                                className="w-10 h-10 rounded-xl object-cover shrink-0 border border-slate-200 dark:border-slate-600"
+                                className="w-11 h-11 rounded-2xl object-cover shrink-0 border border-slate-200 dark:border-slate-600 shadow-2xs"
                               />
-                              <div className="truncate">
-                                <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
-                                  {doc.fullName}
-                                </p>
+                              <div className="truncate space-y-0.5">
+                                <div className="flex items-center gap-1.5 truncate">
+                                  <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                                    {doc.fullName}
+                                  </p>
+                                  <span className="text-[9px] font-extrabold bg-blue-50 text-blue-700 px-1.5 py-0.2 rounded-sm border border-blue-100 shrink-0">
+                                    Verified
+                                  </span>
+                                </div>
                                 <p className="text-[10px] text-teal-600 dark:text-teal-400 font-semibold truncate">
                                   {doc.specialization} • {doc.experience || 10}+ yrs exp
                                 </p>
-                                <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                                  Fee: ₹{doc.consultationFee}
-                                </p>
+                                <div className="flex items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400">
+                                  <span className="font-bold text-slate-800 dark:text-slate-200">
+                                    Fee: ₹{doc.consultationFee}
+                                  </span>
+                                  <span>•</span>
+                                  <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                                    24/7 Video Available
+                                  </span>
+                                </div>
                               </div>
                             </div>
 
                             <Link
                               to={`/doctors/${doc.doctorId}`}
                               onClick={handleClose}
-                              className="px-3 py-1.5 text-xs font-bold bg-gradient-to-r from-blue-600 to-teal-600 text-white rounded-xl hover:from-blue-700 hover:to-teal-700 shrink-0 transition active:scale-95 shadow-xs"
+                              className="px-3.5 py-2 text-xs font-black bg-gradient-to-r from-blue-600 to-teal-600 hover:from-blue-700 hover:to-teal-700 text-white rounded-xl shrink-0 transition active:scale-95 shadow-xs flex items-center gap-1"
                             >
-                              Book
+                              <span>Book</span>
                             </Link>
                           </div>
                         ))}

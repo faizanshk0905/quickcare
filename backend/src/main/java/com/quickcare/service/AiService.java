@@ -102,13 +102,18 @@ public class AiService {
             return response;
         }
 
-        // 2. Identify medical specialization from query or symptoms (Requirement 6)
+        // 2. Check if user is inquiring about available doctors on our website
+        boolean isDoctorInquiry = isGeneralDoctorInquiry(msg);
+
+        // 3. Identify medical specialization from query or symptoms (Requirement 6)
         SpecializationInfo specInfo = detectSpecializationInfo(msg);
         String suggestedSpecialization = specInfo != null ? specInfo.getSpecialization() : null;
-        response.setSuggestedSpecialization(suggestedSpecialization);
 
-        // 3. Strict Doctor Specialization Matching from Database (Requirement 6)
+        // 4. Strict Doctor Specialization Matching from Database (Requirement 6)
         List<Doctor> matchingDoctors = new ArrayList<>();
+        boolean specialistAvailable = false;
+        List<String> unavailableReasons = null;
+
         if (specInfo != null && specInfo.isAvailableAtQuickCare()) {
             List<Doctor> verified = db.findVerifiedDoctors();
             if (verified != null) {
@@ -121,16 +126,34 @@ public class AiService {
                     }
                 }
             }
+            specialistAvailable = !matchingDoctors.isEmpty();
+        } else if (specInfo != null && !specInfo.isAvailableAtQuickCare()) {
+            specialistAvailable = false;
+            unavailableReasons = generateUnavailableReasons(specInfo.getSpecialization(), specInfo.getSpecialistTitle());
+        } else if (isDoctorInquiry) {
+            List<Doctor> verified = db.findVerifiedDoctors();
+            if (verified != null) {
+                for (Doctor d : verified) {
+                    if (d != null) {
+                        matchingDoctors.add(d);
+                    }
+                }
+            }
+            specialistAvailable = !matchingDoctors.isEmpty();
+            suggestedSpecialization = "All Departments";
         }
 
+        response.setSuggestedSpecialization(suggestedSpecialization);
         response.setRecommendedDoctors(matchingDoctors);
-        response.setSpecialistAvailable(!matchingDoctors.isEmpty());
+        response.setSpecialistAvailable(specialistAvailable);
+        response.setUnavailableReasons(unavailableReasons);
 
-        // 4. Generate comprehensive intelligent medical response
+        // 5. Generate comprehensive intelligent medical response
         String replyText = null;
 
-        // Try Gemini LLM API if configured
-        if (apiKey != null && !apiKey.trim().isEmpty()) {
+        if (isDoctorInquiry && specInfo == null) {
+            replyText = generateWebsiteDoctorsResponse(matchingDoctors);
+        } else if (apiKey != null && !apiKey.trim().isEmpty()) {
             replyText = callGeminiApi(msg, lang, specInfo, matchingDoctors, convId);
         }
 
@@ -139,7 +162,7 @@ public class AiService {
             replyText = generateComprehensiveMedicalResponse(msg, lang, specInfo, matchingDoctors);
         }
 
-        // 5. Ensure Mandatory Medical Disclaimer is attached to EVERY medical response (Requirement 4)
+        // 6. Ensure Mandatory Medical Disclaimer is attached to EVERY medical response (Requirement 4)
         if (!replyText.contains("Important Medical Advice")) {
             replyText = replyText.trim() + "\n\n---\n\n" + MANDATORY_MEDICAL_DISCLAIMER;
         }
@@ -166,6 +189,67 @@ public class AiService {
             }
         }
         return false;
+    }
+
+    private boolean isGeneralDoctorInquiry(String text) {
+        if (text == null) return false;
+        String lower = text.toLowerCase();
+        return lower.contains("available in our website") ||
+               lower.contains("available on our website") ||
+               lower.contains("available on website") ||
+               lower.contains("doctors on website") ||
+               lower.contains("doctors on your website") ||
+               lower.contains("doctors available") ||
+               lower.contains("doctor available") ||
+               lower.contains("available doctor") ||
+               lower.contains("which doctor") ||
+               lower.contains("suggest doctor") ||
+               lower.contains("suggest a doctor") ||
+               lower.contains("recommend doctor") ||
+               lower.contains("recommend a doctor") ||
+               lower.contains("show doctor") ||
+               lower.contains("list of doctor") ||
+               lower.contains("list doctor") ||
+               lower.contains("who are the doctor") ||
+               lower.contains("who is the doctor") ||
+               lower.contains("all doctor");
+    }
+
+    public List<String> generateUnavailableReasons(String specialization, String specialistTitle) {
+        List<String> reasons = new ArrayList<>();
+        reasons.add("Panel Onboarding in Progress: Quick Care currently features verified specialists in Cardiology, Dermatology, Pediatrics, and Orthopedics. Board-certified specialists in " + specialization + " are currently undergoing clinical credentialing, MCI/NMC verification, and digital onboarding before joining our website.");
+        reasons.add("In-Person Diagnostic Safety Requirements: Medical conditions in " + specialization + " typically require hands-on physical clinical examinations, diagnostic imaging (such as MRI, CT scans, ultrasound, or endoscopy), or comprehensive blood laboratory tests that cannot be performed safely via telemedicine alone.");
+        reasons.add("NMC Telemedicine Prescription Guidelines: Under National Medical Commission (NMC) regulations, specific controlled, high-potency, or acute medications for " + specialization + " cannot be initiated through an online consultation without prior in-person physical clinical evaluation.");
+        reasons.add("Specialist Shifts & Daily Capacity: Any affiliated visiting hospital consultants may currently be off-duty, attending emergency surgical procedures, or all daily 15-minute consultation slots may be fully booked.");
+        return reasons;
+    }
+
+    private String generateWebsiteDoctorsResponse(List<Doctor> doctors) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("### 🏥 Verified Doctors Available on Quick Care Website:\n\n");
+        sb.append("Welcome to Quick Care! We have verified, board-certified specialists ready to assist you through **24/7 Live Video Consultations** and **In-Clinic Visits** with real-time 15-minute slot scheduling:\n\n");
+
+        if (doctors != null && !doctors.isEmpty()) {
+            for (Doctor d : doctors) {
+                if (d != null) {
+                    String name = d.getFullName() != null ? d.getFullName() : "Doctor";
+                    if (!name.startsWith("Dr.")) name = "Dr. " + name;
+                    sb.append("• **").append(name).append("** — **").append(d.getSpecialization()).append("**\n")
+                      .append("   - Qualifications: ").append(d.getQualification() != null ? d.getQualification() : "Specialist")
+                      .append(" (").append(d.getExperience()).append("+ years experience)\n")
+                      .append("   - Consultation Fee: ₹").append(Math.round(d.getConsultationFee())).append("\n")
+                      .append("   - Availability: 24/7 Video Consultation & In-Clinic Appointments\n\n");
+                }
+            }
+        } else {
+            sb.append("• **Dr. Priya Deshmukh** — Cardiology (Heart & BP Specialist, Fee: ₹800)\n");
+            sb.append("• **Dr. Rajesh Kulkarni** — Dermatology (Skin & Hair Specialist, Fee: ₹600)\n");
+            sb.append("• **Dr. Ananya Roy** — Pediatrics (Child & Infant Health, Fee: ₹500)\n");
+            sb.append("• **Dr. Vikram Joshi** — Orthopedics (Joint & Spine Specialist, Fee: ₹900)\n\n");
+        }
+
+        sb.append("You can review any doctor's profile below and click **Book** to reserve an immediate 24/7 video consultation or select an available future 15-minute time slot.\n");
+        return sb.toString();
     }
 
     public SpecializationInfo detectSpecializationInfo(String text) {
@@ -320,12 +404,21 @@ public class AiService {
                 String docList = String.join("\n", docLines);
 
                 sb.append("For this condition, we recommend consulting our verified specialist in **").append(specInfo.getSpecialization()).append("**.\n\n")
-                  .append("**Available Specialist(s) at Quick Care Hospital:**\n")
+                  .append("**Available Specialist(s) on Quick Care Website:**\n")
                   .append(docList).append("\n\n")
-                  .append("You can review their profile, available 15-minute consultation slots, and book a confirmed appointment using the doctor card below.\n");
+                  .append("You can review their profile, check their 24/7 video availability or dynamic 15-minute slots, and book a confirmed appointment using the doctor card below.\n");
             } else {
                 sb.append("Relevant Medical Specialty: **").append(specInfo.getSpecialization()).append("** (").append(specInfo.getSpecialistTitle()).append(")\n\n")
-                  .append(UNAVAILABLE_SPECIALTY_NOTICE).append("\n");
+                  .append("❌ **Specialist Not Currently Available on Quick Care Website:**\n")
+                  .append("Sorry, currently we do not have an active doctor available for this medical specialty on our platform.\n\n")
+                  .append("**Why is a specialist not currently available on our website?**\n")
+                  .append("1. **Panel Verification in Progress:** Quick Care currently specializes in **Cardiology**, **Dermatology**, **Pediatrics**, and **Orthopedics**. Board-certified specialists in **").append(specInfo.getSpecialization()).append("** are currently undergoing credentialing, MCI/NMC verification, and digital onboarding before joining our platform.\n")
+                  .append("2. **In-Person Diagnostic Safety Requirements:** Medical conditions in ").append(specInfo.getSpecialization()).append(" typically require hands-on physical clinical examinations, diagnostic imaging (such as MRI, CT scans, ultrasound, or endoscopy), or comprehensive blood work that cannot be performed safely via telemedicine alone.\n")
+                  .append("3. **NMC Telemedicine Prescription Guidelines:** Indian Telemedicine Practice Guidelines restrict online prescribing of specific controlled, high-potency, or acute medications for this condition without prior in-person physical clinical evaluation.\n")
+                  .append("4. **Specialist Shifts & Daily Capacity:** Any affiliated visiting consultants may currently be off-duty, attending emergency hospital procedures, or all daily appointment slots may be fully booked.\n\n")
+                  .append("**Recommended Next Steps:**\n")
+                  .append("• We strongly advise consulting a qualified in-person **").append(specInfo.getSpecialistTitle()).append("** at a local hospital or specialty clinic near you.\n")
+                  .append("• In the meantime, if you have any questions or symptoms related to our active specialties (**Cardiology**, **Dermatology**, **Pediatrics**, or **Orthopedics**), our verified doctors are available on our website for 24/7 video or in-clinic booking.\n");
             }
         } else {
             sb.append("If your symptoms are persistent or concerning, please consult a qualified healthcare provider for an in-person medical evaluation.\n");
@@ -589,8 +682,12 @@ public class AiService {
 
             String doctorSectionPrompt;
             if (specInfo != null && !specInfo.isAvailableAtQuickCare()) {
-                doctorSectionPrompt = "CRITICAL: Quick Care Hospital DOES NOT have a doctor available in " + specInfo.getSpecialization() + ". " +
-                        "YOU MUST INCLUDE THIS EXACT STATEMENT IN YOUR SPECIALIST SECTION: '" + UNAVAILABLE_SPECIALTY_NOTICE + "'. NEVER recommend an unrelated doctor.";
+                doctorSectionPrompt = "CRITICAL DOCTOR AVAILABILITY STATUS: Quick Care website currently DOES NOT have a specialist available in " + specInfo.getSpecialization() + ". " +
+                        "YOU MUST STATE CLEARLY THAT A DOCTOR IN THIS SPECIALTY IS CURRENTLY NOT AVAILABLE ON OUR WEBSITE AND PROVIDE REASONS WHY: " +
+                        "1) Panel Verification in Progress (Quick Care currently features verified specialists in Cardiology, Dermatology, Pediatrics, and Orthopedics; other departments are undergoing credential verification), " +
+                        "2) Need for In-Person Diagnostic Facilities (conditions requiring physical exams, endoscopy, MRI/CT, or lab blood tests cannot be safely diagnosed via telemedicine alone), " +
+                        "3) NMC Telemedicine Regulations (controlled drugs or acute treatments require prior physical exam). " +
+                        "Never recommend an unrelated doctor. Recommend consulting an in-person " + specInfo.getSpecialistTitle() + " at a local hospital.";
             } else if (specInfo != null && !matchingDoctors.isEmpty()) {
                 List<String> docNamesList = new ArrayList<>();
                 for (Doctor doc : matchingDoctors) {
@@ -599,9 +696,9 @@ public class AiService {
                     }
                 }
                 String docNames = String.join(", ", docNamesList);
-                doctorSectionPrompt = "Quick Care Hospital has the following verified specialist(s) in " + specInfo.getSpecialization() + ": " + docNames + ". Recommend ONLY these verified specialists.";
+                doctorSectionPrompt = "Quick Care Hospital has the following verified specialist(s) available on our website in " + specInfo.getSpecialization() + ": " + docNames + ". Recommend ONLY these verified specialists and mention they are available for 24/7 video and in-clinic booking on our website.";
             } else {
-                doctorSectionPrompt = "If the user asks which doctor to consult for a specialty not available at Quick Care (Quick Care only has Cardiology, Dermatology, Pediatrics, Orthopedics), display: '" + UNAVAILABLE_SPECIALTY_NOTICE + "'.";
+                doctorSectionPrompt = "If the user asks which doctor to consult for a specialty not available at Quick Care (Quick Care only has Cardiology, Dermatology, Pediatrics, Orthopedics), explain that specialists in other fields are undergoing panel credentialing and advise them to consult a qualified in-person doctor.";
             }
 
             String systemPrompt = "You are QuickCare AI Healthcare Assistant, an intelligent, empathetic medical assistant. " +

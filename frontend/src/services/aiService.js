@@ -529,6 +529,41 @@ function extractConditionName(lower) {
   return { name: 'Health Condition / Symptom Pattern', system: 'relevant biological systems' };
 }
 
+function isGeneralDoctorInquiry(text) {
+  if (!text) return false;
+  const lower = text.toLowerCase();
+  return (
+    lower.includes('available in our website') ||
+    lower.includes('available on our website') ||
+    lower.includes('available on website') ||
+    lower.includes('doctors on website') ||
+    lower.includes('doctors on your website') ||
+    lower.includes('doctors available') ||
+    lower.includes('doctor available') ||
+    lower.includes('available doctor') ||
+    lower.includes('which doctor') ||
+    lower.includes('suggest doctor') ||
+    lower.includes('suggest a doctor') ||
+    lower.includes('recommend doctor') ||
+    lower.includes('recommend a doctor') ||
+    lower.includes('show doctor') ||
+    lower.includes('list of doctor') ||
+    lower.includes('list doctor') ||
+    lower.includes('who are the doctor') ||
+    lower.includes('who is the doctor') ||
+    lower.includes('all doctor')
+  );
+}
+
+export function generateUnavailableReasons(specialization, specialistTitle) {
+  return [
+    `Panel Verification in Progress: Quick Care currently features verified specialists in Cardiology, Dermatology, Pediatrics, and Orthopedics. Board-certified specialists in ${specialization} are undergoing clinical credentialing and MCI/NMC verification before joining our digital platform.`,
+    `In-Person Diagnostic Safety Requirements: Medical conditions in ${specialization} typically require physical clinical examinations, diagnostic imaging (such as MRI, CT scans, ultrasound, or endoscopy), or comprehensive blood work that cannot be performed safely via telemedicine alone.`,
+    `NMC Telemedicine Prescription Guidelines: Indian Telemedicine Practice Guidelines restrict online prescribing of specific controlled, high-potency, or acute medications for this condition without prior in-person physical clinical evaluation.`,
+    `Specialist Shifts & Daily Capacity: Any affiliated visiting consultants may currently be off-duty, attending emergency hospital procedures, or all daily 15-minute appointment slots may be fully booked.`
+  ];
+}
+
 /**
  * Formulates structured, educational clinical response following the 8 user requirements
  */
@@ -547,22 +582,57 @@ export function executeComprehensiveMedicalTriaging(text, lang = 'en', conversat
       suggestedSpecialization: null,
       specialistAvailable: false,
       recommendedDoctors: [],
+      unavailableReasons: null,
     };
   }
 
   const lower = (text || '').toLowerCase().trim();
   const specialtyInfo = detectMedicalSpecialty(lower);
+  const isDoctorInquiry = isGeneralDoctorInquiry(lower);
+
+  // General inquiry asking for doctors available on the website
+  if (isDoctorInquiry && !specialtyInfo) {
+    const allDoctors = DEFAULT_DOCTORS;
+    const docList = allDoctors
+      .map(
+        (d) =>
+          `• **${d.fullName}** — **${d.specialization}**\n   - Qualifications: ${d.qualification} (${d.experience}+ years experience)\n   - Fee: ₹${d.consultationFee}\n   - Availability: 24/7 Video Consultation & In-Clinic Appointments`
+      )
+      .join('\n\n');
+
+    const reply = `### 🏥 Verified Doctors Available on Quick Care Website:\n\nWelcome to Quick Care! We have verified, board-certified specialists ready to assist you through **24/7 Live Video Consultations** and **In-Clinic Visits** with real-time 15-minute slot scheduling:\n\n${docList}\n\nYou can review any doctor's profile below and click **Book** to reserve an immediate 24/7 video consultation or select an available future 15-minute time slot.\n\n---\n\n${MANDATORY_MEDICAL_DISCLAIMER}`;
+
+    return {
+      conversationId: conversationId || `conv_${Date.now()}`,
+      emergency: false,
+      suggestedSpecialization: 'All Departments',
+      specialistAvailable: true,
+      recommendedDoctors: allDoctors,
+      unavailableReasons: null,
+      reply,
+    };
+  }
+
   const medicalInfo = getMedicalGuidance(lower);
 
   // 2. DOCTOR MATCHING FROM VERIFIED DATABASE
   let matchingDoctors = [];
   let specialistAvailable = false;
+  let unavailableReasons = null;
 
   if (specialtyInfo) {
-    matchingDoctors = DEFAULT_DOCTORS.filter(
-      (d) => d.specialization.toLowerCase() === specialtyInfo.specialty.toLowerCase()
-    );
-    specialistAvailable = matchingDoctors.length > 0;
+    if (specialtyInfo.availableAtQuickCare) {
+      matchingDoctors = DEFAULT_DOCTORS.filter(
+        (d) => d.specialization.toLowerCase() === specialtyInfo.specialty.toLowerCase()
+      );
+      specialistAvailable = matchingDoctors.length > 0;
+    } else {
+      specialistAvailable = false;
+      unavailableReasons = generateUnavailableReasons(
+        specialtyInfo.specialty,
+        specialtyInfo.doctorTitle
+      );
+    }
   }
 
   // 3. CONSTRUCT 8-POINT INTELLIGENT MEDICAL RESPONSE
@@ -578,8 +648,8 @@ export function executeComprehensiveMedicalTriaging(text, lang = 'en', conversat
   sections.push(`**7. Lifestyle & Dietary Precautions:**\n${medicalInfo.precautions}`);
   sections.push(`**8. When Medical Attention is Necessary:**\n${medicalInfo.whenToSeekCare}`);
 
-  // 4. DOCTOR RECOMMENDATION SECTION
-  sections.push(`---\n### 👨‍⚕️ Specialist Consultation Recommendation:`);
+  // 4. DOCTOR RECOMMENDATION SECTION WITH REASONS IF UNAVAILABLE
+  sections.push(`---\n### 👨‍⚕️ Specialist Consultation Status & Recommendation:`);
   if (specialtyInfo) {
     if (specialistAvailable && matchingDoctors.length > 0) {
       const docList = matchingDoctors
@@ -587,11 +657,11 @@ export function executeComprehensiveMedicalTriaging(text, lang = 'en', conversat
         .join('\n');
 
       sections.push(
-        `For this condition, we recommend consulting our verified specialist in **${specialtyInfo.specialty}**.\n\n**Available Specialist(s) at Quick Care:**\n${docList}\n\nYou can review their profile and book a verified 15-minute consultation slot using the doctor card below.`
+        `For this condition, we recommend consulting our verified specialist in **${specialtyInfo.specialty}**.\n\n**Available Specialist(s) on Quick Care Website:**\n${docList}\n\nYou can review their profile, check 24/7 video availability or real-time 15-minute slots, and book a verified appointment using the doctor card below.`
       );
     } else {
       sections.push(
-        `Relevant Medical Specialty: **${specialtyInfo.specialty}** (${specialtyInfo.doctorTitle})\n\n${UNAVAILABLE_SPECIALTY_NOTICE}`
+        `Relevant Medical Specialty: **${specialtyInfo.specialty}** (${specialtyInfo.doctorTitle})\n\n❌ **Specialist Not Currently Available on Quick Care Website:**\nSorry, currently we do not have an active doctor available for this medical specialty on our platform.\n\n**Why is a specialist not currently available on our website?**\n1. **Panel Verification in Progress:** Quick Care currently specializes in **Cardiology**, **Dermatology**, **Pediatrics**, and **Orthopedics**. Board-certified specialists in **${specialtyInfo.specialty}** are currently undergoing credentialing, MCI/NMC verification, and digital onboarding before joining our platform.\n2. **In-Person Diagnostic Safety Requirements:** Medical conditions in ${specialtyInfo.specialty} typically require hands-on physical clinical examinations, diagnostic imaging (such as MRI, CT scans, ultrasound, or endoscopy), or comprehensive blood work that cannot be performed safely via telemedicine alone.\n3. **NMC Telemedicine Prescription Guidelines:** Indian Telemedicine Practice Guidelines restrict online prescribing of specific controlled, high-potency, or acute medications for this condition without prior in-person physical clinical evaluation.\n4. **Specialist Shifts & Daily Capacity:** Any affiliated visiting consultants may currently be off-duty, attending emergency hospital procedures, or all daily appointment slots may be fully booked.\n\n**Recommended Next Steps:**\n• We strongly advise consulting a qualified in-person **${specialtyInfo.doctorTitle}** at a local hospital or specialty clinic near you.\n• In the meantime, if you have any questions or symptoms related to our active specialties (**Cardiology**, **Dermatology**, **Pediatrics**, or **Orthopedics**), our verified doctors are available on our website for 24/7 video or in-clinic booking below.`
       );
     }
   } else {
@@ -609,6 +679,7 @@ export function executeComprehensiveMedicalTriaging(text, lang = 'en', conversat
     suggestedSpecialization: specialtyInfo ? specialtyInfo.specialty : null,
     specialistAvailable,
     recommendedDoctors: matchingDoctors,
+    unavailableReasons,
     reply: sections.join('\n\n'),
   };
 }

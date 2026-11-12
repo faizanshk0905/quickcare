@@ -11,6 +11,7 @@ public class AiChatResponse {
     private String emergencyDisclaimer;
     private boolean specialistAvailable;
     private String conversationId;
+    private List<String> unavailableReasons;
 
     public AiChatResponse() {}
 
@@ -34,4 +35,7 @@ public class AiChatResponse {
 
     public String getConversationId() { return conversationId; }
     public void setConversationId(String conversationId) { this.conversationId = conversationId; }
+
+    public List<String> getUnavailableReasons() { return unavailableReasons; }
+    public void setUnavailableReasons(List<String> unavailableReasons) { this.unavailableReasons = unavailableReasons; }
 }
