@@ -17,6 +17,10 @@ import {
   MessageSquare,
   Sparkles,
   Check,
+  Send,
+  Mail,
+  Link2,
+  ShieldCheck,
 } from 'lucide-react';
 import { appointmentService } from '../../services/appointmentService';
 
@@ -31,6 +35,15 @@ export const AppointmentCard = ({
   const [confirming, setConfirming] = useState(false);
   const [confirmMsg, setConfirmMsg] = useState('');
   const [copiedMeetLink, setCopiedMeetLink] = useState(false);
+
+  // Send Video Consultation Link modal state (Doctor)
+  const [showSendLinkModal, setShowSendLinkModal] = useState(false);
+  const [videoLinkInput, setVideoLinkInput] = useState(
+    appointment.videoConsultationLink || appointment.googleMeetLink || ''
+  );
+  const [submittingLink, setSubmittingLink] = useState(false);
+  const [sendLinkSuccess, setSendLinkSuccess] = useState('');
+  const [sendLinkError, setSendLinkError] = useState('');
 
   // Approval modal state (Doctor)
   const [showApprovalModal, setShowApprovalModal] = useState(false);
@@ -49,11 +62,47 @@ export const AppointmentCard = ({
   const isDoctor = role === 'DOCTOR';
   const isPatient = role === 'PATIENT';
 
+  const isVideo = appointment.consultationType === 'VIDEO';
+  const isLinkSent = Boolean(
+    appointment.videoLinkSent && (appointment.videoConsultationLink || appointment.googleMeetLink)
+  );
+  const consultationUrl = appointment.videoConsultationLink || appointment.googleMeetLink;
+
   const handleCopyLink = (url) => {
     if (!url) return;
     navigator.clipboard.writeText(url);
     setCopiedMeetLink(true);
     setTimeout(() => setCopiedMeetLink(false), 2000);
+  };
+
+  const handleSendVideoLink = async () => {
+    const trimmed = (videoLinkInput || '').trim();
+    if (!trimmed || !trimmed.startsWith('http')) {
+      setSendLinkError('Please enter a valid video meeting URL starting with http:// or https://');
+      return;
+    }
+    try {
+      setSubmittingLink(true);
+      setSendLinkError('');
+      const res = await appointmentService.sendVideoConsultationLink(
+        appointment.appointmentId,
+        trimmed
+      );
+      setSendLinkSuccess(
+        res?.message || `Video consultation link sent to ${appointment.patientEmail || 'patient'} successfully!`
+      );
+      setTimeout(() => {
+        setShowSendLinkModal(false);
+        setSendLinkSuccess('');
+        onRefresh && onRefresh();
+      }, 1500);
+    } catch (err) {
+      setSendLinkError(
+        err.response?.data?.message || err.message || 'Failed to dispatch consultation link.'
+      );
+    } finally {
+      setSubmittingLink(false);
+    }
   };
 
   const handleConfirmResponse = async (response) => {
@@ -123,6 +172,42 @@ export const AppointmentCard = ({
         </span>
       );
     }
+
+    if (isVideo) {
+      if (status === 'COMPLETED') {
+        return (
+          <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-900 flex items-center gap-1">
+            <CheckCircle className="w-3.5 h-3.5" /> Consultation Completed
+          </span>
+        );
+      }
+      if (status === 'CONFIRMED' || confirmationStatus === 'CONFIRMED') {
+        if (isLinkSent) {
+          return (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900 flex items-center gap-1">
+                <CheckCircle className="w-3.5 h-3.5" /> Appointment Confirmed
+              </span>
+              <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-900 flex items-center gap-1">
+                <Video className="w-3.5 h-3.5" /> Video Link Sent
+              </span>
+            </div>
+          );
+        } else {
+          return (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900 flex items-center gap-1">
+                <CheckCircle className="w-3.5 h-3.5" /> Appointment Confirmed
+              </span>
+              <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-900 flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5" /> Waiting for Doctor to Send Link
+              </span>
+            </div>
+          );
+        }
+      }
+    }
+
     if (confirmationStatus === 'CONFIRMED' || status === 'CONFIRMED') {
       return (
         <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900 flex items-center gap-1">
@@ -276,11 +361,12 @@ export const AppointmentCard = ({
       )}
 
       {/* TELEHEALTH VIDEO CONSULTATION CARD */}
-      {appointment.consultationType === 'VIDEO' &&
+      {isVideo &&
         appointment.status !== 'CANCELLED' &&
         appointment.status !== 'REJECTED' &&
         appointment.status !== 'DECLINED' && (
-        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-teal-50/90 via-blue-50/90 to-indigo-50/90 dark:from-slate-800/90 dark:via-teal-950/40 dark:to-slate-800/90 border border-teal-200 dark:border-teal-800/60 space-y-3.5 shadow-xs">
+        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-teal-50/90 via-blue-50/90 to-indigo-50/90 dark:from-slate-800/90 dark:via-teal-950/40 dark:to-slate-800/90 border border-teal-200 dark:border-teal-800/60 space-y-4 shadow-xs">
+          {/* Header */}
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2.5">
               <div className="w-9 h-9 rounded-xl bg-teal-600 flex items-center justify-center text-white shadow-xs">
@@ -289,86 +375,183 @@ export const AppointmentCard = ({
               <div>
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-black text-slate-900 dark:text-white">
-                    QuickCare Telehealth Consultation
+                    QuickCare Online Video Consultation
                   </span>
-                  <span className="px-2 py-0.5 text-[9px] font-extrabold uppercase rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    100% Connected
+                  <span
+                    className={`px-2 py-0.5 text-[9px] font-extrabold uppercase rounded-full border flex items-center gap-1 ${
+                      isLinkSent
+                        ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700'
+                        : 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-700'
+                    }`}
+                  >
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        isLinkSent ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'
+                      }`}
+                    />
+                    {isLinkSent ? 'Video Link Sent' : 'Waiting for Doctor to Send Link'}
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                  Real WebRTC audio, video & screen share between Dr. {appointment.doctorName?.replace(/^Dr\.\s*/i, '')} & {appointment.patientName}
+                  Scheduled for {appointment.appointmentDate} at {appointment.appointmentTime}
                 </p>
               </div>
             </div>
 
-            {/* Quick Action Buttons */}
-            <div className="flex flex-wrap items-center gap-2">
-              <Link
-                to={`/consultations/${appointment.appointmentId}`}
-                className="px-4 py-2 text-xs font-extrabold rounded-xl bg-gradient-to-r from-teal-600 to-blue-600 hover:from-teal-700 hover:to-blue-700 text-white shadow-md transition flex items-center gap-1.5 active:scale-95"
-              >
-                <Video className="w-3.5 h-3.5" />
-                <span>Join Live Video Room</span>
-              </Link>
-              <a
-                href={directLiveUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-3 py-2 text-xs font-bold rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition flex items-center gap-1"
-                title="Open in Separate Window"
-              >
-                <ExternalLink className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
-                <span className="hidden sm:inline">Direct Tab</span>
-              </a>
-            </div>
-          </div>
-
-          {/* Secondary Google Meet Option */}
-          <div className="p-3 bg-white/80 dark:bg-slate-900/80 rounded-xl border border-teal-100 dark:border-slate-700 text-xs flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-slate-700 dark:text-slate-300">Google Meet Option:</span>
-              {isRealMeet ? (
-                <span className="text-teal-700 dark:text-teal-400 font-mono text-[11px] font-semibold">
-                  {meetUrl}
-                </span>
-              ) : (
-                <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                  Ready to launch via Google Meet
-                </span>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2">
-              <a
-                href={meetUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-2.5 py-1 text-xs font-bold rounded-lg bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900 transition flex items-center gap-1"
-              >
-                <Video className="w-3 h-3 text-blue-600 dark:text-blue-400" />
-                <span>{isRealMeet ? 'Join Google Meet' : 'Start Google Meet'}</span>
-                <ExternalLink className="w-2.5 h-2.5" />
-              </a>
+            {/* Doctor quick action to send/update link */}
+            {isDoctor && (
               <button
                 type="button"
-                onClick={() => handleCopyLink(directLiveUrl)}
-                className="px-2.5 py-1 text-xs font-bold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition flex items-center gap-1"
+                onClick={() => {
+                  setVideoLinkInput(appointment.videoConsultationLink || appointment.googleMeetLink || '');
+                  setShowSendLinkModal(true);
+                }}
+                className="px-3.5 py-1.5 bg-teal-600 hover:bg-teal-700 text-white font-extrabold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 active:scale-95"
               >
-                {copiedMeetLink ? (
-                  <>
-                    <Check className="w-3 h-3 text-emerald-600" />
-                    <span className="text-emerald-600">Copied</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-3 h-3 text-slate-400" />
-                    <span>Copy Room URL</span>
-                  </>
-                )}
+                <Send className="w-3.5 h-3.5" />
+                <span>{isLinkSent ? 'Update Consultation Link' : 'Send Video Consultation Link'}</span>
               </button>
-            </div>
+            )}
           </div>
+
+          {/* PATIENT VIEW: When Link is Sent */}
+          {isPatient && isLinkSent && (
+            <div className="space-y-3">
+              <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/50 rounded-xl border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-900 dark:text-emerald-200 space-y-1">
+                <div className="flex items-center gap-1.5 font-bold">
+                  <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>Dr. {appointment.doctorName?.replace(/^Dr\.\s*/i, '')} has sent your consultation link!</span>
+                </div>
+                <p className="text-[11px] text-emerald-800/90 dark:text-emerald-300/90">
+                  The link has also been sent to your registered email: <strong>{appointment.patientEmail}</strong>. Please join at your scheduled time ({appointment.appointmentDate} at {appointment.appointmentTime}).
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2.5">
+                <a
+                  href={consultationUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 py-3 px-5 text-center text-xs font-black uppercase tracking-wider rounded-xl bg-gradient-to-r from-teal-600 to-blue-600 hover:from-teal-700 hover:to-blue-700 text-white shadow-md transition flex items-center justify-center gap-2 active:scale-95"
+                >
+                  <Video className="w-4 h-4" />
+                  <span>Join Video Consultation</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+
+                <button
+                  type="button"
+                  onClick={() => handleCopyLink(consultationUrl)}
+                  className="py-3 px-4 text-xs font-bold rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition flex items-center gap-1.5"
+                >
+                  {copiedMeetLink ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      <span className="text-emerald-600">Copied</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Copy Link</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* PATIENT VIEW: When Link has NOT been sent yet */}
+          {isPatient && !isLinkSent && (
+            <div className="p-4 bg-amber-50/80 dark:bg-amber-950/40 rounded-xl border border-amber-200 dark:border-amber-900/60 text-xs text-amber-900 dark:text-amber-200 space-y-2">
+              <div className="flex items-center gap-2 font-bold text-amber-800 dark:text-amber-300">
+                <Clock className="w-4 h-4 text-amber-600 animate-spin" />
+                <span>Waiting for Doctor to Send Link</span>
+              </div>
+              <p className="text-[11px] text-amber-800/90 dark:text-amber-300/90 leading-relaxed">
+                Your video consultation with <strong>Dr. {appointment.doctorName?.replace(/^Dr\.\s*/i, '')}</strong> is confirmed for <strong>{appointment.appointmentDate} at {appointment.appointmentTime}</strong>.
+              </p>
+              <div className="p-2.5 rounded-lg bg-white/70 dark:bg-slate-900/60 border border-amber-200/60 dark:border-amber-800/40 text-[11px] text-slate-600 dark:text-slate-400">
+                🛡️ <strong>Doctor-Controlled Link:</strong> For clinical security and scheduling privacy, the doctor will review and dispatch your Google Meet or Zoom link prior to the appointment. It will appear right here and will be delivered directly to your registered email (<strong>{appointment.patientEmail}</strong>).
+              </div>
+            </div>
+          )}
+
+          {/* DOCTOR VIEW: Status & Link Management */}
+          {isDoctor && (
+            <div className="space-y-3">
+              <div className="p-3.5 bg-white/80 dark:bg-slate-900/80 rounded-xl border border-teal-100 dark:border-slate-700 text-xs space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-1 text-[11px]">
+                  <span className="font-semibold text-slate-600 dark:text-slate-400">
+                    Patient Registered Email:
+                  </span>
+                  <span className="font-mono font-bold text-teal-800 dark:text-teal-300">
+                    {appointment.patientEmail || 'Not specified'}
+                  </span>
+                </div>
+
+                {isLinkSent ? (
+                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-bold text-slate-700 dark:text-slate-300">Active Link:</span>
+                      <a
+                        href={consultationUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-teal-700 dark:text-teal-400 font-mono text-[11px] font-semibold hover:underline flex items-center gap-1"
+                      >
+                        <span className="truncate max-w-[200px] sm:max-w-xs">{consultationUrl}</span>
+                        <ExternalLink className="w-2.5 h-2.5 shrink-0" />
+                      </a>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={consultationUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-2.5 py-1 text-xs font-bold rounded-lg bg-teal-50 dark:bg-teal-950 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 hover:bg-teal-100 transition flex items-center gap-1"
+                      >
+                        <Video className="w-3 h-3 text-teal-600" />
+                        <span>Join</span>
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => handleCopyLink(consultationUrl)}
+                        className="px-2.5 py-1 text-xs font-bold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 transition flex items-center gap-1"
+                      >
+                        {copiedMeetLink ? (
+                          <>
+                            <Check className="w-3 h-3 text-emerald-600" />
+                            <span className="text-emerald-600">Copied</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3 h-3 text-slate-400" />
+                            <span>Copy</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 text-[11px] text-amber-800 dark:text-amber-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                    <span>
+                      Video link not sent yet. Patient is waiting. Click "Send Video Consultation Link" to dispatch link to patient's registered email.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setVideoLinkInput(appointment.videoConsultationLink || appointment.googleMeetLink || '');
+                        setShowSendLinkModal(true);
+                      }}
+                      className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] rounded-lg shrink-0 shadow-xs"
+                    >
+                      Send Link Now
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {appointment.doctorNotes && (
             <div className="text-xs text-slate-600 dark:text-slate-300 bg-white/70 dark:bg-slate-900/70 p-2.5 rounded-xl border border-slate-200/50 dark:border-slate-700/50">
@@ -381,6 +564,20 @@ export const AppointmentCard = ({
 
       {/* Actions */}
       <div className="pt-2 flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 dark:border-slate-800">
+        {/* Doctor Send Video Link Action Button */}
+        {isDoctor && isVideo && (appointment.status === 'CONFIRMED' || appointment.status === 'PENDING') && (
+          <button
+            type="button"
+            onClick={() => {
+              setVideoLinkInput(appointment.videoConsultationLink || appointment.googleMeetLink || '');
+              setShowSendLinkModal(true);
+            }}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-teal-50 dark:bg-teal-950/60 hover:bg-teal-100 dark:hover:bg-teal-900/60 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 text-xs font-bold rounded-xl transition"
+          >
+            <Send className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+            <span>{isLinkSent ? 'Update Video Link' : 'Send Video Consultation Link'}</span>
+          </button>
+        )}
         {/* Doctor Actions */}
         {isDoctor && appointment.status === 'PENDING' && (
           <>
@@ -458,6 +655,157 @@ export const AppointmentCard = ({
           </button>
         )}
       </div>
+
+      {/* DOCTOR SEND VIDEO CONSULTATION LINK MODAL */}
+      {showSendLinkModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-lg w-full space-y-4 shadow-2xl">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-teal-100 dark:bg-teal-900/60 flex items-center justify-center text-teal-600 dark:text-teal-400">
+                <Video className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
+                  Send Video Consultation Link
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Doctor controls meeting link dispatch to patient's registered email.
+                </p>
+              </div>
+            </div>
+
+            {/* Patient & Appointment Details */}
+            <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 space-y-2 text-xs">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Patient Name</span>
+                  <span className="font-extrabold text-slate-800 dark:text-slate-200">{appointment.patientName}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Appointment Status</span>
+                  <span className="font-extrabold text-teal-600 dark:text-teal-400">{appointment.status || 'CONFIRMED'}</span>
+                </div>
+              </div>
+
+              <div>
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">Patient Registered Email</span>
+                <div className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300 font-mono mt-0.5">
+                  <Mail className="w-3.5 h-3.5 text-teal-600" />
+                  <span>{appointment.patientEmail || 'No email provided'}</span>
+                  <span className="text-[9px] font-normal px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 ml-auto">
+                    Registered Email (Read-Only)
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200/60 dark:border-slate-700/60 text-[11px]">
+                <div>
+                  <span className="text-slate-500">Date:</span> <strong className="text-slate-700 dark:text-slate-300">{appointment.appointmentDate}</strong>
+                </div>
+                <div>
+                  <span className="text-slate-500">Time:</span> <strong className="text-slate-700 dark:text-slate-300">{appointment.appointmentTime}</strong>
+                </div>
+              </div>
+            </div>
+
+            {/* Video Link Input Form */}
+            <div className="space-y-3 text-xs">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="font-bold text-slate-700 dark:text-slate-300">
+                    Video Consultation URL <span className="text-rose-500">*</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const clean = (appointment.appointmentId || 'live').replace(/[^a-zA-Z0-9]/g, '').slice(0, 8);
+                      setVideoLinkInput(`https://meet.google.com/qck-care-${clean}`);
+                    }}
+                    className="text-[10px] font-bold text-teal-600 hover:text-teal-700 dark:text-teal-400 flex items-center gap-1"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    <span>Auto-Fill Google Meet URL</span>
+                  </button>
+                </div>
+                <input
+                  type="url"
+                  value={videoLinkInput}
+                  onChange={(e) => {
+                    setVideoLinkInput(e.target.value);
+                    setSendLinkError('');
+                  }}
+                  placeholder="Paste Google Meet, Zoom, or video conference URL (e.g. https://meet.google.com/abc-defg-hij)"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono text-xs focus:ring-2 focus:ring-teal-500 focus:outline-hidden"
+                />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Accepts any valid video conferencing URL (Google Meet, Zoom, Microsoft Teams, etc.)
+                </p>
+              </div>
+
+              {/* Review Before Sending */}
+              {videoLinkInput && (
+                <div className="p-3 rounded-xl bg-teal-50/70 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-900/60 space-y-1.5">
+                  <span className="text-[11px] font-bold text-teal-800 dark:text-teal-300 block">
+                    Review Consultation Link Before Sending:
+                  </span>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-xs font-semibold text-teal-900 dark:text-teal-200 truncate">
+                      {videoLinkInput}
+                    </span>
+                    <a
+                      href={videoLinkInput}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-teal-600 text-white hover:bg-teal-700 transition flex items-center gap-1 shrink-0"
+                    >
+                      <span>Test / Preview</span>
+                      <ExternalLink className="w-2.5 h-2.5" />
+                    </a>
+                  </div>
+                </div>
+              )}
+
+              {/* Feedback messages */}
+              {sendLinkSuccess && (
+                <div className="p-3 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 rounded-xl text-xs font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{sendLinkSuccess}</span>
+                </div>
+              )}
+              {sendLinkError && (
+                <div className="p-3 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 rounded-xl text-xs font-bold text-rose-800 dark:text-rose-300 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>{sendLinkError}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                disabled={submittingLink}
+                onClick={() => {
+                  setShowSendLinkModal(false);
+                  setSendLinkError('');
+                }}
+                className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={submittingLink || !videoLinkInput.trim()}
+                onClick={handleSendVideoLink}
+                className="px-5 py-2 text-xs font-extrabold text-white bg-gradient-to-r from-teal-600 to-blue-600 hover:from-teal-700 hover:to-blue-700 disabled:opacity-50 rounded-xl shadow-md transition flex items-center gap-1.5 active:scale-95"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>{submittingLink ? 'Sending Link & Email...' : 'Send Link to Patient'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* DOCTOR APPROVE MODAL */}
       {showApprovalModal && (

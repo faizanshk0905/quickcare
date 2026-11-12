@@ -22,6 +22,11 @@ public class Appointment {
     private double consultationFee;
     private String meetingRoomId;
     private String googleMeetLink;
+    private String videoConsultationLink;
+    private boolean videoLinkSent = false;
+    private Instant videoLinkSentAt;
+    private String videoLinkSentBy;
+    private String videoConsultationStatus = "WAITING_FOR_LINK"; // WAITING_FOR_LINK, LINK_SENT, COMPLETED
     private String doctorNotes;
     private Instant approvedAt;
     private Instant rejectedAt;
@@ -187,4 +192,19 @@ public class Appointment {
 
     public Instant getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
+
+    public String getVideoConsultationLink() { return videoConsultationLink; }
+    public void setVideoConsultationLink(String videoConsultationLink) { this.videoConsultationLink = videoConsultationLink; }
+
+    public boolean isVideoLinkSent() { return videoLinkSent; }
+    public void setVideoLinkSent(boolean videoLinkSent) { this.videoLinkSent = videoLinkSent; }
+
+    public Instant getVideoLinkSentAt() { return videoLinkSentAt; }
+    public void setVideoLinkSentAt(Instant videoLinkSentAt) { this.videoLinkSentAt = videoLinkSentAt; }
+
+    public String getVideoLinkSentBy() { return videoLinkSentBy; }
+    public void setVideoLinkSentBy(String videoLinkSentBy) { this.videoLinkSentBy = videoLinkSentBy; }
+
+    public String getVideoConsultationStatus() { return videoConsultationStatus; }
+    public void setVideoConsultationStatus(String videoConsultationStatus) { this.videoConsultationStatus = videoConsultationStatus; }
 }

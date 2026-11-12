@@ -143,9 +143,19 @@ public class AppointmentService {
         apt.setReason(req.getReason());
         apt.setStatus("PENDING");
         apt.setConsultationFee(doctor.getConsultationFee());
-        String initialMeet = googleMeetService.getOrCreateGoogleMeetLink(apt);
-        apt.setGoogleMeetLink(initialMeet);
-        apt.setMeetingRoomId(initialMeet);
+        if (isVideo) {
+            apt.setVideoConsultationStatus("WAITING_FOR_LINK");
+            apt.setVideoLinkSent(false);
+            apt.setVideoConsultationLink(null);
+            apt.setGoogleMeetLink(null);
+            apt.setMeetingRoomId(null);
+        } else {
+            apt.setVideoConsultationStatus("NOT_APPLICABLE");
+            apt.setVideoLinkSent(false);
+            apt.setVideoConsultationLink(null);
+            apt.setGoogleMeetLink(null);
+            apt.setMeetingRoomId(null);
+        }
 
         Appointment saved = db.saveAppointment(apt);
 
@@ -193,7 +203,16 @@ public class AppointmentService {
     }
 
     public List<Appointment> getAppointmentsForPatient(String patientId) {
-        return db.findAppointmentsByPatientId(patientId);
+        List<Appointment> list = db.findAppointmentsByPatientId(patientId);
+        // Requirement 3 & 6: The patient must not be able to access the meeting link before the doctor sends it.
+        for (Appointment apt : list) {
+            if ("VIDEO".equalsIgnoreCase(apt.getConsultationType()) && !apt.isVideoLinkSent()) {
+                apt.setGoogleMeetLink(null);
+                apt.setVideoConsultationLink(null);
+                apt.setMeetingRoomId(null);
+            }
+        }
+        return list;
     }
 
     public List<Appointment> getAppointmentsForDoctor(String doctorId) {
@@ -215,20 +234,24 @@ public class AppointmentService {
 
         if ("CONFIRMED".equalsIgnoreCase(newStatus)) {
             apt.setApprovedAt(Instant.now());
-            String meetUrl = googleMeetService.getOrCreateGoogleMeetLink(apt);
-            apt.setGoogleMeetLink(meetUrl);
-            apt.setMeetingRoomId(meetUrl);
-
-            // Ensure WebRTC consultation room is ready
-            videoService.createConsultationRoom(apt.getAppointmentId(), apt.getDoctorId(), apt.getPatientId(), meetUrl);
-
-            notificationService.sendNotification(apt.getPatientUid(), "Video Consultation Approved",
-                    "Dr. " + apt.getDoctorName() + " has approved your consultation on " + apt.getAppointmentDate() + " at " + apt.getAppointmentTime() + ". Google Meet link is ready: " + meetUrl,
-                    "APPOINTMENT_CONFIRMED", apt.getAppointmentId());
-
-            // Dispatch full approval email with meeting link and instructions to patient
-            emailService.sendConsultationApprovalEmail(apt, meetUrl);
-            apt.addAuditLog("CONSULTATION_APPROVED", apt.getDoctorName(), "Doctor approved consultation. Google Meet link: " + meetUrl);
+            boolean isVideo = "VIDEO".equalsIgnoreCase(apt.getConsultationType());
+            if (isVideo) {
+                if (!apt.isVideoLinkSent()) {
+                    apt.setVideoConsultationStatus("WAITING_FOR_LINK");
+                    apt.setVideoLinkSent(false);
+                    apt.setVideoConsultationLink(null);
+                    apt.setGoogleMeetLink(null);
+                    apt.setMeetingRoomId(null);
+                }
+                notificationService.sendNotification(apt.getPatientUid(), "Video Consultation Approved",
+                        "Dr. " + apt.getDoctorName() + " has approved your consultation on " + apt.getAppointmentDate() + " at " + apt.getAppointmentTime() + ". Doctor will share your video consultation link shortly.",
+                        "APPOINTMENT_CONFIRMED", apt.getAppointmentId());
+            } else {
+                notificationService.sendNotification(apt.getPatientUid(), "Appointment Approved",
+                        "Dr. " + apt.getDoctorName() + " has approved your clinic visit on " + apt.getAppointmentDate() + " at " + apt.getAppointmentTime() + ".",
+                        "APPOINTMENT_CONFIRMED", apt.getAppointmentId());
+            }
+            apt.addAuditLog("CONSULTATION_APPROVED", apt.getDoctorName(), "Doctor approved appointment.");
 
         } else if ("REJECTED".equalsIgnoreCase(newStatus)) {
             apt.setRejectedAt(Instant.now());
@@ -682,13 +705,13 @@ public class AppointmentService {
         apt.setApprovedAt(Instant.now());
         apt.setUpdatedAt(Instant.now());
 
-        // Generate genuine Google Meet link
-        String meetUrl = googleMeetService.getOrCreateGoogleMeetLink(apt);
-        apt.setGoogleMeetLink(meetUrl);
-        apt.setMeetingRoomId(meetUrl);
-
-        // Ensure video consultation entity is created
-        videoService.createConsultationRoom(apt.getAppointmentId(), apt.getDoctorId(), apt.getPatientId(), meetUrl);
+        if (!apt.isVideoLinkSent()) {
+            apt.setVideoConsultationStatus("WAITING_FOR_LINK");
+            apt.setVideoLinkSent(false);
+            apt.setVideoConsultationLink(null);
+            apt.setGoogleMeetLink(null);
+            apt.setMeetingRoomId(null);
+        }
 
         // Reserve doctor's slot if needed
         DoctorAvailability da = db.findAvailability(apt.getDoctorId(), apt.getAppointmentDate())
@@ -702,13 +725,72 @@ public class AppointmentService {
 
         // Dispatch In-App Notification
         notificationService.sendNotification(apt.getPatientUid(), "Video Consultation Approved",
-                "Dr. " + apt.getDoctorName() + " has approved your video consultation for " + apt.getAppointmentDate() + " at " + apt.getAppointmentTime() + ". Google Meet: " + meetUrl,
+                "Dr. " + apt.getDoctorName() + " has approved your video consultation for " + apt.getAppointmentDate() + " at " + apt.getAppointmentTime() + ". Your doctor will send the consultation link to your registered email.",
                 "APPOINTMENT_CONFIRMED", apt.getAppointmentId());
 
-        // Dispatch Confirmation Email to Patient
-        emailService.sendConsultationApprovalEmail(saved, meetUrl);
-        saved.addAuditLog("CONSULTATION_APPROVED", apt.getDoctorName(), "Doctor approved video consultation with Google Meet: " + meetUrl);
+        saved.addAuditLog("CONSULTATION_APPROVED", apt.getDoctorName(), "Doctor approved video consultation. Waiting for doctor to send consultation link.");
         return db.saveAppointment(saved);
+    }
+
+    /**
+     * Requirement 1, 2, 5 & 6: Doctor-Controlled Video Consultation Link Sharing.
+     * The video consultation link must be sent by the doctor, not automatically generated or sent without doctor approval.
+     */
+    public synchronized Appointment sendDoctorVideoConsultationLink(String appointmentId, String videoLink, String doctorUid) {
+        Appointment apt = getAppointmentById(appointmentId);
+
+        // Security check: only assigned doctor or admin can send link
+        boolean isAssignedDoctor = (apt.getDoctorUid() != null && apt.getDoctorUid().equals(doctorUid));
+        if (!isAssignedDoctor && doctorUid != null) {
+            Doctor doc = db.findDoctorByUid(doctorUid).orElse(null);
+            if (doc != null && doc.getDoctorId() != null && doc.getDoctorId().equals(apt.getDoctorId())) {
+                isAssignedDoctor = true;
+            }
+        }
+        boolean isAdmin = "admin".equalsIgnoreCase(doctorUid) || "admin_001".equalsIgnoreCase(doctorUid);
+        if (!isAssignedDoctor && !isAdmin) {
+            throw new UnauthorizedException("Only the assigned doctor can send consultation links.");
+        }
+
+        if (videoLink == null || !videoLink.trim().matches("^https?://.+")) {
+            throw new BadRequestException("Please enter a valid video meeting URL (e.g., Google Meet or Zoom link).");
+        }
+
+        String trimmedLink = videoLink.trim();
+        apt.setVideoConsultationLink(trimmedLink);
+        apt.setGoogleMeetLink(trimmedLink);
+        apt.setMeetingRoomId(trimmedLink);
+        apt.setVideoLinkSent(true);
+        apt.setVideoLinkSentAt(Instant.now());
+        apt.setVideoLinkSentBy(apt.getDoctorName() != null ? apt.getDoctorName() : "Doctor");
+        apt.setVideoConsultationStatus("LINK_SENT");
+        apt.setUpdatedAt(Instant.now());
+
+        if ("PENDING".equalsIgnoreCase(apt.getStatus())) {
+            apt.setStatus("CONFIRMED");
+            apt.setApprovedAt(Instant.now());
+        }
+
+        apt.addAuditLog("VIDEO_LINK_SENT", apt.getDoctorName(), "Doctor dispatched video consultation link: " + trimmedLink);
+
+        // Send Link to Patient's registered email
+        emailService.sendDoctorVideoConsultationLinkEmail(apt, trimmedLink);
+
+        // Ensure video consultation entity is created
+        try {
+            videoService.createConsultationRoom(apt.getAppointmentId(), apt.getDoctorId(), apt.getPatientId(), trimmedLink);
+        } catch (Exception ignored) {}
+
+        // In-App Alert
+        if (apt.getPatientUid() != null) {
+            try {
+                notificationService.sendNotification(apt.getPatientUid(), "Video Consultation Link Ready",
+                        "Dr. " + apt.getDoctorName() + " has sent your video consultation link: " + trimmedLink,
+                        "VIDEO_LINK_SENT", apt.getAppointmentId());
+            } catch (Exception ignored) {}
+        }
+
+        return db.saveAppointment(apt);
     }
 
     public Appointment updateMeetingLink(String appointmentId, String meetingLink) {

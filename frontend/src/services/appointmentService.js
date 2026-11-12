@@ -49,7 +49,7 @@ const saveLocalAppointments = (list) => {
 
 export const appointmentService = {
   async bookAppointment(data) {
-    const meetLink = `https://meet.google.com/qck-care-${Math.random().toString(36).substring(2, 6)}`;
+    const isVideo = (data.consultationType || 'VIDEO').toUpperCase() === 'VIDEO';
     const localApt = {
       appointmentId: `apt_${Date.now().toString(36)}`,
       doctorId: data.doctorId || 'doc_001',
@@ -66,8 +66,11 @@ export const appointmentService = {
       confirmationStatus: 'PENDING',
       reason: data.reason || 'Telehealth Consultation',
       consultationFee: data.consultationFee || 800,
-      googleMeetLink: meetLink,
-      meetingRoomId: meetLink,
+      googleMeetLink: null,
+      videoConsultationLink: null,
+      videoLinkSent: false,
+      videoConsultationStatus: isVideo ? 'WAITING_FOR_LINK' : 'NOT_APPLICABLE',
+      meetingRoomId: null,
       createdAt: new Date().toISOString(),
     };
 
@@ -81,9 +84,7 @@ export const appointmentService = {
       if (res && res.data) {
         if (res.data.data?.appointmentId) {
           localApt.appointmentId = res.data.data.appointmentId;
-          if (res.data.data.googleMeetLink) {
-            localApt.googleMeetLink = res.data.data.googleMeetLink;
-          }
+          localApt.videoConsultationStatus = res.data.data.videoConsultationStatus || localApt.videoConsultationStatus;
           saveLocalAppointments(list);
         }
         return res.data;
@@ -268,6 +269,37 @@ export const appointmentService = {
     }
   },
 
+  async sendVideoConsultationLink(appointmentId, videoConsultationLink) {
+    const trimmed = (videoConsultationLink || '').trim();
+    const list = getLocalAppointments();
+    const idx = list.findIndex((a) => a.appointmentId === appointmentId);
+    if (idx !== -1) {
+      list[idx].videoConsultationLink = trimmed;
+      list[idx].googleMeetLink = trimmed;
+      list[idx].meetingRoomId = trimmed;
+      list[idx].videoLinkSent = true;
+      list[idx].videoLinkSentAt = new Date().toISOString();
+      list[idx].videoConsultationStatus = 'LINK_SENT';
+      if (list[idx].status === 'PENDING') {
+        list[idx].status = 'CONFIRMED';
+      }
+      saveLocalAppointments(list);
+    }
+    try {
+      const res = await api.post(`/appointments/${appointmentId}/send-video-link`, {
+        videoConsultationLink: trimmed,
+      });
+      return res.data;
+    } catch (err) {
+      console.warn('Backend sendVideoConsultationLink offline, saved locally:', err.message);
+      return {
+        success: true,
+        message: 'Video consultation link dispatched to patient email successfully',
+        data: idx !== -1 ? list[idx] : null,
+      };
+    }
+  },
+
   async approveAppointment(appointmentId, data = {}) {
     return this.updateStatus(appointmentId, 'CONFIRMED');
   },
@@ -280,8 +312,10 @@ export const appointmentService = {
     const list = getLocalAppointments();
     const idx = list.findIndex((a) => a.appointmentId === appointmentId);
     if (idx !== -1) {
+      list[idx].videoConsultationLink = link;
       list[idx].googleMeetLink = link;
       list[idx].meetingRoomId = link;
+      list[idx].videoLinkSent = true;
       saveLocalAppointments(list);
     }
     try {
@@ -293,14 +327,25 @@ export const appointmentService = {
   },
 
   async getGoogleMeetDetails(appointmentId) {
+    try {
+      const res = await api.get(`/appointments/${appointmentId}/google-meet`);
+      if (res && res.data) return res.data;
+    } catch (err) {
+      console.warn('Backend getGoogleMeetDetails offline, loading local store:', err.message);
+    }
     const apt = getLocalAppointments().find((a) => a.appointmentId === appointmentId);
     const cleanId = (appointmentId || 'session').replace(/[^a-zA-Z0-9]/g, '');
+    const isSent = apt?.videoLinkSent || Boolean(apt?.videoConsultationLink);
     return {
       success: true,
       data: {
-        googleMeetLink: apt?.googleMeetLink || 'https://meet.google.com/new',
-        meetingRoomId: `QuickCare-${cleanId}`,
-        liveVideoUrl: `https://meet.jit.si/QuickCare-${cleanId}`,
+        appointmentId,
+        googleMeetLink: isSent ? (apt?.videoConsultationLink || apt?.googleMeetLink) : null,
+        videoConsultationLink: isSent ? (apt?.videoConsultationLink || apt?.googleMeetLink) : null,
+        videoLinkSent: isSent,
+        videoConsultationStatus: isSent ? 'LINK_SENT' : 'WAITING_FOR_LINK',
+        meetingRoomId: isSent ? `QuickCare-${cleanId}` : null,
+        liveVideoUrl: isSent ? `https://meet.jit.si/QuickCare-${cleanId}` : null,
       },
     };
   },

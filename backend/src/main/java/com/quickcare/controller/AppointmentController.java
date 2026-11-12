@@ -41,8 +41,21 @@ public class AppointmentController {
     }
 
     @GetMapping("/{appointmentId}")
-    public ResponseEntity<ApiResponse<Appointment>> getAppointment(@PathVariable String appointmentId) {
+    public ResponseEntity<ApiResponse<Appointment>> getAppointment(
+            @PathVariable String appointmentId,
+            @AuthenticationPrincipal UserPrincipal principal) {
         Appointment apt = appointmentService.getAppointmentById(appointmentId);
+        boolean isDoctorOrAdmin = principal != null && (
+            "DOCTOR".equalsIgnoreCase(principal.getRole()) ||
+            "ADMIN".equalsIgnoreCase(principal.getRole()) ||
+            (principal.getUid() != null && principal.getUid().equals(apt.getDoctorUid())) ||
+            "admin".equalsIgnoreCase(principal.getUid())
+        );
+        if ("VIDEO".equalsIgnoreCase(apt.getConsultationType()) && !apt.isVideoLinkSent() && !isDoctorOrAdmin) {
+            apt.setGoogleMeetLink(null);
+            apt.setVideoConsultationLink(null);
+            apt.setMeetingRoomId(null);
+        }
         return ResponseEntity.ok(ApiResponse.ok(apt));
     }
 
@@ -93,21 +106,62 @@ public class AppointmentController {
     }
 
     @GetMapping("/{appointmentId}/google-meet")
-    public ResponseEntity<ApiResponse<Map<String, String>>> getGoogleMeetDetails(@PathVariable String appointmentId) {
+    public ResponseEntity<ApiResponse<Map<String, String>>> getGoogleMeetDetails(
+            @PathVariable String appointmentId,
+            @AuthenticationPrincipal UserPrincipal principal) {
         Appointment apt = appointmentService.getAppointmentById(appointmentId);
-        String meetLink = apt.getGoogleMeetLink();
-        if (meetLink == null || meetLink.isEmpty()) {
-            meetLink = apt.getMeetingRoomId();
-        }
+        boolean isDoctorOrAdmin = principal != null && (
+            "DOCTOR".equalsIgnoreCase(principal.getRole()) ||
+            "ADMIN".equalsIgnoreCase(principal.getRole()) ||
+            (principal.getUid() != null && principal.getUid().equals(apt.getDoctorUid())) ||
+            "admin".equalsIgnoreCase(principal.getUid())
+        );
+
         Map<String, String> details = new HashMap<>();
         details.put("appointmentId", apt.getAppointmentId());
-        details.put("googleMeetLink", meetLink);
         details.put("doctorName", apt.getDoctorName());
         details.put("patientName", apt.getPatientName());
+        details.put("patientEmail", apt.getPatientEmail());
         details.put("appointmentDate", apt.getAppointmentDate());
         details.put("appointmentTime", apt.getAppointmentTime());
         details.put("status", apt.getStatus());
+        details.put("videoConsultationStatus", apt.getVideoConsultationStatus());
+        details.put("videoLinkSent", String.valueOf(apt.isVideoLinkSent()));
+
+        if ("VIDEO".equalsIgnoreCase(apt.getConsultationType()) && !apt.isVideoLinkSent() && !isDoctorOrAdmin) {
+            // Patient cannot see the meeting link before doctor sends it
+            details.put("googleMeetLink", null);
+            details.put("videoConsultationLink", null);
+            details.put("message", "Waiting for Doctor to Send Link");
+        } else {
+            String meetLink = apt.getVideoConsultationLink();
+            if (meetLink == null || meetLink.isEmpty()) {
+                meetLink = apt.getGoogleMeetLink();
+            }
+            if (meetLink == null || meetLink.isEmpty()) {
+                meetLink = apt.getMeetingRoomId();
+            }
+            details.put("googleMeetLink", meetLink);
+            details.put("videoConsultationLink", meetLink);
+        }
         return ResponseEntity.ok(ApiResponse.ok(details));
+    }
+
+    @PostMapping("/{appointmentId}/send-video-link")
+    public ResponseEntity<ApiResponse<Appointment>> sendVideoConsultationLink(
+            @PathVariable String appointmentId,
+            @RequestBody Map<String, String> body,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        String videoLink = body != null ? body.get("videoConsultationLink") : null;
+        if (videoLink == null || videoLink.trim().isEmpty()) {
+            videoLink = body != null ? body.get("videoLink") : null;
+        }
+        if (videoLink == null || videoLink.trim().isEmpty()) {
+            videoLink = body != null ? body.get("googleMeetLink") : null;
+        }
+        Appointment updated = appointmentService.sendDoctorVideoConsultationLink(
+                appointmentId, videoLink, principal != null ? principal.getUid() : null);
+        return ResponseEntity.ok(ApiResponse.ok("Video consultation link sent to patient registered email successfully", updated));
     }
 
     @PutMapping("/{appointmentId}/meeting-link")
