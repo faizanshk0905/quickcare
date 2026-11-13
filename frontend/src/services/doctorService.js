@@ -237,17 +237,120 @@ export const doctorService = {
   },
 
   async getMyDoctorProfile() {
+    // 1. Identify currently authenticated session
+    let currentUser = null;
+    try {
+      const rawUser = localStorage.getItem('quickcare_current_user') || localStorage.getItem('quickcare_demo_user');
+      if (rawUser) {
+        currentUser = JSON.parse(rawUser);
+      }
+    } catch (e) {}
+
+    // 2. Attempt fetching from backend /doctors/me
     try {
       const res = await api.get('/doctors/me');
-      return res.data;
+      if (res && res.data && (res.data.data?.doctorId || res.data.doctorId)) {
+        return res.data;
+      }
     } catch (err) {
-      return { success: true, data: DEFAULT_DOCTORS[0] };
+      console.warn('Backend /doctors/me offline or mock, resolving authenticated doctor profile:', err.message);
     }
+
+    // 3. Resolve from persistent shared doctor registry for this specific user
+    if (currentUser) {
+      const normEmail = (currentUser.email || '').toLowerCase().trim();
+      const currentUid = currentUser.userId || currentUser.uid;
+
+      // Look in quickcare_shared_doctors
+      try {
+        const rawDocs = localStorage.getItem('quickcare_shared_doctors');
+        if (rawDocs) {
+          const list = JSON.parse(rawDocs);
+          const found = list.find(
+            (d) => (d.email || '').toLowerCase().trim() === normEmail ||
+                   (currentUid && (d.uid === currentUid || d.doctorId === currentUid || d.doctorId === `doc_${currentUid}`))
+          );
+          if (found) {
+            return { success: true, data: found };
+          }
+        }
+      } catch (e) {}
+
+      // If user is a DOCTOR, build and return their distinct personal doctor profile
+      if ((currentUser.role || '').toUpperCase() === 'DOCTOR') {
+        const rawName = currentUser.fullName || 'Doctor';
+        const cleanName = rawName.replace(/^dr\.\s*/i, '').trim();
+        const docId = currentUser.doctorId || (currentUid ? (currentUid.startsWith('doc_') ? currentUid : `doc_${currentUid}`) : `doc_${Date.now().toString(36)}`);
+
+        const distinctProfile = {
+          doctorId: docId,
+          uid: currentUid || `usr_${Date.now().toString(36)}`,
+          fullName: `Dr. ${cleanName}`,
+          email: currentUser.email,
+          phone: currentUser.phone || '',
+          gender: currentUser.gender || 'Male',
+          specialization: currentUser.specialization || 'General Physician',
+          qualification: currentUser.qualification || 'MBBS, MD',
+          experience: Number(currentUser.experience) || 5,
+          medicalRegistrationNumber: currentUser.medicalRegistrationNumber || ('REG-' + Date.now().toString().slice(-6)),
+          consultationFee: Number(currentUser.consultationFee) || 600,
+          clinicAddress: currentUser.clinicAddress || currentUser.address || 'QuickCare Telehealth Center',
+          bio: currentUser.bio || `Senior consultant practitioner specializing in ${currentUser.specialization || 'Clinical Medicine'}.`,
+          verificationStatus: currentUser.verificationStatus || 'VERIFIED',
+          profileImage: currentUser.profileImage || (currentUser.gender === 'Female'
+            ? 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=400'
+            : 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400'),
+          workingHours: currentUser.workingHours || '09:00 AM - 05:00 PM',
+          workingStartTime: '09:00 AM',
+          workingEndTime: '05:00 PM',
+          slotDurationMinutes: 15,
+          availableDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+          onlineStatus: 'AVAILABLE_FOR_VIDEO',
+          videoConsultationAvailable: true,
+          rating: 5.0,
+          reviewCount: 0,
+        };
+
+        // Persist to quickcare_shared_doctors so it stays persistent
+        try {
+          const rawDocs = localStorage.getItem('quickcare_shared_doctors');
+          const list = rawDocs ? JSON.parse(rawDocs) : [];
+          const idx = list.findIndex(d => (d.email || '').toLowerCase().trim() === normEmail);
+          if (idx >= 0) {
+            list[idx] = { ...list[idx], ...distinctProfile };
+          } else {
+            list.unshift(distinctProfile);
+          }
+          localStorage.setItem('quickcare_shared_doctors', JSON.stringify(list));
+        } catch (e) {}
+
+        return { success: true, data: distinctProfile };
+      }
+    }
+
+    // 4. Fallback ONLY if completely unauthenticated
+    return { success: true, data: DEFAULT_DOCTORS[0] };
   },
 
   async updateDoctorProfile(data) {
-    const res = await api.put('/doctors/profile', data);
-    return res.data;
+    try {
+      const raw = localStorage.getItem('quickcare_shared_doctors');
+      if (raw) {
+        const list = JSON.parse(raw);
+        const idx = list.findIndex(d => d.doctorId === data.doctorId || d.uid === data.uid || d.email === data.email);
+        if (idx >= 0) {
+          list[idx] = { ...list[idx], ...data };
+          localStorage.setItem('quickcare_shared_doctors', JSON.stringify(list));
+        }
+      }
+    } catch (e) {}
+
+    try {
+      const res = await api.put('/doctors/profile', data);
+      return res.data;
+    } catch (err) {
+      return { success: true, message: 'Profile updated successfully', data };
+    }
   },
 
   async getDoctorAvailability(doctorId, date) {

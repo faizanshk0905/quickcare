@@ -131,7 +131,7 @@ export const appointmentService = {
     return { success: true, data: merged };
   },
 
-  async getDoctorAppointments() {
+  async getDoctorAppointments(targetDoctorId = null) {
     let remoteList = [];
     try {
       const res = await api.get('/appointments/doctor');
@@ -144,11 +144,49 @@ export const appointmentService = {
       console.warn('Backend getDoctorAppointments offline, loading local store:', err.message);
     }
 
+    // Determine current doctor identity
+    let docId = targetDoctorId;
+    let docEmail = null;
+    let docName = null;
+
+    try {
+      const rawUser = localStorage.getItem('quickcare_current_user') || localStorage.getItem('quickcare_demo_user');
+      if (rawUser) {
+        const u = JSON.parse(rawUser);
+        docId = docId || u.doctorId || u.userId || u.uid;
+        docEmail = (u.email || '').toLowerCase().trim();
+        docName = (u.fullName || '').toLowerCase().replace(/^dr\.\s*/i, '').trim();
+      }
+    } catch (e) {}
+
     const localList = getLocalAppointments();
     const remoteIds = new Set(remoteList.map((a) => a.appointmentId));
     const merged = [...localList.filter((l) => !remoteIds.has(l.appointmentId)), ...remoteList];
 
-    return { success: true, data: merged };
+    // Filter appointments: ONLY return appointments belonging to THIS doctor!
+    const filtered = merged.filter((a) => {
+      if (!docId && !docEmail && !docName) return true;
+
+      const aDocId = a.doctorId || '';
+      const aDocEmail = (a.doctorEmail || '').toLowerCase().trim();
+      const aDocName = (a.doctorName || '').toLowerCase().replace(/^dr\.\s*/i, '').trim();
+
+      const matchId = docId && (
+        aDocId === docId ||
+        aDocId === `doc_${docId}` ||
+        docId === `doc_${aDocId}`
+      );
+      const matchEmail = docEmail && aDocEmail && aDocEmail === docEmail;
+      const matchName = docName && aDocName && (
+        aDocName === docName ||
+        aDocName.includes(docName) ||
+        docName.includes(aDocName)
+      );
+
+      return matchId || matchEmail || matchName;
+    });
+
+    return { success: true, data: filtered };
   },
 
   async updateStatus(appointmentId, status, reason = '') {
@@ -217,17 +255,17 @@ export const appointmentService = {
     }
   },
 
-  async getDoctorWaitingQueue() {
+  async getDoctorWaitingQueue(targetDoctorId = null) {
     try {
       const res = await api.get('/appointments/doctor/waiting-queue');
       if (res && res.data && Array.isArray(res.data.data)) {
         return res.data;
       }
-    } catch (err) {
-      // Return any confirmed video consultations
-    }
+    } catch (err) {}
+
     const today = new Date().toISOString().split('T')[0];
-    const queue = getLocalAppointments().filter(
+    const docApts = await this.getDoctorAppointments(targetDoctorId);
+    const queue = (docApts?.data || []).filter(
       (a) => a.consultationType === 'VIDEO' && a.status === 'CONFIRMED' && a.appointmentDate === today
     );
     return { success: true, data: queue };

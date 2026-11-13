@@ -102,25 +102,24 @@ export const DoctorDashboard = () => {
   const fetchDoctorData = async () => {
     try {
       setLoading(true);
-      const [docRes, aptRes, queueRes] = await Promise.all([
-        doctorService.getMyDoctorProfile(),
-        doctorService.getMyDoctorProfile().then((d) =>
-          d?.data?.doctorId ? appointmentService.getDoctorAppointments() : { data: [] }
-        ),
-        appointmentService.getDoctorWaitingQueue().catch(() => ({ data: [] })),
+      const docRes = await doctorService.getMyDoctorProfile();
+      const currentDoc = docRes?.data || null;
+
+      const [aptRes, queueRes] = await Promise.all([
+        appointmentService.getDoctorAppointments(currentDoc?.doctorId),
+        appointmentService.getDoctorWaitingQueue(currentDoc?.doctorId).catch(() => ({ data: [] })),
       ]);
 
-      if (docRes && docRes.data) {
-        setDoctor(docRes.data);
+      if (currentDoc) {
+        setDoctor(currentDoc);
       } else {
+        const cleanName = (user?.fullName || 'Doctor').replace(/^dr\.\s*/i, '').trim();
         setDoctor({
-          doctorId: 'doc_001',
-          fullName: 'Dr. Priya Deshmukh',
-          specialization: 'Cardiologist',
-          hospitalAffiliation: 'Apollo Hospital',
-          experienceYears: 12,
-          rating: 4.9,
-          consultationFee: 800,
+          doctorId: user?.userId || user?.uid || 'doc_current',
+          fullName: `Dr. ${cleanName}`,
+          specialization: user?.specialization || 'General Physician',
+          qualification: user?.qualification || 'MBBS, MD',
+          consultationFee: user?.consultationFee || 600,
         });
       }
       if (aptRes && aptRes.data) {
@@ -130,16 +129,7 @@ export const DoctorDashboard = () => {
         setWaitingQueue(queueRes.data);
       }
     } catch (err) {
-      console.warn('Using resilient doctor state:', err.message);
-      setDoctor({
-        doctorId: 'doc_001',
-        fullName: 'Dr. Priya Deshmukh',
-        specialization: 'Cardiologist',
-        hospitalAffiliation: 'Apollo Hospital',
-        experienceYears: 12,
-        rating: 4.9,
-        consultationFee: 800,
-      });
+      console.warn('Doctor dashboard data load notice:', err.message);
     } finally {
       setLoading(false);
     }
@@ -148,10 +138,10 @@ export const DoctorDashboard = () => {
   useEffect(() => {
     fetchDoctorData();
 
-    // Poll live waiting queue every 4 seconds
+    // Poll live waiting queue every 4 seconds for THIS doctor
     const interval = setInterval(async () => {
       try {
-        const qRes = await appointmentService.getDoctorWaitingQueue();
+        const qRes = await appointmentService.getDoctorWaitingQueue(doctor?.doctorId);
         if (qRes && qRes.data) {
           setWaitingQueue(qRes.data);
         }
@@ -159,7 +149,7 @@ export const DoctorDashboard = () => {
     }, 4000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [doctor?.doctorId]);
 
   const total = appointments.length;
   const today = new Date().toISOString().split('T')[0];
@@ -205,10 +195,12 @@ export const DoctorDashboard = () => {
             Doctor Clinical Portal
           </span>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-            Dr. {doctor?.fullName || user?.fullName}
+            {(doctor?.fullName || user?.fullName || 'Doctor').startsWith('Dr.')
+              ? (doctor?.fullName || user?.fullName)
+              : `Dr. ${doctor?.fullName || user?.fullName || 'Doctor'}`}
           </h1>
           <p className="text-xs sm:text-sm text-teal-100 max-w-xl">
-            {doctor?.specialization} • {doctor?.qualification} • Fee: ₹{doctor?.consultationFee}
+            {doctor?.specialization || 'General Physician'} • {doctor?.qualification || 'MBBS, MD'} • Fee: ₹{doctor?.consultationFee || 600}
           </p>
 
           {/* Real-Time Live Status Toggle */}
