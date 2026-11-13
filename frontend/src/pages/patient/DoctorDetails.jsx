@@ -204,9 +204,9 @@ export const DoctorDetails = () => {
     let patientEmail = user?.email;
     if (!patientFullName || !patientEmail) {
       try {
-        const storedDemo = localStorage.getItem('quickcare_demo_user');
-        if (storedDemo) {
-          const parsed = JSON.parse(storedDemo);
+        const stored = localStorage.getItem('quickcare_current_user') || localStorage.getItem('quickcare_demo_user');
+        if (stored) {
+          const parsed = JSON.parse(stored);
           patientFullName = patientFullName || parsed?.fullName;
           patientEmail = patientEmail || parsed?.email;
         }

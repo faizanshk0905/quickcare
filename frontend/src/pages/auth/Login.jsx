@@ -34,10 +34,11 @@ export const Login = () => {
         navigate('/patient', { replace: true });
       }
     } catch (err) {
-      if (!err.response || err.code === 'ERR_NETWORK' || err.response?.status === 500 || err.response?.status === 502) {
-        setError('Backend is initializing. You can click any 1-Click Demo Profile above to explore immediately without waiting.');
+      const msg = err.response?.data?.message || err.message || '';
+      if (!err.response || err.code === 'ERR_NETWORK' || err.response?.status === 500 || err.response?.status === 502 || err.response?.status === 405 || err.response?.status === 404) {
+        setError(msg || 'Account not found or service starting up. You can click any 1-Click Demo Profile above or register a new account.');
       } else {
-        setError(err.response?.data?.message || err.message || 'Login failed. Please check your credentials.');
+        setError(msg || 'Login failed. Please check your credentials.');
       }
     } finally {
       setLoading(false);

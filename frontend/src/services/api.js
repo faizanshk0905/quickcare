@@ -1,9 +1,10 @@
 import axios from 'axios';
 
+const rawBase = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
+const baseURL = rawBase ? `${rawBase.replace(/\/+$/, '')}/api` : '/api';
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL
-    ? `${import.meta.env.VITE_API_BASE_URL.replace(/\/+$/, '')}/api`
-    : '/api',
+  baseURL,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -36,8 +37,8 @@ api.interceptors.response.use(
   (error) => {
     if (error.response && (error.response.status === 401 || error.response.status === 403)) {
       const currentToken = localStorage.getItem('quickcare_token');
-      // Do not clear if using active demo session
-      if (currentToken && !currentToken.startsWith('demo-token-') &&
+      // Do not clear if using active demo or resilient session
+      if (currentToken && !currentToken.startsWith('demo-token-') && !currentToken.startsWith('resilient-token-') &&
           !window.location.pathname.startsWith('/login') &&
           !window.location.pathname.startsWith('/register')) {
         console.warn('Session expired or unauthorized. Clearing stored token.');
