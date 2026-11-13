@@ -34,9 +34,9 @@ export const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [verifyingId, setVerifyingId] = useState(null);
 
-  const fetchStats = async () => {
+  const fetchStats = async (showLoading = true) => {
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
       const [statsRes, docRes, confRes] = await Promise.all([
         adminService.getDashboardStats().catch((e) => { console.warn('Stats API error:', e.message); return null; }),
         adminService.getAllDoctors().catch((e) => { console.warn('Doctors API error:', e.message); return null; }),
@@ -147,24 +147,27 @@ export const AdminDashboard = () => {
         }
       ]);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchStats();
+    fetchStats(true);
 
-    // Poll live confirmations every 4 seconds
-    const interval = setInterval(async () => {
-      try {
-        const confRes = await appointmentService.getAdminConfirmations();
-        if (confRes && confRes.data) {
-          setConfirmations(confRes.data);
-        }
-      } catch (ignored) {}
-    }, 4000);
+    // High-speed real-time polling every 2 seconds for instant doctor and confirmation updates
+    const interval = setInterval(() => {
+      fetchStats(false);
+    }, 2000);
 
-    return () => clearInterval(interval);
+    const handleDoctorUpdate = () => fetchStats(false);
+    window.addEventListener('quickcare_doctors_updated', handleDoctorUpdate);
+    window.addEventListener('storage', handleDoctorUpdate);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('quickcare_doctors_updated', handleDoctorUpdate);
+      window.removeEventListener('storage', handleDoctorUpdate);
+    };
   }, []);
 
   const handleReleaseSlot = async (appointmentId) => {
@@ -195,10 +198,13 @@ export const AdminDashboard = () => {
   const handleVerify = async (doctorId, approve) => {
     setVerifyingId(doctorId);
     try {
+      // Optimistic instant UI removal from pending queue (0ms latency)
+      setPendingDoctors((prev) => prev.filter((d) => d.doctorId !== doctorId && d.uid !== doctorId));
       await adminService.verifyDoctor(doctorId, approve, approve ? 'Approved' : 'Qualifications could not be verified.');
-      fetchStats();
+      fetchStats(false);
     } catch (err) {
-      alert(err.response?.data?.message || err.message || 'Verification update failed.');
+      console.warn('Doctor verification notice:', err.message);
+      fetchStats(false);
     } finally {
       setVerifyingId(null);
     }
@@ -533,18 +539,33 @@ export const AdminDashboard = () => {
 
       {/* Pending Doctor Approvals Queue */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
-            <span className="w-2.5 h-2.5 bg-amber-500 rounded-full animate-ping" />
-            Pending Doctor Verifications ({pendingDoctors.length})
-          </h2>
-          <Link
-            to="/admin/doctors"
-            className="text-xs font-bold text-purple-700 hover:text-purple-900 flex items-center gap-1"
-          >
-            <span>View All</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
+              <span className="w-2.5 h-2.5 bg-amber-500 rounded-full animate-ping" />
+              Pending Doctor Verifications ({pendingDoctors.length})
+            </h2>
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-xs">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Live Sync Active
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => fetchStats(true)}
+              className="px-2.5 py-1 text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition shadow-xs flex items-center gap-1"
+              title="Sync Doctors and Approvals Immediately"
+            >
+              <span>↻ Sync Now</span>
+            </button>
+            <Link
+              to="/admin/doctors"
+              className="text-xs font-bold text-purple-700 hover:text-purple-900 flex items-center gap-1"
+            >
+              <span>View All</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
         </div>
 
         {pendingDoctors.length === 0 ? (
@@ -569,14 +590,28 @@ export const AdminDashboard = () => {
                       className="w-12 h-12 rounded-2xl object-cover border border-slate-100"
                     />
                     <div>
-                      <h4 className="font-bold text-slate-900 text-sm">{doc.fullName}</h4>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <h4 className="font-bold text-slate-900 text-sm">{doc.fullName}</h4>
+                        {doc.isRecentlyAdded && (
+                          <span className="px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-emerald-500 text-white animate-pulse shadow-xs">
+                            NEW
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-teal-700 font-semibold">{doc.specialization}</p>
                       <p className="text-[11px] text-slate-500">{doc.qualification}</p>
                     </div>
                   </div>
-                  <span className="px-2 py-0.5 bg-amber-100 text-amber-800 text-[10px] font-bold rounded-full">
-                    PENDING
-                  </span>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="px-2 py-0.5 bg-amber-100 text-amber-800 text-[10px] font-bold rounded-full">
+                      PENDING
+                    </span>
+                    {doc.isRecentlyAdded && (
+                      <span className="text-[9px] font-bold text-emerald-600">
+                        Just Added
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="p-2.5 bg-slate-50 rounded-xl text-xs space-y-1">

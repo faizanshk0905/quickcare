@@ -28,6 +28,8 @@ export default function handler(req, res) {
     medicalRegistrationNumber: body.medicalRegistrationNumber || '',
     hospitalAffiliation: body.hospitalAffiliation || '',
     consultationFee: body.consultationFee || 800,
+    verificationStatus: role === 'DOCTOR' ? 'PENDING' : 'VERIFIED',
+    isRecentlyAdded: true,
   };
   const token = `resilient-token-${uid}`;
 

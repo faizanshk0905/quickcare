@@ -159,7 +159,24 @@ export const doctorService = {
       console.warn('Backend doctors API loading or offline, using verified roster:', err.message);
     }
 
-    let filtered = DEFAULT_DOCTORS;
+    const getCombinedDoctors = () => {
+      try {
+        const raw = localStorage.getItem('quickcare_shared_doctors');
+        if (raw) {
+          const local = JSON.parse(raw);
+          const verified = local.filter((d) => d.verificationStatus === 'VERIFIED');
+          if (verified.length > 0) {
+            const map = new Map();
+            DEFAULT_DOCTORS.forEach((d) => map.set(d.doctorId, d));
+            verified.forEach((d) => map.set(d.doctorId, d));
+            return Array.from(map.values());
+          }
+        }
+      } catch (e) {}
+      return DEFAULT_DOCTORS;
+    };
+
+    let filtered = getCombinedDoctors();
     if (params.specialization && params.specialization !== 'ALL') {
       filtered = filtered.filter(
         (d) => d.specialization?.toLowerCase() === params.specialization.toLowerCase()
@@ -202,7 +219,17 @@ export const doctorService = {
       console.warn('Backend getDoctorById API offline, resolving from faculty roster:', err.message);
     }
 
-    const doc = DEFAULT_DOCTORS.find((d) => d.doctorId === id) || DEFAULT_DOCTORS[0];
+    let doc = DEFAULT_DOCTORS.find((d) => d.doctorId === id);
+    if (!doc) {
+      try {
+        const raw = localStorage.getItem('quickcare_shared_doctors');
+        if (raw) {
+          const local = JSON.parse(raw);
+          doc = local.find((d) => d.doctorId === id || d.uid === id);
+        }
+      } catch (e) {}
+    }
+    doc = doc || DEFAULT_DOCTORS[0];
     return {
       success: true,
       data: doc,

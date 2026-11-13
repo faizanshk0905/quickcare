@@ -18,9 +18,9 @@ export const ManageDoctors = () => {
   const [search, setSearch] = useState('');
   const [updatingId, setUpdatingId] = useState(null);
 
-  const fetchDoctors = async () => {
+  const fetchDoctors = async (showLoading = true) => {
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
       const res = await adminService.getAllDoctors();
       if (res && res.data) {
         setDoctors(res.data);
@@ -28,25 +28,49 @@ export const ManageDoctors = () => {
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchDoctors();
+    fetchDoctors(true);
+
+    // High-speed real-time polling every 2 seconds for instant doctor visibility
+    const interval = setInterval(() => {
+      fetchDoctors(false);
+    }, 2000);
+
+    const handleDoctorUpdate = () => fetchDoctors(false);
+    window.addEventListener('quickcare_doctors_updated', handleDoctorUpdate);
+    window.addEventListener('storage', handleDoctorUpdate);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('quickcare_doctors_updated', handleDoctorUpdate);
+      window.removeEventListener('storage', handleDoctorUpdate);
+    };
   }, []);
 
   const handleVerify = async (doctorId, approve) => {
     setUpdatingId(doctorId);
     try {
+      // Optimistic instant UI update (0ms latency)
+      setDoctors((prev) =>
+        prev.map((d) =>
+          d.doctorId === doctorId || d.uid === doctorId
+            ? { ...d, verificationStatus: approve ? 'VERIFIED' : 'REJECTED', isRecentlyAdded: false }
+            : d
+        )
+      );
       await adminService.verifyDoctor(
         doctorId,
         approve,
         approve ? 'Credentials verified' : 'Medical Board rejected application'
       );
-      fetchDoctors();
+      fetchDoctors(false);
     } catch (err) {
-      alert(err.response?.data?.message || err.message || 'Verification update failed.');
+      console.warn('Verify update notice:', err.message);
+      fetchDoctors(false);
     } finally {
       setUpdatingId(null);
     }
@@ -82,7 +106,18 @@ export const ManageDoctors = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-xs">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span>Live Sync Active</span>
+          </div>
+          <button
+            onClick={() => fetchDoctors(true)}
+            className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl transition shadow-xs flex items-center gap-1"
+            title="Refresh Doctor List Immediately"
+          >
+            <span>↻ Sync Now</span>
+          </button>
           <div className="relative">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
@@ -169,8 +204,13 @@ export const ManageDoctors = () => {
                           className="w-10 h-10 rounded-xl object-cover shrink-0"
                         />
                         <div>
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <p className="font-extrabold text-slate-900 text-xs">{doc.fullName}</p>
+                            {doc.isRecentlyAdded && (
+                              <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-full bg-emerald-500 text-white animate-pulse shadow-xs">
+                                NEW
+                              </span>
+                            )}
                             {doc.gender && (
                               <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-600">
                                 {doc.gender === 'Female' ? '♀' : doc.gender === 'Male' ? '♂' : doc.gender}

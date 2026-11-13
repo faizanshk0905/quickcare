@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { registerDoctorToSharedRegistry } from '../../services/adminService';
 import {
   Stethoscope,
   User,
@@ -153,10 +154,16 @@ export const DoctorRegister = () => {
 
     setLoading(true);
     try {
-      await register(formData);
+      const regRes = await register(formData);
+      registerDoctorToSharedRegistry({
+        ...formData,
+        userId: regRes?.data?.user?.userId || regRes?.data?.profileId,
+        uid: regRes?.data?.user?.uid || regRes?.data?.profileId,
+      });
       setSuccessPending(true);
     } catch (err) {
       console.warn('Doctor registration completed locally:', err.message);
+      registerDoctorToSharedRegistry(formData);
       setSuccessPending(true);
     } finally {
       setLoading(false);

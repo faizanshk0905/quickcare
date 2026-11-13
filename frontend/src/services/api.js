@@ -79,6 +79,52 @@ api.interceptors.response.use(
           list.push(localUser);
         }
         localStorage.setItem('quickcare_all_registered_users', JSON.stringify(list));
+
+        if (role === 'DOCTOR') {
+          const rawDocs = localStorage.getItem('quickcare_shared_doctors');
+          const docList = rawDocs ? JSON.parse(rawDocs) : [];
+          const doctorObj = {
+            doctorId: `doc_${generatedUid}`,
+            uid: generatedUid,
+            fullName: (payload.fullName || 'Doctor').startsWith('Dr.') ? payload.fullName : `Dr. ${payload.fullName || 'Doctor'}`,
+            email: (payload.email || '').toLowerCase().trim(),
+            phone: payload.phone || '',
+            gender: payload.gender || 'Female',
+            profileImage: payload.profileImage || (payload.gender === 'Male'
+              ? 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400'
+              : 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=400'),
+            specialization: payload.specialization || 'General Physician',
+            qualification: payload.qualification || 'MBBS, MD',
+            experience: Number(payload.experience) || 5,
+            medicalRegistrationNumber: payload.medicalRegistrationNumber || ('REG-' + Date.now().toString().slice(-6)),
+            consultationFee: Number(payload.consultationFee) || 500,
+            workingHours: payload.workingHours || '09:00 AM - 05:00 PM',
+            workingStartTime: '09:00 AM',
+            workingEndTime: '05:00 PM',
+            slotDurationMinutes: 15,
+            clinicAddress: payload.clinicAddress || 'QuickCare Telehealth Center',
+            bio: payload.bio || 'Consultant practitioner at QuickCare Healthcare',
+            verificationStatus: 'PENDING',
+            status: 'ACTIVE',
+            rating: 5.0,
+            reviewCount: 0,
+            onlineStatus: 'AVAILABLE_FOR_VIDEO',
+            videoConsultationAvailable: true,
+            availableDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+            createdAt: new Date().toISOString(),
+            isRecentlyAdded: true,
+          };
+          const dIdx = docList.findIndex(d => (d.email || '').toLowerCase().trim() === doctorObj.email);
+          if (dIdx >= 0) {
+            docList[dIdx] = { ...docList[dIdx], ...doctorObj };
+          } else {
+            docList.unshift(doctorObj);
+          }
+          localStorage.setItem('quickcare_shared_doctors', JSON.stringify(docList));
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('quickcare_doctors_updated', { detail: doctorObj }));
+          }
+        }
       } catch (e) {}
 
       return Promise.resolve({
