@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
 import { NotificationDropdown } from './NotificationDropdown';
 import {
   HeartPulse,
@@ -15,15 +14,12 @@ import {
   Shield,
   Stethoscope,
   ChevronDown,
-  Sun,
-  Moon,
   Settings,
 } from 'lucide-react';
 
 export const Navbar = () => {
   const { t } = useTranslation();
   const { user, role, isAuthenticated, logout } = useAuth();
-  const { isDark, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -136,20 +132,6 @@ export const Navbar = () => {
 
           {/* Right side items */}
           <div className="hidden md:flex items-center space-x-3">
-            {/* Theme Toggle Button (Light / Dark Mode) */}
-            <button
-              onClick={toggleTheme}
-              className="p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition focus:outline-none"
-              title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-              aria-label="Toggle Theme"
-            >
-              {isDark ? (
-                <Sun className="w-5 h-5 text-amber-400 hover:rotate-45 transition-transform" />
-              ) : (
-                <Moon className="w-5 h-5 text-slate-600 hover:-rotate-12 transition-transform" />
-              )}
-            </button>
-
             {isAuthenticated ? (
               <>
                 <NotificationDropdown />
@@ -266,22 +248,11 @@ export const Navbar = () => {
 
           {/* Mobile menu button */}
           <div className="flex md:hidden items-center gap-2">
-            <button
-              onClick={toggleTheme}
-              className="p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-              aria-label="Toggle Theme"
-            >
-              {isDark ? (
-                <Sun className="w-5 h-5 text-amber-400" />
-              ) : (
-                <Moon className="w-5 h-5 text-slate-600" />
-              )}
-            </button>
             {isAuthenticated && <NotificationDropdown />}
             <button
               data-mobile-toggle="true"
               onClick={() => setMobileMenuOpen((prev) => !prev)}
-              className="p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+              className="p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition"
               aria-label="Toggle Mobile Menu"
             >
               {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}

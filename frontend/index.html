@@ -17,12 +17,13 @@
     <script>
       (function() {
         try {
-          var saved = localStorage.getItem('quickcare_theme');
-          var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-          if (saved === 'dark' || (!saved && prefersDark)) {
-            document.documentElement.classList.add('dark');
-          } else {
+          localStorage.removeItem('quickcare_theme');
+          localStorage.removeItem('quickcare_font_size');
+          if (document.documentElement) {
             document.documentElement.classList.remove('dark');
+          }
+          if (document.body) {
+            document.body.classList.remove('dark', 'font-large', 'font-xlarge');
           }
         } catch(e) {}
       })();

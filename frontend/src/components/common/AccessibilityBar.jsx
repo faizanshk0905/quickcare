@@ -1,13 +1,11 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
-import { Type, Eye, Volume2, VolumeX, Globe, Sun, Moon } from 'lucide-react';
+import { Eye, Volume2, VolumeX, Globe } from 'lucide-react';
 
 export const AccessibilityBar = () => {
   const { t } = useTranslation();
   const {
-    fontSize,
-    setFontSize,
     highContrast,
     setHighContrast,
     textToSpeech,
@@ -15,11 +13,7 @@ export const AccessibilityBar = () => {
     language,
     changeLanguage,
     speak,
-    theme,
-    toggleTheme,
   } = useTheme();
-
-  const [isOpen, setIsOpen] = useState(false);
 
   const toggleTts = () => {
     const next = !textToSpeech;
@@ -68,39 +62,10 @@ export const AccessibilityBar = () => {
         </div>
 
         {/* Accessibility controls */}
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1.5">
-            <Type className="w-3.5 h-3.5 text-teal-400" />
-            <span className="hidden sm:inline text-slate-400">Font:</span>
-            <button
-              onClick={() => setFontSize('normal')}
-              className={`px-1.5 py-0.5 text-[11px] rounded ${
-                fontSize === 'normal' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              A
-            </button>
-            <button
-              onClick={() => setFontSize('large')}
-              className={`px-1.5 py-0.5 text-xs rounded font-medium ${
-                fontSize === 'large' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              A+
-            </button>
-            <button
-              onClick={() => setFontSize('xlarge')}
-              className={`px-1.5 py-0.5 text-sm rounded font-bold ${
-                fontSize === 'xlarge' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              A++
-            </button>
-          </div>
-
+        <div className="flex items-center gap-3">
           <button
             onClick={() => setHighContrast(!highContrast)}
-            className={`flex items-center gap-1 px-2 py-0.5 rounded transition ${
+            className={`flex items-center gap-1 px-2.5 py-0.5 rounded transition ${
               highContrast ? 'bg-amber-400 text-slate-950 font-bold' : 'text-slate-300 hover:text-white'
             }`}
             title="Toggle High Contrast"
@@ -111,22 +76,13 @@ export const AccessibilityBar = () => {
 
           <button
             onClick={toggleTts}
-            className={`flex items-center gap-1 px-2 py-0.5 rounded transition ${
+            className={`flex items-center gap-1 px-2.5 py-0.5 rounded transition ${
               textToSpeech ? 'bg-emerald-500 text-white font-bold' : 'text-slate-300 hover:text-white'
             }`}
             title="Screen Reader / Read Aloud"
           >
             {textToSpeech ? <Volume2 className="w-3.5 h-3.5 animate-pulse" /> : <VolumeX className="w-3.5 h-3.5" />}
             <span className="hidden md:inline">TTS</span>
-          </button>
-
-          <button
-            onClick={toggleTheme}
-            className="flex items-center gap-1 px-2 py-0.5 rounded transition text-slate-300 hover:text-white"
-            title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-          >
-            {theme === 'dark' ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5 text-blue-300" />}
-            <span className="hidden md:inline">{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
           </button>
         </div>
       </div>
