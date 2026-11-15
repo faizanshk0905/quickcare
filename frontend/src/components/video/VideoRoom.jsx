@@ -1,19 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import {
   Video,
-  PhoneOff,
   Shield,
   Clock,
   User,
   Stethoscope,
-  Maximize2,
   FilePlus,
   ExternalLink,
   Copy,
   Check,
-  Radio,
   Sparkles,
-  Link as LinkIcon,
+  AlertCircle,
+  Calendar,
+  Send,
 } from 'lucide-react';
 import { consultationService } from '../../services/consultationService';
 import { appointmentService } from '../../services/appointmentService';
@@ -22,23 +21,27 @@ export const VideoRoom = ({ appointment, currentUser, onEndCall, onOpenPrescript
   const [callDuration, setCallDuration] = useState(0);
   const [consultation, setConsultation] = useState(null);
   const [copiedLink, setCopiedLink] = useState(false);
-  const [customMeetUrl, setCustomMeetUrl] = useState(appointment?.googleMeetLink || '');
+  const [customMeetUrl, setCustomMeetUrl] = useState(
+    appointment?.googleMeetLink || appointment?.videoConsultationLink || ''
+  );
   const [savingMeetUrl, setSavingMeetUrl] = useState(false);
   const [meetSaveSuccess, setMeetSaveSuccess] = useState(false);
-  const [activeTab, setActiveTab] = useState('live'); // 'live' | 'google-meet'
+  const [saveError, setSaveError] = useState('');
 
-  const cleanId = (appointment?.appointmentId || 'session').replace(/[^a-zA-Z0-9]/g, '');
-  const roomName = `QuickCare-${cleanId}`;
   const isDoctor = currentUser?.role === 'DOCTOR';
-  const displayName =
-    currentUser?.fullName ||
-    (isDoctor ? `Dr. ${appointment?.doctorName || 'Doctor'}` : appointment?.patientName || 'Patient');
+  const otherParticipantName = isDoctor
+    ? appointment?.patientName || 'Patient'
+    : `Dr. ${appointment?.doctorName?.replace(/^(?:dr\.?\s*)+/i, '') || 'Doctor'}`;
 
-  // Embeddable Jitsi Meet configuration (Zero login, instant WebRTC audio/video)
-  const jitsiEmbedUrl = `https://meet.jit.si/${roomName}#config.prejoinPageEnabled=false&userInfo.displayName=${encodeURIComponent(
-    displayName
-  )}&config.disableDeepLinking=true`;
-  const directRoomUrl = `https://meet.jit.si/${roomName}`;
+  const meetUrl =
+    appointment?.googleMeetLink ||
+    appointment?.videoConsultationLink ||
+    customMeetUrl ||
+    'https://meet.google.com/new';
+
+  const isLinkSent = Boolean(
+    appointment?.videoLinkSent && (appointment?.googleMeetLink || appointment?.videoConsultationLink)
+  );
 
   // Session lifecycle & call duration timer
   useEffect(() => {
@@ -68,6 +71,7 @@ export const VideoRoom = ({ appointment, currentUser, onEndCall, onOpenPrescript
   }, [appointment.appointmentId]);
 
   const handleCopyLink = (url) => {
+    if (!url) return;
     navigator.clipboard.writeText(url);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2500);
@@ -75,50 +79,38 @@ export const VideoRoom = ({ appointment, currentUser, onEndCall, onOpenPrescript
 
   const handleSaveMeetUrl = async (e) => {
     e.preventDefault();
-    if (!customMeetUrl) return;
+    const trimmed = (customMeetUrl || '').trim();
+    if (!trimmed || !trimmed.toLowerCase().includes('meet.google.com')) {
+      setSaveError('Please enter a valid Google Meet link (e.g. https://meet.google.com/xxx-yyyy-zzz)');
+      return;
+    }
     try {
       setSavingMeetUrl(true);
-      await appointmentService.updateMeetingLink(appointment.appointmentId, customMeetUrl.trim());
+      setSaveError('');
+      await appointmentService.sendVideoConsultationLink(appointment.appointmentId, trimmed);
       setMeetSaveSuccess(true);
       setTimeout(() => setMeetSaveSuccess(false), 3000);
     } catch (err) {
-      alert('Failed to update Google Meet link: ' + err.message);
+      setSaveError(err.message || 'Failed to update Google Meet link');
     } finally {
       setSavingMeetUrl(false);
     }
   };
 
-  const handleEndCall = async () => {
-    if (consultation) {
-      try {
-        await consultationService.end(consultation.consultationId);
-      } catch (err) {
-        console.warn('End consultation sync:', err);
-      }
-    }
-    onEndCall && onEndCall();
+  const formatTime = (secs) => {
+    const mins = Math.floor(secs / 60);
+    const rem = secs % 60;
+    return `${mins.toString().padStart(2, '0')}:${rem.toString().padStart(2, '0')}`;
   };
-
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const otherParticipantName = isDoctor
-    ? appointment?.patientName || 'Patient'
-    : appointment?.doctorName?.startsWith('Dr.')
-    ? appointment.doctorName
-    : `Dr. ${appointment?.doctorName || 'Specialist'}`;
 
   return (
-    <div className="w-full bg-slate-950 rounded-3xl overflow-hidden shadow-2xl flex flex-col border border-slate-800 animate-in fade-in">
-      {/* Top Header Bar */}
-      <div className="p-4 bg-slate-900/95 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2.5">
-          <div className="flex items-center gap-2 px-3 py-1 bg-emerald-500/20 border border-emerald-500/40 rounded-full text-emerald-400 text-xs font-semibold">
+    <div className="bg-slate-900 rounded-3xl overflow-hidden border border-slate-800 shadow-2xl flex flex-col">
+      {/* Top Session Bar */}
+      <div className="bg-slate-950 px-5 py-4 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 px-3 py-1 bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 text-xs font-black uppercase tracking-wider rounded-full">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-            <span>LIVE TELEHEALTH SESSION</span>
+            <span>Google Meet Telehealth Session</span>
           </div>
 
           <span className="text-xs text-slate-300 font-mono flex items-center gap-1.5 bg-white/10 px-2.5 py-1 rounded-full">
@@ -127,206 +119,173 @@ export const VideoRoom = ({ appointment, currentUser, onEndCall, onOpenPrescript
           </span>
 
           <span className="text-xs text-slate-400 flex items-center gap-1.5 bg-slate-800 px-2.5 py-1 rounded-full">
-            {isDoctor ? <User className="w-3.5 h-3.5 text-blue-400" /> : <Stethoscope className="w-3.5 h-3.5 text-teal-400" />}
+            {isDoctor ? (
+              <User className="w-3.5 h-3.5 text-blue-400" />
+            ) : (
+              <Stethoscope className="w-3.5 h-3.5 text-teal-400" />
+            )}
             <span className="text-white font-medium">{otherParticipantName}</span>
           </span>
         </div>
 
-        {/* View Mode Switcher & Actions */}
+        {/* Doctor Actions */}
         <div className="flex items-center gap-2">
-          <div className="flex items-center bg-slate-800 p-1 rounded-xl border border-slate-700">
-            <button
-              onClick={() => setActiveTab('live')}
-              className={`px-3 py-1 text-xs font-bold rounded-lg transition ${
-                activeTab === 'live'
-                  ? 'bg-teal-600 text-white shadow-xs'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Direct Live Room
-            </button>
-            <button
-              onClick={() => setActiveTab('google-meet')}
-              className={`px-3 py-1 text-xs font-bold rounded-lg transition ${
-                activeTab === 'google-meet'
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Google Meet
-            </button>
-          </div>
-
-          <a
-            href={directRoomUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl border border-slate-700 transition"
-            title="Open Video Room in New Window / Fullscreen"
-          >
-            <Maximize2 className="w-3.5 h-3.5 text-teal-400" />
-            <span className="hidden sm:inline">Separate Tab</span>
-          </a>
-
           {isDoctor && onOpenPrescription && (
             <button
               onClick={onOpenPrescription}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-md transition"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-md transition cursor-pointer"
             >
               <FilePlus className="w-3.5 h-3.5" />
-              <span>Write Rx</span>
+              <span>Write Digital Prescription</span>
             </button>
           )}
 
           <button
-            onClick={handleEndCall}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-md transition active:scale-95"
-            title="End Telehealth Consultation"
+            onClick={onEndCall}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-md transition cursor-pointer active:scale-95"
+            title="Complete / Leave Consultation"
           >
-            <PhoneOff className="w-3.5 h-3.5" />
-            <span>End Call</span>
+            <span>Exit Portal</span>
           </button>
         </div>
       </div>
 
-      {/* Main Video Area */}
-      {activeTab === 'live' ? (
-        <div className="relative w-full h-[76vh] min-h-[560px] bg-slate-950 flex flex-col">
-          {/* Real Embedded WebRTC Video Consultation Frame */}
-          <iframe
-            src={jitsiEmbedUrl}
-            allow="camera; microphone; fullscreen; display-capture; autoplay; clipboard-write; speaker"
-            className="w-full h-full border-0 flex-1"
-            title="QuickCare Real-Time Video Consultation"
-          />
+      {/* Main Google Meet Consultation Card */}
+      <div className="p-8 sm:p-12 text-center text-white space-y-6 max-w-3xl mx-auto w-full">
+        <div className="w-20 h-20 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-3xl flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/20">
+          <Video className="w-10 h-10" />
+        </div>
 
-          {/* Quick Helper Footer */}
-          <div className="bg-slate-900/90 px-4 py-2 border-t border-slate-800 flex flex-wrap items-center justify-between text-[11px] text-slate-400 gap-2">
-            <div className="flex items-center gap-2">
-              <Shield className="w-3.5 h-3.5 text-emerald-400" />
-              <span>
-                100% Connected WebRTC Session. Camera, mic & screen share active across mobile & desktop.
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
+        <div className="space-y-2">
+          <span className="px-3 py-1 bg-emerald-500/20 text-emerald-300 text-xs font-bold rounded-full border border-emerald-500/30">
+            Powered by Google Meet
+          </span>
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-white">
+            {isDoctor ? `Consultation with ${appointment.patientName}` : `Consultation with Dr. ${appointment.doctorName?.replace(/^(?:dr\.?\s*)+/i, '')}`}
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-400 max-w-lg mx-auto">
+            Scheduled for {appointment.appointmentDate} at {appointment.appointmentTime}. Click below to join the authorized Google Meet consultation room.
+          </p>
+        </div>
+
+        {/* Prominent Join / Launch Button */}
+        {isLinkSent || isDoctor ? (
+          <div className="pt-2 space-y-4">
+            <a
+              href={meetUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-2.5 px-8 py-4 bg-emerald-500 hover:bg-emerald-600 text-white font-black text-sm uppercase tracking-wider rounded-2xl shadow-xl shadow-emerald-500/25 transition active:scale-95 cursor-pointer"
+            >
+              <Video className="w-5 h-5" />
+              <span>{isDoctor ? 'Launch Google Meet Room' : 'Join Google Meet'}</span>
+              <ExternalLink className="w-4 h-4" />
+            </a>
+
+            {/* Meet Link Display & Copy */}
+            <div className="flex items-center justify-center gap-2 max-w-md mx-auto bg-slate-800/80 p-3 rounded-2xl border border-slate-700">
+              <span className="text-xs font-mono text-slate-300 truncate">{meetUrl}</span>
               <button
-                onClick={() => handleCopyLink(directRoomUrl)}
-                className="hover:text-white flex items-center gap-1 transition"
+                type="button"
+                onClick={() => handleCopyLink(meetUrl)}
+                className="px-2.5 py-1 text-xs font-bold bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition flex items-center gap-1 cursor-pointer shrink-0"
               >
                 {copiedLink ? (
                   <>
-                    <Check className="w-3 h-3 text-emerald-400" />
-                    <span className="text-emerald-400">Link Copied</span>
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                    <span className="text-emerald-400">Copied</span>
                   </>
                 ) : (
                   <>
-                    <Copy className="w-3 h-3 text-slate-400" />
-                    <span>Copy Room URL</span>
+                    <Copy className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Copy</span>
                   </>
                 )}
               </button>
-              <span>•</span>
-              <a
-                href={directRoomUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:text-teal-300 flex items-center gap-1 text-teal-400 font-bold"
-              >
-                <span>Open Fullscreen Window</span>
-                <ExternalLink className="w-3 h-3" />
-              </a>
             </div>
           </div>
-        </div>
-      ) : (
-        /* Google Meet Companion Mode */
-        <div className="w-full h-[76vh] min-h-[560px] p-6 sm:p-12 flex flex-col items-center justify-center text-center space-y-6 bg-radial from-slate-900 to-slate-950 text-white">
-          <div className="w-20 h-20 rounded-3xl bg-blue-500/20 border border-blue-500/40 text-blue-400 flex items-center justify-center shadow-lg">
-            <Video className="w-10 h-10" />
-          </div>
-
-          <div className="space-y-2 max-w-lg">
-            <span className="px-3 py-1 bg-blue-500/20 text-blue-300 text-xs font-bold rounded-full border border-blue-500/30">
-              Google Meet Integration
-            </span>
-            <h3 className="text-2xl font-black text-white">Connect via Official Google Meet</h3>
-            <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
-              Google Meet requires meetings to be generated from an active Google account. You can start a real meeting in 1 click or paste your meeting link below.
+        ) : (
+          /* When link is pending for patient */
+          <div className="p-5 bg-amber-950/40 border border-amber-800/60 rounded-2xl text-left space-y-2 text-xs text-amber-200">
+            <div className="flex items-center gap-2 font-bold text-amber-300">
+              <Clock className="w-4 h-4 text-amber-400 animate-spin" />
+              <span>Waiting for Doctor's Google Meet Link</span>
+            </div>
+            <p className="text-[11px] text-amber-300/90 leading-relaxed">
+              Dr. {appointment.doctorName?.replace(/^(?:dr\.?\s*)+/i, '')} will send your official Google Meet invitation link prior to the appointment. The link will appear here and will be delivered to your registered email ({appointment.patientEmail}).
             </p>
           </div>
+        )}
 
-          <div className="flex flex-wrap items-center justify-center gap-3">
-            <a
-              href="https://meet.google.com/new"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-lg transition flex items-center gap-2 active:scale-95"
-            >
-              <Sparkles className="w-4 h-4" />
-              <span>Start Real Google Meet (meet.google.com/new)</span>
-              <ExternalLink className="w-3.5 h-3.5" />
-            </a>
-
-            {customMeetUrl && customMeetUrl.includes('meet.google.com') && !customMeetUrl.includes('qck-care') && (
+        {/* Doctor Management Section: Update Google Meet Link */}
+        {isDoctor && (
+          <form onSubmit={handleSaveMeetUrl} className="pt-6 border-t border-slate-800 text-left space-y-3">
+            <label className="text-xs font-bold text-slate-300 flex items-center justify-between">
+              <span>Update / Change Google Meet Link:</span>
               <a
-                href={customMeetUrl}
+                href="https://meet.google.com/new"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-lg transition flex items-center gap-2 active:scale-95"
+                className="text-[11px] text-teal-400 hover:underline flex items-center gap-1"
               >
-                <Video className="w-4 h-4" />
-                <span>Join Assigned Google Meet</span>
-                <ExternalLink className="w-3.5 h-3.5" />
+                <Sparkles className="w-3 h-3" />
+                <span>Create New Google Meet</span>
               </a>
-            )}
-          </div>
-
-          {/* Paste & Share Google Meet URL (Doctor or Patient) */}
-          <form
-            onSubmit={handleSaveMeetUrl}
-            className="w-full max-w-lg bg-slate-900 p-4 rounded-2xl border border-slate-800 space-y-3 text-left"
-          >
-            <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-              <LinkIcon className="w-3.5 h-3.5 text-teal-400" />
-              <span>Share Authentic Google Meet Link:</span>
             </label>
-
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <input
                 type="url"
                 value={customMeetUrl}
-                onChange={(e) => setCustomMeetUrl(e.target.value)}
-                placeholder="https://meet.google.com/abc-defg-hij"
-                className="flex-1 px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-hidden focus:border-blue-500 font-mono"
+                onChange={(e) => {
+                  setCustomMeetUrl(e.target.value);
+                  setSaveError('');
+                }}
+                placeholder="https://meet.google.com/xxx-yyyy-zzz"
+                className="flex-1 px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white font-mono text-xs focus:ring-2 focus:ring-teal-500 focus:outline-hidden"
               />
               <button
                 type="submit"
-                disabled={savingMeetUrl || !customMeetUrl}
-                className="px-4 py-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition shrink-0"
+                disabled={savingMeetUrl}
+                className="px-4 py-2.5 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer"
               >
-                {savingMeetUrl ? 'Saving...' : 'Save & Share'}
+                <Send className="w-3.5 h-3.5" />
+                <span>{savingMeetUrl ? 'Updating...' : 'Update & Email Patient'}</span>
               </button>
             </div>
-
-            {meetSaveSuccess && (
-              <p className="text-xs font-bold text-emerald-400 flex items-center gap-1">
-                <Check className="w-3.5 h-3.5" /> Google Meet link shared successfully with participant!
+            {saveError && (
+              <p className="text-xs text-rose-400 flex items-center gap-1">
+                <AlertCircle className="w-3.5 h-3.5" /> {saveError}
               </p>
             )}
-
-            <p className="text-[11px] text-slate-400">
-              Paste the link generated from Google Meet and click Save so {otherParticipantName} sees it immediately.
-            </p>
+            {meetSaveSuccess && (
+              <p className="text-xs text-emerald-400 flex items-center gap-1">
+                <Check className="w-3.5 h-3.5" /> Google Meet link updated and dispatched to patient email successfully!
+              </p>
+            )}
           </form>
+        )}
 
-          <button
-            onClick={() => setActiveTab('live')}
-            className="text-xs font-bold text-teal-400 hover:text-teal-300 underline"
-          >
-            ← Back to QuickCare Direct Live Video Room
-          </button>
+        {/* Pre-Call Clinical Checklist */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-6 border-t border-slate-800 text-left text-xs">
+          <div className="p-3 bg-slate-800/60 rounded-xl border border-slate-800 space-y-1">
+            <span className="font-bold text-slate-200">1. Audio & Camera</span>
+            <p className="text-[11px] text-slate-400">Ensure microphone and webcam are enabled in your browser.</p>
+          </div>
+          <div className="p-3 bg-slate-800/60 rounded-xl border border-slate-800 space-y-1">
+            <span className="font-bold text-slate-200">2. Quiet Setting</span>
+            <p className="text-[11px] text-slate-400">Sit in a well-lit, private room for clear audio and clinical privacy.</p>
+          </div>
+          <div className="p-3 bg-slate-800/60 rounded-xl border border-slate-800 space-y-1">
+            <span className="font-bold text-slate-200">3. Prior Records</span>
+            <p className="text-[11px] text-slate-400">Keep prior lab reports, prescriptions, and symptoms ready.</p>
+          </div>
         </div>
-      )}
+
+        <div className="flex items-center justify-center gap-2 text-xs text-slate-500 pt-2">
+          <Shield className="w-4 h-4 text-emerald-400" />
+          <span>Encrypted Medical Telehealth via Official Google Meet • QuickCare Network</span>
+        </div>
+      </div>
     </div>
   );
 };

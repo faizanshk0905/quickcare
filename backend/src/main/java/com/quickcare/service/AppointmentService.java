@@ -752,8 +752,8 @@ public class AppointmentService {
             throw new UnauthorizedException("Only the assigned doctor can send consultation links.");
         }
 
-        if (videoLink == null || !videoLink.trim().matches("^https?://.+")) {
-            throw new BadRequestException("Please enter a valid video meeting URL (e.g., Google Meet or Zoom link).");
+        if (videoLink == null || !videoLink.trim().toLowerCase().contains("meet.google.com")) {
+            throw new BadRequestException("Please enter a valid Google Meet link (e.g., https://meet.google.com/xxx-yyyy-zzz).");
         }
 
         String trimmedLink = videoLink.trim();

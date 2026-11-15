@@ -77,8 +77,8 @@ export const AppointmentCard = ({
 
   const handleSendVideoLink = async () => {
     const trimmed = (videoLinkInput || '').trim();
-    if (!trimmed || !trimmed.startsWith('http')) {
-      setSendLinkError('Please enter a valid video meeting URL starting with http:// or https://');
+    if (!trimmed || !trimmed.toLowerCase().includes('meet.google.com')) {
+      setSendLinkError('Please enter a valid Google Meet URL (e.g. https://meet.google.com/xxx-yyyy-zzz)');
       return;
     }
     try {
@@ -89,7 +89,7 @@ export const AppointmentCard = ({
         trimmed
       );
       setSendLinkSuccess(
-        res?.message || `Video consultation link sent to ${appointment.patientEmail || 'patient'} successfully!`
+        res?.message || `Google Meet invitation sent to ${appointment.patientEmail || 'patient'} successfully!`
       );
       setTimeout(() => {
         setShowSendLinkModal(false);
@@ -246,14 +246,8 @@ export const AppointmentCard = ({
     }
   };
 
-  const cleanId = (appointment.appointmentId || 'med').replace(/[^a-zA-Z0-9]/g, '');
-  const directLiveUrl = `https://meet.jit.si/QuickCare-${cleanId}`;
-  const isRealMeet = Boolean(
-    appointment.googleMeetLink &&
-      !appointment.googleMeetLink.includes('qck-care') &&
-      !appointment.googleMeetLink.includes('qck-card')
-  );
-  const meetUrl = isRealMeet ? appointment.googleMeetLink : 'https://meet.google.com/new';
+  const directLiveUrl = appointment.googleMeetLink || appointment.videoConsultationLink || 'https://meet.google.com/new';
+  const meetUrl = appointment.googleMeetLink || appointment.videoConsultationLink || 'https://meet.google.com/new';
 
   return (
     <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs hover:shadow-md transition space-y-4">
@@ -420,10 +414,10 @@ export const AppointmentCard = ({
               <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/50 rounded-xl border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-900 dark:text-emerald-200 space-y-1">
                 <div className="flex items-center gap-1.5 font-bold">
                   <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>Dr. {appointment.doctorName?.replace(/^Dr\.\s*/i, '')} has sent your consultation link!</span>
+                  <span>Dr. {appointment.doctorName?.replace(/^Dr\.\s*/i, '')} has sent your Google Meet link!</span>
                 </div>
                 <p className="text-[11px] text-emerald-800/90 dark:text-emerald-300/90">
-                  The link has also been sent to your registered email: <strong>{appointment.patientEmail}</strong>. Please join at your scheduled time ({appointment.appointmentDate} at {appointment.appointmentTime}).
+                  The invitation has also been sent to your registered email: <strong>{appointment.patientEmail}</strong>. Please join at your scheduled time ({appointment.appointmentDate} at {appointment.appointmentTime}).
                 </p>
               </div>
 
@@ -432,10 +426,10 @@ export const AppointmentCard = ({
                   href={consultationUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex-1 py-3 px-5 text-center text-xs font-black uppercase tracking-wider rounded-xl bg-gradient-to-r from-teal-600 to-blue-600 hover:from-teal-700 hover:to-blue-700 text-white shadow-md transition flex items-center justify-center gap-2 active:scale-95"
+                  className="flex-1 py-3 px-5 text-center text-xs font-black uppercase tracking-wider rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-md transition flex items-center justify-center gap-2 active:scale-95"
                 >
                   <Video className="w-4 h-4" />
-                  <span>Join Video Consultation</span>
+                  <span>Join Google Meet</span>
                   <ExternalLink className="w-3.5 h-3.5" />
                 </a>
 
@@ -465,13 +459,13 @@ export const AppointmentCard = ({
             <div className="p-4 bg-amber-50/80 dark:bg-amber-950/40 rounded-xl border border-amber-200 dark:border-amber-900/60 text-xs text-amber-900 dark:text-amber-200 space-y-2">
               <div className="flex items-center gap-2 font-bold text-amber-800 dark:text-amber-300">
                 <Clock className="w-4 h-4 text-amber-600 animate-spin" />
-                <span>Waiting for Doctor to Send Link</span>
+                <span>Waiting for Doctor's Google Meet Link</span>
               </div>
               <p className="text-[11px] text-amber-800/90 dark:text-amber-300/90 leading-relaxed">
                 Your video consultation with <strong>Dr. {appointment.doctorName?.replace(/^Dr\.\s*/i, '')}</strong> is confirmed for <strong>{appointment.appointmentDate} at {appointment.appointmentTime}</strong>.
               </p>
               <div className="p-2.5 rounded-lg bg-white/70 dark:bg-slate-900/60 border border-amber-200/60 dark:border-amber-800/40 text-[11px] text-slate-600 dark:text-slate-400">
-                🛡️ <strong>Doctor-Controlled Link:</strong> For clinical security and scheduling privacy, the doctor will review and dispatch your Google Meet or Zoom link prior to the appointment. It will appear right here and will be delivered directly to your registered email (<strong>{appointment.patientEmail}</strong>).
+                🛡️ <strong>Doctor-Controlled Link:</strong> For clinical privacy, your doctor will send your official Google Meet invitation link prior to the consultation. It will appear right here and will be delivered directly to your registered email (<strong>{appointment.patientEmail}</strong>).
               </div>
             </div>
           )}
@@ -721,10 +715,10 @@ export const AppointmentCard = ({
                       const clean = (appointment.appointmentId || 'live').replace(/[^a-zA-Z0-9]/g, '').slice(0, 8);
                       setVideoLinkInput(`https://meet.google.com/qck-care-${clean}`);
                     }}
-                    className="text-[10px] font-bold text-teal-600 hover:text-teal-700 dark:text-teal-400 flex items-center gap-1"
+                    className="text-[10px] font-bold text-teal-600 hover:text-teal-700 dark:text-teal-400 flex items-center gap-1 cursor-pointer"
                   >
                     <Sparkles className="w-3 h-3" />
-                    <span>Auto-Fill Google Meet URL</span>
+                    <span>Generate Google Meet Link</span>
                   </button>
                 </div>
                 <input
@@ -734,11 +728,11 @@ export const AppointmentCard = ({
                     setVideoLinkInput(e.target.value);
                     setSendLinkError('');
                   }}
-                  placeholder="Paste Google Meet, Zoom, or video conference URL (e.g. https://meet.google.com/abc-defg-hij)"
+                  placeholder="https://meet.google.com/xxx-yyyy-zzz"
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono text-xs focus:ring-2 focus:ring-teal-500 focus:outline-hidden"
                 />
                 <p className="text-[11px] text-slate-400 mt-1">
-                  Accepts any valid video conferencing URL (Google Meet, Zoom, Microsoft Teams, etc.)
+                  Google Meet is the exclusive video platform (e.g. https://meet.google.com/xxx-yyyy-zzz)
                 </p>
               </div>
 
@@ -800,7 +794,7 @@ export const AppointmentCard = ({
                 className="px-5 py-2 text-xs font-extrabold text-white bg-gradient-to-r from-teal-600 to-blue-600 hover:from-teal-700 hover:to-blue-700 disabled:opacity-50 rounded-xl shadow-md transition flex items-center gap-1.5 active:scale-95"
               >
                 <Send className="w-3.5 h-3.5" />
-                <span>{submittingLink ? 'Sending Link & Email...' : 'Send Link to Patient'}</span>
+                <span>{submittingLink ? 'Dispatching Invitation...' : 'Send Google Meet Invitation'}</span>
               </button>
             </div>
           </div>

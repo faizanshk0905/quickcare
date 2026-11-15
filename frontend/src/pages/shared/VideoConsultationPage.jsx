@@ -251,20 +251,22 @@ export const VideoConsultationPage = () => {
             <button
               type="button"
               onClick={() => setBypassWaiting(true)}
-              className="w-full sm:w-auto px-6 py-3.5 bg-gradient-to-r from-teal-600 to-blue-600 hover:from-teal-700 hover:to-blue-700 text-white font-extrabold text-xs uppercase tracking-wider rounded-2xl shadow-lg shadow-teal-500/25 transition active:scale-95 flex items-center justify-center gap-2"
+              className="w-full sm:w-auto px-6 py-3.5 bg-gradient-to-r from-teal-600 to-blue-600 hover:from-teal-700 hover:to-blue-700 text-white font-extrabold text-xs uppercase tracking-wider rounded-2xl shadow-lg shadow-teal-500/25 transition active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
             >
               <Video className="w-4 h-4" />
-              <span>Enter Live Video Room Now</span>
+              <span>Enter Consultation Portal</span>
             </button>
-            <a
-              href={`https://meet.jit.si/QuickCare-${(appointment.appointmentId || 'live').replace(/[^a-zA-Z0-9]/g, '')}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full sm:w-auto px-5 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-2xl transition flex items-center justify-center gap-1.5"
-            >
-              <span>Open in Separate Tab</span>
-              <ExternalLink className="w-3.5 h-3.5" />
-            </a>
+            {(appointment.googleMeetLink || appointment.videoConsultationLink) && (
+              <a
+                href={appointment.googleMeetLink || appointment.videoConsultationLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full sm:w-auto px-5 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-2xl shadow-md transition flex items-center justify-center gap-1.5"
+              >
+                <span>Join Google Meet</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            )}
           </div>
 
           {/* Queue Position Card */}
@@ -290,7 +292,7 @@ export const VideoConsultationPage = () => {
 
           <div className="flex items-center justify-center gap-2 text-xs font-semibold text-slate-400">
             <ShieldCheck className="w-4 h-4 text-emerald-600" />
-            <span>Encrypted WebRTC Session • Real camera & mic active on entry</span>
+            <span>Encrypted Google Meet Consultation • Camera & microphone enabled</span>
           </div>
         </div>
       ) : isDoctorWaitingToAdmit ? (

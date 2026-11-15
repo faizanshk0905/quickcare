@@ -1,135 +1,211 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { doctorService } from '../../services/doctorService';
 import { appointmentService } from '../../services/appointmentService';
+import { prescriptionService } from '../../services/prescriptionService';
 import { AppointmentCard } from '../../components/common/AppointmentCard';
 import {
-  Stethoscope,
+  LayoutDashboard,
   Calendar,
   Clock,
-  CheckCircle,
   Users,
   Video,
-  FilePlus,
   Sliders,
-  ArrowRight,
-  ShieldAlert,
+  Bell,
+  User,
+  LogOut,
+  Stethoscope,
+  CheckCircle2,
   AlertCircle,
+  XCircle,
+  Send,
   ExternalLink,
   Copy,
   Check,
-  Send,
-  Mail,
+  Search,
+  Filter,
+  ShieldCheck,
   Sparkles,
+  Menu,
+  X,
+  FilePlus,
+  Plus,
+  Clock4,
+  Mail,
+  Phone,
+  Building,
+  Award,
+  ChevronRight,
+  RefreshCw,
+  HeartPulse,
 } from 'lucide-react';
 
 export const DoctorDashboard = () => {
-  const { user } = useAuth();
+  const { user, logout, updateUser } = useAuth();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Active Tab from URL query (?tab=overview|appointments|schedule|patients|video|availability|notifications|profile)
+  const currentTab = searchParams.get('tab') || 'overview';
+  const setActiveTab = (tab) => {
+    setSearchParams({ tab });
+    setMobileMenuOpen(false);
+  };
+
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [doctor, setDoctor] = useState(null);
   const [appointments, setAppointments] = useState([]);
-  const [waitingQueue, setWaitingQueue] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+  const [prescriptions, setPrescriptions] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [copiedMeetId, setCopiedMeetId] = useState('');
-  const [editingMeetId, setEditingMeetId] = useState(null);
-  const [customMeetLink, setCustomMeetLink] = useState('');
-  const [savingLink, setSavingLink] = useState(false);
 
-  // Send Video Consultation Link Modal State
-  const [sendLinkApt, setSendLinkApt] = useState(null);
-  const [videoLinkInput, setVideoLinkInput] = useState('');
-  const [submittingLink, setSubmittingLink] = useState(false);
-  const [sendLinkSuccess, setSendLinkSuccess] = useState('');
-  const [sendLinkError, setSendLinkError] = useState('');
+  // Send Google Meet Link Modal
+  const [selectedVideoApt, setSelectedVideoApt] = useState(null);
+  const [meetLinkInput, setMeetLinkInput] = useState('');
+  const [submittingMeetLink, setSubmittingMeetLink] = useState(false);
+  const [meetModalSuccess, setMeetModalSuccess] = useState('');
+  const [meetModalError, setMeetModalError] = useState('');
+  const [copiedLink, setCopiedLink] = useState(false);
 
-  const handleOpenSendLinkModal = (apt) => {
-    setSendLinkApt(apt);
-    setVideoLinkInput(apt.videoConsultationLink || apt.googleMeetLink || '');
-    setSendLinkError('');
-    setSendLinkSuccess('');
-  };
+  // Reject Modal
+  const [rejectApt, setRejectApt] = useState(null);
+  const [rejectReason, setRejectReason] = useState('Doctor is unavailable at requested time.');
+  const [submittingReject, setSubmittingReject] = useState(false);
 
-  const handleSendLinkSubmit = async () => {
-    if (!sendLinkApt) return;
-    const trimmed = (videoLinkInput || '').trim();
-    if (!trimmed || !trimmed.startsWith('http')) {
-      setSendLinkError('Please enter a valid video meeting URL starting with http:// or https://');
-      return;
-    }
-    try {
-      setSubmittingLink(true);
-      setSendLinkError('');
-      const res = await appointmentService.sendVideoConsultationLink(sendLinkApt.appointmentId, trimmed);
-      setSendLinkSuccess(
-        res?.message || `Video consultation link sent to ${sendLinkApt.patientEmail || 'patient'} successfully!`
-      );
-      setTimeout(() => {
-        setSendLinkApt(null);
-        setSendLinkSuccess('');
-        fetchDoctorData();
-      }, 1500);
-    } catch (err) {
-      setSendLinkError(
-        err.response?.data?.message || err.message || 'Failed to dispatch consultation link.'
-      );
-    } finally {
-      setSubmittingLink(false);
-    }
-  };
+  // Patient Medical History Modal
+  const [selectedPatientHistory, setSelectedPatientHistory] = useState(null);
 
-  const handleSaveMeetLink = async (aptId) => {
-    if (!customMeetLink) return;
-    try {
-      setSavingLink(true);
-      await appointmentService.updateMeetingLink(aptId, customMeetLink.trim());
-      setEditingMeetId(null);
-      setCustomMeetLink('');
-      fetchDoctorData();
-    } catch (err) {
-      alert('Failed to update Google Meet link: ' + err.message);
-    } finally {
-      setSavingLink(false);
-    }
-  };
+  // Filter & Search states for Appointments Tab
+  const [aptStatusFilter, setAptStatusFilter] = useState('ALL');
+  const [aptTypeFilter, setAptTypeFilter] = useState('ALL');
+  const [aptSearchQuery, setAptSearchQuery] = useState('');
 
-  const handleCopyLink = (meetUrl, id) => {
-    if (!meetUrl) return;
-    navigator.clipboard.writeText(meetUrl);
-    setCopiedMeetId(id);
-    setTimeout(() => setCopiedMeetId(''), 2000);
-  };
+  // Video Tab Filter
+  const [videoFilter, setVideoFilter] = useState('ALL'); // 'ALL' | 'PENDING' | 'SENT' | 'COMPLETED'
+  const [videoSearch, setVideoSearch] = useState('');
 
+  // Patients Tab Search
+  const [patientSearch, setPatientSearch] = useState('');
+
+  // Availability Tab State
+  const [availableDays, setAvailableDays] = useState(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']);
+  const [workingStartTime, setWorkingStartTime] = useState('09:00 AM');
+  const [workingEndTime, setWorkingEndTime] = useState('05:00 PM');
+  const [breakStartTime, setBreakStartTime] = useState('01:00 PM');
+  const [breakEndTime, setBreakEndTime] = useState('02:00 PM');
+  const [slotDuration, setSlotDuration] = useState(15);
+  const [savingAvailability, setSavingAvailability] = useState(false);
+  const [availabilitySuccess, setAvailabilitySuccess] = useState('');
+
+  // Profile Tab State
+  const [profileForm, setProfileForm] = useState({
+    fullName: '',
+    specialization: 'General Physician',
+    qualification: 'MBBS, MD',
+    experience: 5,
+    consultationFee: 600,
+    clinicAddress: '',
+    medicalRegistrationNumber: '',
+    bio: '',
+    profileImage: '',
+    gender: 'Male',
+  });
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileSuccess, setProfileSuccess] = useState('');
+  const [profileError, setProfileError] = useState('');
+
+  // Online status toggle
+  const [onlineStatus, setOnlineStatus] = useState('AVAILABLE_FOR_VIDEO');
+
+  // --- Fetch Doctor Profile and Doctor-Specific Appointments ---
   const fetchDoctorData = async () => {
     try {
       setLoading(true);
       const docRes = await doctorService.getMyDoctorProfile();
       const currentDoc = docRes?.data || null;
 
-      const [aptRes, queueRes] = await Promise.all([
-        appointmentService.getDoctorAppointments(currentDoc?.doctorId),
-        appointmentService.getDoctorWaitingQueue(currentDoc?.doctorId).catch(() => ({ data: [] })),
+      // Identify clean name
+      const authRawName = user?.fullName || 'Doctor';
+      const cleanAuthName = authRawName.replace(/^(?:dr\.?\s*)+/i, '').trim();
+
+      const resolvedDoc = currentDoc || {
+        doctorId: user?.doctorId || user?.userId || user?.uid || 'doc_current',
+        uid: user?.userId || user?.uid,
+        fullName: `Dr. ${cleanAuthName}`,
+        specialization: user?.specialization || 'General Physician',
+        qualification: user?.qualification || 'MBBS, MD',
+        consultationFee: user?.consultationFee || 600,
+        experience: user?.experience || 5,
+        clinicAddress: user?.clinicAddress || user?.address || 'QuickCare Telehealth Center',
+        medicalRegistrationNumber: user?.medicalRegistrationNumber || 'REG-101',
+        bio: user?.bio || 'Dedicated medical consultant at QuickCare Healthcare.',
+        gender: user?.gender || 'Male',
+        availableDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+        workingStartTime: '09:00 AM',
+        workingEndTime: '05:00 PM',
+        slotDurationMinutes: 15,
+        onlineStatus: 'AVAILABLE_FOR_VIDEO',
+      };
+
+      setDoctor(resolvedDoc);
+      setOnlineStatus(resolvedDoc.onlineStatus || 'AVAILABLE_FOR_VIDEO');
+
+      // Populate availability
+      if (resolvedDoc.availableDays && resolvedDoc.availableDays.length > 0) {
+        setAvailableDays(resolvedDoc.availableDays);
+      }
+      if (resolvedDoc.workingStartTime) setWorkingStartTime(resolvedDoc.workingStartTime);
+      if (resolvedDoc.workingEndTime) setWorkingEndTime(resolvedDoc.workingEndTime);
+      if (resolvedDoc.breakStartTime) setBreakStartTime(resolvedDoc.breakStartTime);
+      if (resolvedDoc.breakEndTime) setBreakEndTime(resolvedDoc.breakEndTime);
+      if (resolvedDoc.slotDurationMinutes) setSlotDuration(resolvedDoc.slotDurationMinutes);
+
+      // Populate profile form
+      setProfileForm({
+        fullName: (resolvedDoc.fullName || '').replace(/^(?:dr\.?\s*)+/i, '').trim(),
+        specialization: resolvedDoc.specialization || 'General Physician',
+        qualification: resolvedDoc.qualification || 'MBBS, MD',
+        experience: resolvedDoc.experience || 5,
+        consultationFee: resolvedDoc.consultationFee || 600,
+        clinicAddress: resolvedDoc.clinicAddress || '',
+        medicalRegistrationNumber: resolvedDoc.medicalRegistrationNumber || '',
+        bio: resolvedDoc.bio || '',
+        profileImage: resolvedDoc.profileImage || '',
+        gender: resolvedDoc.gender || 'Male',
+      });
+
+      // Fetch appointments strictly for this doctor
+      const [aptRes, rxRes] = await Promise.all([
+        appointmentService.getDoctorAppointments(resolvedDoc.doctorId),
+        prescriptionService.getDoctorPrescriptions().catch(() => ({ data: [] })),
       ]);
 
-      if (currentDoc) {
-        setDoctor(currentDoc);
-      } else {
-        const cleanName = (user?.fullName || 'Doctor').replace(/^dr\.\s*/i, '').trim();
-        setDoctor({
-          doctorId: user?.userId || user?.uid || 'doc_current',
-          fullName: `Dr. ${cleanName}`,
-          specialization: user?.specialization || 'General Physician',
-          qualification: user?.qualification || 'MBBS, MD',
-          consultationFee: user?.consultationFee || 600,
-        });
-      }
       if (aptRes && aptRes.data) {
         setAppointments(aptRes.data);
       }
-      if (queueRes && queueRes.data) {
-        setWaitingQueue(queueRes.data);
+      if (rxRes && rxRes.data) {
+        setPrescriptions(rxRes.data);
       }
+
+      // Read local notifications for this doctor
+      try {
+        const rawNotifs = localStorage.getItem('quickcare_notifications');
+        if (rawNotifs) {
+          const allN = JSON.parse(rawNotifs);
+          const docN = allN.filter(
+            (n) =>
+              n.recipientUid === resolvedDoc.uid ||
+              n.recipientUid === resolvedDoc.doctorId ||
+              n.recipientEmail === resolvedDoc.email ||
+              n.type?.startsWith('DOCTOR') ||
+              n.type === 'APPOINTMENT_BOOKED'
+          );
+          setNotifications(docN);
+        }
+      } catch (e) {}
     } catch (err) {
-      console.warn('Doctor dashboard data load notice:', err.message);
+      console.warn('Doctor clinical portal fetch note:', err.message);
     } finally {
       setLoading(false);
     }
@@ -137,608 +213,1788 @@ export const DoctorDashboard = () => {
 
   useEffect(() => {
     fetchDoctorData();
+  }, [user?.userId, user?.uid, user?.email]);
 
-    // Poll live waiting queue every 4 seconds for THIS doctor
-    const interval = setInterval(async () => {
-      try {
-        const qRes = await appointmentService.getDoctorWaitingQueue(doctor?.doctorId);
-        if (qRes && qRes.data) {
-          setWaitingQueue(qRes.data);
+  // Dynamic Statistics computed from real records for THIS doctor
+  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+
+  const stats = useMemo(() => {
+    const total = appointments.length;
+    const todayCount = appointments.filter((a) => a.appointmentDate === todayStr).length;
+    const pendingCount = appointments.filter((a) => a.status === 'PENDING').length;
+    const completedCount = appointments.filter((a) => a.status === 'COMPLETED').length;
+    const videoCount = appointments.filter((a) => a.consultationType === 'VIDEO').length;
+    const pendingVideoLinks = appointments.filter(
+      (a) => a.consultationType === 'VIDEO' && a.status !== 'CANCELLED' && a.status !== 'REJECTED' && !a.videoLinkSent
+    ).length;
+
+    return {
+      total,
+      todayCount,
+      pendingCount,
+      completedCount,
+      videoCount,
+      pendingVideoLinks,
+    };
+  }, [appointments, todayStr]);
+
+  // Next Scheduled Patient (first upcoming confirmed/pending appointment)
+  const nextScheduledPatient = useMemo(() => {
+    const active = appointments.filter(
+      (a) =>
+        (a.status === 'CONFIRMED' || a.status === 'PENDING') &&
+        !a.slotReleased &&
+        a.appointmentDate >= todayStr
+    );
+    if (active.length === 0) return null;
+    active.sort((a, b) => {
+      const dateA = `${a.appointmentDate} ${a.appointmentTime}`;
+      const dateB = `${b.appointmentDate} ${b.appointmentTime}`;
+      return dateA.localeCompare(dateB);
+    });
+    return active[0];
+  }, [appointments, todayStr]);
+
+  // Today's Appointments sorted chronologically
+  const todayAppointments = useMemo(() => {
+    const list = appointments.filter((a) => a.appointmentDate === todayStr);
+    list.sort((a, b) => (a.appointmentTime || '').localeCompare(b.appointmentTime || ''));
+    return list;
+  }, [appointments, todayStr]);
+
+  // Unique Patients Roster for this Doctor
+  const patientRoster = useMemo(() => {
+    const map = new Map();
+    appointments.forEach((a) => {
+      const key = a.patientUid || a.patientId || (a.patientEmail || '').toLowerCase();
+      if (!key) return;
+      if (!map.has(key)) {
+        map.set(key, {
+          patientId: a.patientId,
+          patientUid: a.patientUid,
+          patientName: a.patientName || 'Patient',
+          patientEmail: a.patientEmail || '',
+          patientPhone: a.patientPhone || 'Not specified',
+          totalVisits: 1,
+          lastVisitDate: a.appointmentDate,
+          lastVisitTime: a.appointmentTime,
+          latestReason: a.reason || 'General Consultation',
+          appointments: [a],
+        });
+      } else {
+        const item = map.get(key);
+        item.totalVisits += 1;
+        item.appointments.push(a);
+        if (a.appointmentDate > item.lastVisitDate) {
+          item.lastVisitDate = a.appointmentDate;
+          item.lastVisitTime = a.appointmentTime;
+          item.latestReason = a.reason || item.latestReason;
         }
-      } catch (ignored) {}
-    }, 4000);
+      }
+    });
+    return Array.from(map.values());
+  }, [appointments]);
 
-    return () => clearInterval(interval);
-  }, [doctor?.doctorId]);
-
-  const total = appointments.length;
-  const today = new Date().toISOString().split('T')[0];
-  const todayApts = appointments.filter((a) => a.appointmentDate === today);
-  const pendingRequests = appointments.filter((a) => a.status === 'PENDING');
-  const confirmed = appointments.filter((a) => a.status === 'CONFIRMED');
-  const completed = appointments.filter((a) => a.status === 'COMPLETED');
-  const uniquePatients = new Set(appointments.map((a) => a.patientId)).size;
-
-  const handleStatusChange = async (appointmentId, status) => {
+  // Handle Status Changes (Approve, Complete, Cancel)
+  const handleStatusChange = async (appointmentId, newStatus) => {
     try {
-      await appointmentService.updateStatus(appointmentId, status);
+      await appointmentService.updateStatus(appointmentId, newStatus);
       fetchDoctorData();
     } catch (err) {
-      alert(err.response?.data?.message || err.message || 'Action failed.');
+      alert(err.response?.data?.message || err.message || 'Status update failed.');
     }
   };
 
+  // Handle Reject Submit
+  const handleRejectSubmit = async (e) => {
+    e.preventDefault();
+    if (!rejectApt) return;
+    try {
+      setSubmittingReject(true);
+      await appointmentService.rejectAppointment(rejectApt.appointmentId, { reason: rejectReason });
+      setRejectApt(null);
+      fetchDoctorData();
+    } catch (err) {
+      alert('Failed to decline appointment: ' + err.message);
+    } finally {
+      setSubmittingReject(false);
+    }
+  };
+
+  // Open Google Meet Modal
+  const handleOpenMeetModal = (apt) => {
+    setSelectedVideoApt(apt);
+    setMeetLinkInput(apt.googleMeetLink || apt.videoConsultationLink || '');
+    setMeetModalError('');
+    setMeetModalSuccess('');
+  };
+
+  // Send Google Meet Invitation
+  const handleSendGoogleMeetSubmit = async (e) => {
+    e.preventDefault();
+    if (!selectedVideoApt) return;
+
+    const trimmed = (meetLinkInput || '').trim();
+    if (!trimmed || !trimmed.toLowerCase().includes('meet.google.com')) {
+      setMeetModalError('Please enter a valid Google Meet URL containing meet.google.com (e.g. https://meet.google.com/xxx-yyyy-zzz)');
+      return;
+    }
+
+    try {
+      setSubmittingMeetLink(true);
+      setMeetModalError('');
+      const res = await appointmentService.sendVideoConsultationLink(
+        selectedVideoApt.appointmentId,
+        trimmed
+      );
+      setMeetModalSuccess(
+        res?.message || `Google Meet invitation sent to ${selectedVideoApt.patientEmail || 'patient'} successfully!`
+      );
+      setTimeout(() => {
+        setSelectedVideoApt(null);
+        setMeetModalSuccess('');
+        fetchDoctorData();
+      }, 1500);
+    } catch (err) {
+      setMeetModalError(err.message || 'Failed to dispatch Google Meet invitation.');
+    } finally {
+      setSubmittingMeetLink(false);
+    }
+  };
+
+  // Auto-generate Google Meet URL
+  const handleAutoGenerateMeetLink = () => {
+    const cleanApt = (selectedVideoApt?.appointmentId || 'live').replace(/[^a-zA-Z0-9]/g, '').slice(0, 8);
+    setMeetLinkInput(`https://meet.google.com/qck-${cleanApt}`);
+    setMeetModalError('');
+  };
+
+  // Copy Link helper
+  const handleCopy = (text) => {
+    navigator.clipboard.writeText(text);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2000);
+  };
+
+  // Save Availability Settings
+  const handleSaveAvailability = async (e) => {
+    e.preventDefault();
+    setSavingAvailability(true);
+    setAvailabilitySuccess('');
+    try {
+      const updatePayload = {
+        doctorId: doctor?.doctorId,
+        availableDays,
+        workingStartTime,
+        workingEndTime,
+        breakStartTime,
+        breakEndTime,
+        slotDurationMinutes: Number(slotDuration),
+        workingHours: `${workingStartTime} - ${workingEndTime}`,
+      };
+      await doctorService.updateDoctorProfile(updatePayload);
+      setAvailabilitySuccess('Availability schedule and slot durations updated successfully!');
+      setTimeout(() => setAvailabilitySuccess(''), 4000);
+      fetchDoctorData();
+    } catch (err) {
+      alert('Failed to save availability: ' + err.message);
+    } finally {
+      setSavingAvailability(false);
+    }
+  };
+
+  // Save Doctor Profile
+  const handleSaveProfile = async (e) => {
+    e.preventDefault();
+    setSavingProfile(true);
+    setProfileError('');
+    setProfileSuccess('');
+    try {
+      const cleanName = profileForm.fullName.replace(/^(?:dr\.?\s*)+/i, '').trim();
+      const updatedPayload = {
+        ...doctor,
+        fullName: `Dr. ${cleanName}`,
+        specialization: profileForm.specialization,
+        qualification: profileForm.qualification,
+        experience: Number(profileForm.experience),
+        consultationFee: Number(profileForm.consultationFee),
+        clinicAddress: profileForm.clinicAddress,
+        medicalRegistrationNumber: profileForm.medicalRegistrationNumber,
+        bio: profileForm.bio,
+        profileImage: profileForm.profileImage,
+        gender: profileForm.gender,
+      };
+      await doctorService.updateDoctorProfile(updatedPayload);
+      updateUser({
+        fullName: `Dr. ${cleanName}`,
+        specialization: profileForm.specialization,
+        qualification: profileForm.qualification,
+        consultationFee: Number(profileForm.consultationFee),
+      });
+      setProfileSuccess('Doctor clinical profile updated successfully!');
+      setTimeout(() => setProfileSuccess(''), 4000);
+      fetchDoctorData();
+    } catch (err) {
+      setProfileError(err.message || 'Failed to update profile.');
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  // Handle Logout
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
+  const cleanDoctorDisplay = (doctor?.fullName || user?.fullName || 'Doctor')
+    .replace(/^(?:dr\.?\s*)+/i, '')
+    .trim();
+
+  // Navigation Items for Sidebar (All 9 Requirements)
+  const navItems = [
+    { id: 'overview', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'appointments', label: 'Appointments', icon: Calendar, badge: stats.pendingCount },
+    { id: 'schedule', label: "Today's Schedule", icon: Clock, badge: stats.todayCount },
+    { id: 'patients', label: 'Patients', icon: Users, badge: patientRoster.length },
+    { id: 'video', label: 'Video Consultations', icon: Video, badge: stats.pendingVideoLinks, isMeet: true },
+    { id: 'availability', label: 'My Availability', icon: Sliders },
+    { id: 'notifications', label: 'Notifications', icon: Bell, badge: notifications.length },
+    { id: 'profile', label: 'My Profile', icon: User },
+  ];
+
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
-      {/* Verification Notice if Pending */}
-      {doctor?.verificationStatus === 'PENDING' && (
-        <div className="p-4 bg-amber-50 border border-amber-300 rounded-3xl flex items-center justify-between gap-4 text-xs text-amber-900 shadow-xs">
-          <div className="flex items-center gap-3">
-            <ShieldAlert className="w-6 h-6 text-amber-600 shrink-0" />
-            <div>
-              <p className="font-extrabold text-sm text-amber-950">Verification Pending Approval</p>
-              <p className="text-amber-800">
-                Your medical registration ({doctor?.medicalRegistrationNumber}) is undergoing admin credential verification. You will be able to receive public patients once activated.
-              </p>
-            </div>
+    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row">
+      {/* MOBILE TOP BAR */}
+      <div className="md:hidden bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between sticky top-0 z-40 shadow-xs">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-xl bg-teal-600 text-white flex items-center justify-center font-black text-sm">
+            QC
           </div>
-          <span className="px-3 py-1 bg-amber-200/80 font-bold rounded-full text-[11px] shrink-0">
-            Pending Review
-          </span>
+          <span className="font-extrabold text-sm text-slate-900">Dr. {cleanDoctorDisplay}</span>
         </div>
+        <button
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          className="p-2 text-slate-700 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+        >
+          {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+        </button>
+      </div>
+
+      {/* MOBILE DRAWER BACKDROP */}
+      {mobileMenuOpen && (
+        <div
+          onClick={() => setMobileMenuOpen(false)}
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-40 md:hidden"
+        />
       )}
 
-      {/* Doctor Header Banner */}
-      <div className="bg-gradient-to-r from-teal-700 via-teal-800 to-blue-800 rounded-3xl p-6 sm:p-8 text-white shadow-xl flex flex-col md:flex-row items-center justify-between gap-6">
-        <div className="space-y-2 text-center md:text-left">
-          <span className="px-3 py-1 rounded-full bg-white/20 text-xs font-bold backdrop-blur-md">
-            Doctor Clinical Portal
-          </span>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-            {(doctor?.fullName || user?.fullName || 'Doctor').startsWith('Dr.')
-              ? (doctor?.fullName || user?.fullName)
-              : `Dr. ${doctor?.fullName || user?.fullName || 'Doctor'}`}
-          </h1>
-          <p className="text-xs sm:text-sm text-teal-100 max-w-xl">
-            {doctor?.specialization || 'General Physician'} • {doctor?.qualification || 'MBBS, MD'} • Fee: ₹{doctor?.consultationFee || 600}
-          </p>
-
-          {/* Real-Time Live Status Toggle */}
-          <div className="flex flex-wrap items-center gap-1.5 bg-black/20 backdrop-blur-md p-1.5 rounded-2xl border border-white/20 mt-3">
-            <span className="text-[10px] uppercase font-extrabold text-teal-200 px-2">Availability:</span>
-            {[
-              { id: 'AVAILABLE_FOR_VIDEO', label: '24/7 Video Available', dot: 'bg-teal-300 animate-pulse' },
-              { id: 'ONLINE', label: 'Online', dot: 'bg-emerald-400' },
-              { id: 'BUSY', label: 'Busy', dot: 'bg-amber-400' },
-              { id: 'OFFLINE', label: 'Offline', dot: 'bg-slate-400' },
-            ].map((st) => (
-              <button
-                key={st.id}
-                type="button"
-                onClick={async () => {
-                  try {
-                    await doctorService.updateDoctorStatus(st.id);
-                    setDoctor((prev) => ({ ...prev, onlineStatus: st.id }));
-                  } catch (err) {
-                    console.error(err);
-                  }
-                }}
-                className={`px-3 py-1 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
-                  (doctor?.onlineStatus || 'AVAILABLE_FOR_VIDEO') === st.id
-                    ? 'bg-white text-teal-900 shadow-sm font-extrabold'
-                    : 'text-white/80 hover:bg-white/20'
-                }`}
-              >
-                <span className={`w-2 h-2 rounded-full ${st.dot}`} />
-                <span>{st.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3 shrink-0">
-          <Link
-            to="/doctor/availability"
-            className="px-4 py-2.5 bg-white text-teal-800 font-bold text-xs uppercase tracking-wider rounded-xl shadow-md hover:bg-teal-50 transition flex items-center gap-1.5"
-          >
-            <Sliders className="w-4 h-4" /> Manage Availability
-          </Link>
-          <Link
-            to="/doctor/prescriptions/new"
-            className="px-4 py-2.5 bg-teal-900/60 hover:bg-teal-900 text-white font-bold text-xs uppercase tracking-wider rounded-xl border border-white/20 backdrop-blur-md transition flex items-center gap-1.5"
-          >
-            <FilePlus className="w-4 h-4" /> Write Prescription
-          </Link>
-        </div>
-      </div>
-
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
-          <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
-            Today's Visits
-          </span>
-          <p className="text-2xl font-extrabold text-blue-600 dark:text-blue-400 mt-1">{todayApts.length}</p>
-          <span className="text-[10px] text-slate-400 dark:text-slate-500">Scheduled for today</span>
-        </div>
-
-        <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
-          <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider block">
-            Pending Requests
-          </span>
-          <p className="text-2xl font-extrabold text-amber-600 dark:text-amber-400 mt-1">{pendingRequests.length}</p>
-          <span className="text-[10px] text-amber-600 dark:text-amber-400">Action needed</span>
-        </div>
-
-        <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
-          <span className="text-[11px] font-bold text-teal-600 dark:text-teal-400 uppercase tracking-wider block">
-            Confirmed
-          </span>
-          <p className="text-2xl font-extrabold text-teal-600 dark:text-teal-400 mt-1">{confirmed.length}</p>
-          <span className="text-[10px] text-slate-400 dark:text-slate-500">Upcoming sessions</span>
-        </div>
-
-        <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
-          <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider block">
-            Completed
-          </span>
-          <p className="text-2xl font-extrabold text-emerald-700 dark:text-emerald-400 mt-1">{completed.length}</p>
-          <span className="text-[10px] text-slate-400 dark:text-slate-500">Prescribed cases</span>
-        </div>
-
-        <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs col-span-2 lg:col-span-1">
-          <span className="text-[11px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider block">
-            Total Patients
-          </span>
-          <p className="text-2xl font-extrabold text-purple-700 dark:text-purple-400 mt-1">{uniquePatients}</p>
-          <span className="text-[10px] text-slate-400 dark:text-slate-500">Unique individuals</span>
-        </div>
-      </div>
-
-      {/* GOOGLE MEET VIDEO CONSULTATIONS HUB */}
-      <div className="bg-gradient-to-r from-teal-900 via-slate-900 to-blue-950 p-6 sm:p-8 rounded-3xl text-white shadow-xl space-y-5 border border-teal-500/30">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/10">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-teal-500 text-slate-950 flex items-center justify-center font-bold shadow-md shadow-teal-500/20">
-              <Video className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-lg font-black tracking-tight">Telemedicine & Google Meet Hub</h2>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-teal-500/20 text-teal-300 border border-teal-400/30">
-                  Live Meeting Links
+      {/* SIDEBAR NAVIGATION (Desktop: Sticky Left, Mobile: Slide-Out Drawer) */}
+      <aside
+        className={`fixed md:sticky top-0 inset-y-0 left-0 z-50 w-72 bg-white border-r border-slate-200 flex flex-col justify-between transition-transform duration-300 ease-in-out md:translate-x-0 h-screen ${
+          mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        {/* Brand & Doctor Mini Profile */}
+        <div className="p-5 border-b border-slate-100 space-y-4">
+          <div className="flex items-center justify-between">
+            <Link to="/" className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-teal-600 to-blue-600 text-white flex items-center justify-center shadow-md shadow-teal-500/20">
+                <HeartPulse className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="font-black text-base tracking-tight text-slate-900">QUICKCARE</span>
+                <span className="block text-[10px] font-bold text-teal-600 uppercase tracking-wider">
+                  Clinical Portal
                 </span>
               </div>
-              <p className="text-xs text-teal-200/80">
-                Direct authorized Google Meet join links for patient video consultations
+            </Link>
+            <button
+              onClick={() => setMobileMenuOpen(false)}
+              className="md:hidden p-1.5 text-slate-400 hover:text-slate-600 rounded-lg"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Doctor Info Card */}
+          <div className="p-3 bg-gradient-to-br from-teal-50 to-blue-50/50 border border-teal-100/80 rounded-2xl flex items-center gap-3">
+            <div className="relative">
+              <img
+                src={
+                  doctor?.profileImage ||
+                  (doctor?.gender === 'Female'
+                    ? 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=400'
+                    : 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400')
+                }
+                alt={doctor?.fullName}
+                className="w-11 h-11 rounded-xl object-cover border-2 border-white shadow-xs"
+              />
+              <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-white" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-extrabold text-xs text-slate-900 truncate">Dr. {cleanDoctorDisplay}</p>
+              <p className="text-[11px] font-medium text-teal-700 truncate">
+                {doctor?.specialization || 'General Physician'}
               </p>
+              <span className="inline-block mt-0.5 px-2 py-0.5 rounded-md bg-teal-100/70 text-teal-800 text-[10px] font-bold">
+                {doctor?.verificationStatus === 'VERIFIED' ? 'Verified Doctor' : 'Review Pending'}
+              </span>
             </div>
           </div>
-          <span className="text-xs text-teal-300/80 font-mono">
-            {appointments.filter((a) => a.consultationType === 'VIDEO').length} Video Sessions Scheduled
-          </span>
         </div>
 
-        {(() => {
-          const videoApts = appointments.filter(
-            (a) => a.consultationType === 'VIDEO' && a.status !== 'CANCELLED' && a.status !== 'REJECTED'
-          );
-          if (videoApts.length === 0) {
+        {/* Navigation List (9 Structured Items) */}
+        <nav className="p-3 space-y-1 overflow-y-auto flex-1">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = currentTab === item.id;
             return (
-              <div className="p-6 rounded-2xl bg-white/5 border border-white/10 text-center text-xs text-teal-200/70">
-                No video appointments booked yet. When a patient books a video consultation, it will appear here for you to send the meeting link.
-              </div>
-            );
-          }
-          return (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {videoApts.map((apt) => {
-                const meetUrl = apt.videoConsultationLink || apt.googleMeetLink;
-                const isSent = Boolean(apt.videoLinkSent && meetUrl);
-                const isPending = apt.status === 'PENDING';
-
-                return (
-                  <div
-                    key={apt.appointmentId}
-                    className="p-5 rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 space-y-3.5 hover:border-teal-400/40 transition"
-                  >
-                    {/* Header info */}
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <span className="text-sm font-extrabold text-white block">
-                          {apt.patientName || 'Patient Consultation'}
-                        </span>
-                        <div className="flex items-center gap-1.5 text-[11px] text-teal-200 mt-0.5">
-                          <Mail className="w-3.5 h-3.5 text-teal-300 shrink-0" />
-                          <span className="font-mono">{apt.patientEmail || 'No registered email'}</span>
-                        </div>
-                        <span className="text-[11px] text-teal-200/90 block mt-0.5">
-                          📅 {apt.appointmentDate} at {apt.appointmentTime}
-                        </span>
-                      </div>
-
-                      <div className="text-right space-y-1">
-                        <span
-                          className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase border ${
-                            isPending
-                              ? 'bg-amber-400/20 text-amber-300 border-amber-400/40'
-                              : 'bg-emerald-400/20 text-emerald-300 border-emerald-400/40'
-                          }`}
-                        >
-                          {apt.status || 'CONFIRMED'}
-                        </span>
-                        <div>
-                          <span
-                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase border ${
-                              isSent
-                                ? 'bg-teal-500/20 text-teal-300 border-teal-400/40'
-                                : 'bg-amber-500/20 text-amber-300 border-amber-400/40'
-                            }`}
-                          >
-                            <span
-                              className={`w-1.5 h-1.5 rounded-full ${isSent ? 'bg-teal-400' : 'bg-amber-400'}`}
-                            />
-                            {isSent ? 'Video Link Sent' : 'Waiting for Doctor to Send Link'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Status & Actions */}
-                    {isSent ? (
-                      <div className="space-y-2 pt-2 border-t border-white/10 text-xs">
-                        <div className="flex items-center justify-between gap-2 bg-black/20 p-2.5 rounded-xl border border-white/10">
-                          <div className="truncate flex-1">
-                            <span className="text-[10px] text-teal-300/80 font-bold block uppercase">
-                              Active Consultation Link:
-                            </span>
-                            <a
-                              href={meetUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-teal-200 hover:text-white underline font-mono font-medium truncate block"
-                            >
-                              {meetUrl}
-                            </a>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => handleCopyLink(meetUrl, apt.appointmentId)}
-                            className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white shrink-0"
-                            title="Copy link"
-                          >
-                            {copiedMeetId === apt.appointmentId ? (
-                              <Check className="w-3.5 h-3.5 text-emerald-400" />
-                            ) : (
-                              <Copy className="w-3.5 h-3.5 text-slate-300" />
-                            )}
-                          </button>
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-2 pt-1">
-                          <a
-                            href={meetUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex-1 py-2 px-3 bg-gradient-to-r from-teal-500 to-blue-600 hover:from-teal-600 hover:to-blue-700 text-white font-extrabold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-1.5 active:scale-95"
-                          >
-                            <Video className="w-3.5 h-3.5 text-white" />
-                            <span>Join Video Consultation</span>
-                            <ExternalLink className="w-3 h-3 text-teal-200" />
-                          </a>
-
-                          <button
-                            type="button"
-                            onClick={() => handleOpenSendLinkModal(apt)}
-                            className="py-2 px-3 bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold text-xs rounded-xl transition flex items-center gap-1"
-                          >
-                            <Send className="w-3.5 h-3.5 text-teal-300" />
-                            <span>Update Link</span>
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs space-y-2.5">
-                        <p className="text-[11px] text-amber-200 leading-snug">
-                          ⚠️ <strong>Link Required:</strong> The patient cannot join until you send the video consultation link. Paste your Google Meet or Zoom meeting URL to dispatch it directly to <strong>{apt.patientEmail || 'the patient'}</strong>.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => handleOpenSendLinkModal(apt)}
-                          className="w-full py-2.5 px-4 bg-gradient-to-r from-amber-500 to-teal-500 hover:from-amber-600 hover:to-teal-600 text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl shadow-md transition flex items-center justify-center gap-1.5 active:scale-95"
-                        >
-                          <Send className="w-3.5 h-3.5" />
-                          <span>Send Video Consultation Link</span>
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })()}
-      </div>
-
-      {/* LIVE VIRTUAL WAITING QUEUE & ADMISSION */}
-      <div className="bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-md space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span className={`w-3 h-3 rounded-full ${waitingQueue.length > 0 ? 'bg-emerald-500 animate-ping' : 'bg-slate-300 dark:bg-slate-700'}`} />
-            <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">
-              Live Virtual Waiting Room ({waitingQueue.length} Patient{waitingQueue.length === 1 ? '' : 's'} Waiting)
-            </h2>
-          </div>
-          <span className="text-xs text-slate-400 font-medium">
-            One Doctor – One Active Consultation Enforced
-          </span>
-        </div>
-
-        {waitingQueue.length === 0 ? (
-          <div className="p-6 bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-800 rounded-2xl text-center text-xs text-slate-400 dark:text-slate-500">
-            No patients currently in the waiting room. Patients appear here the moment they check in for today's appointment.
-          </div>
-        ) : (
-          <div className="divide-y divide-slate-100 dark:divide-slate-800">
-            {waitingQueue.map((apt, index) => (
-              <div
-                key={apt.appointmentId}
-                className="py-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setActiveTab(item.id)}
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  isActive
+                    ? 'bg-teal-600 text-white shadow-md shadow-teal-600/25'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                }`}
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 text-teal-800 dark:text-teal-300 font-black text-xs flex items-center justify-center shrink-0">
-                    #{index + 1}
-                  </div>
+                  <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-500'}`} />
+                  <span>{item.label}</span>
+                </div>
+                {item.badge > 0 && (
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                      isActive
+                        ? 'bg-white text-teal-800'
+                        : item.isMeet
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : 'bg-teal-100 text-teal-800'
+                    }`}
+                  >
+                    {item.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Sidebar Footer with Logout (Item 9) */}
+        <div className="p-3 border-t border-slate-100 space-y-2">
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>Logout</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* MAIN CONTENT AREA */}
+      <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 space-y-6">
+        {/* Verification Warning if doctor is pending */}
+        {doctor?.verificationStatus === 'PENDING' && (
+          <div className="p-4 bg-amber-50 border border-amber-300 rounded-2xl flex items-center justify-between gap-3 text-xs text-amber-900 shadow-xs">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+              <div>
+                <p className="font-extrabold text-xs">Medical Council Verification In Progress</p>
+                <p className="text-[11px] text-amber-800">
+                  Your credentials ({doctor?.medicalRegistrationNumber}) are being reviewed by the medical board. You will be able to receive public bookings once verified.
+                </p>
+              </div>
+            </div>
+            <span className="px-3 py-1 bg-amber-200 text-amber-900 font-bold rounded-full text-[10px] shrink-0">
+              Pending Review
+            </span>
+          </div>
+        )}
+
+        {/* =========================================================================
+            TAB 1: DASHBOARD OVERVIEW
+        ========================================================================= */}
+        {currentTab === 'overview' && (
+          <div className="space-y-6 animate-in fade-in">
+            {/* Top Clinical Header Banner */}
+            <div className="bg-gradient-to-r from-teal-700 via-teal-800 to-blue-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1 rounded-full bg-white/15 text-xs font-extrabold backdrop-blur-md">
+                    Clinical Practice Portal
+                  </span>
+                  <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-bold border border-emerald-400/30 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                    Google Meet Enabled
+                  </span>
+                </div>
+                <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+                  Welcome back, Dr. {cleanDoctorDisplay}
+                </h1>
+                <p className="text-teal-100 text-xs sm:text-sm font-medium">
+                  {doctor?.specialization || 'General Physician'} • {doctor?.qualification || 'MBBS, MD'} • Consultation Fee: ₹{doctor?.consultationFee || 600}
+                </p>
+                <p className="text-teal-200/80 text-[11px]">
+                  Clinic: {doctor?.clinicAddress || 'QuickCare Telehealth Center'}
+                </p>
+              </div>
+
+              {/* Quick Actions Header */}
+              <div className="flex flex-wrap items-center gap-2.5">
+                <Link
+                  to="/doctor/prescriptions/new"
+                  className="px-4 py-2.5 bg-white text-teal-800 hover:bg-teal-50 font-bold text-xs rounded-xl shadow-md transition flex items-center gap-2 cursor-pointer"
+                >
+                  <FilePlus className="w-4 h-4 text-teal-600" />
+                  <span>Write Prescription</span>
+                </Link>
+                <a
+                  href="https://meet.google.com/new"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center gap-2 cursor-pointer"
+                >
+                  <Video className="w-4 h-4" />
+                  <span>New Google Meet Room</span>
+                </a>
+              </div>
+            </div>
+
+            {/* 5 DYNAMIC METRIC CARDS (Requirement 2) */}
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5">
+              {/* Card 1: Total Appointments */}
+              <div
+                onClick={() => setActiveTab('appointments')}
+                className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition cursor-pointer space-y-2"
+              >
+                <div className="flex items-center justify-between text-slate-500">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                    Total Visits
+                  </span>
+                  <Calendar className="w-4 h-4 text-blue-600" />
+                </div>
+                <p className="text-2xl font-black text-slate-900">{stats.total}</p>
+                <span className="text-[10px] text-slate-400 block">All-time consultations</span>
+              </div>
+
+              {/* Card 2: Today's Appointments */}
+              <div
+                onClick={() => setActiveTab('schedule')}
+                className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition cursor-pointer space-y-2"
+              >
+                <div className="flex items-center justify-between text-slate-500">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                    Today's Visits
+                  </span>
+                  <Clock className="w-4 h-4 text-teal-600" />
+                </div>
+                <p className="text-2xl font-black text-teal-700">{stats.todayCount}</p>
+                <span className="text-[10px] text-slate-400 block">Scheduled for today</span>
+              </div>
+
+              {/* Card 3: Pending Requests */}
+              <div
+                onClick={() => {
+                  setAptStatusFilter('PENDING');
+                  setActiveTab('appointments');
+                }}
+                className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition cursor-pointer space-y-2"
+              >
+                <div className="flex items-center justify-between text-slate-500">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-amber-600">
+                    Pending Requests
+                  </span>
+                  <AlertCircle className="w-4 h-4 text-amber-500" />
+                </div>
+                <p className="text-2xl font-black text-amber-600">{stats.pendingCount}</p>
+                <span className="text-[10px] text-slate-400 block">Action required</span>
+              </div>
+
+              {/* Card 4: Completed Appointments */}
+              <div
+                onClick={() => {
+                  setAptStatusFilter('COMPLETED');
+                  setActiveTab('appointments');
+                }}
+                className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition cursor-pointer space-y-2"
+              >
+                <div className="flex items-center justify-between text-slate-500">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-600">
+                    Completed
+                  </span>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                </div>
+                <p className="text-2xl font-black text-emerald-700">{stats.completedCount}</p>
+                <span className="text-[10px] text-slate-400 block">Prescribed & finished</span>
+              </div>
+
+              {/* Card 5: Video Consultations (Google Meet) */}
+              <div
+                onClick={() => setActiveTab('video')}
+                className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition cursor-pointer space-y-2 col-span-2 lg:col-span-1"
+              >
+                <div className="flex items-center justify-between text-slate-500">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-600">
+                    Google Meet
+                  </span>
+                  <Video className="w-4 h-4 text-emerald-600" />
+                </div>
+                <p className="text-2xl font-black text-emerald-700">{stats.videoCount}</p>
+                <span className="text-[10px] text-slate-400 block">
+                  {stats.pendingVideoLinks > 0 ? `${stats.pendingVideoLinks} links pending` : 'All links sent'}
+                </span>
+              </div>
+            </div>
+
+            {/* NEXT SCHEDULED PATIENT SECTION (Requirement 3) */}
+            <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="p-2 bg-teal-50 text-teal-700 rounded-xl">
+                    <Clock4 className="w-4 h-4" />
+                  </span>
                   <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-extrabold text-slate-900 dark:text-white text-sm">{apt.patientName}</span>
-                      <span className="px-2 py-0.5 bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 text-[10px] font-bold rounded-full">
-                        Slot: {apt.appointmentTime}
-                      </span>
-                      <span className="px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold rounded-full">
-                        Waiting Position {index + 1}
-                      </span>
-                    </div>
-                    {apt.reason && (
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate max-w-md">
-                        {apt.reason}
-                      </p>
-                    )}
+                    <h2 className="text-sm font-extrabold text-slate-900">Next Scheduled Patient</h2>
+                    <p className="text-[11px] text-slate-400">Earliest upcoming clinical consultation</p>
                   </div>
                 </div>
+                {nextScheduledPatient && (
+                  <span className="px-3 py-1 bg-teal-50 border border-teal-200 text-teal-800 text-xs font-bold rounded-full">
+                    {nextScheduledPatient.appointmentDate} at {nextScheduledPatient.appointmentTime}
+                  </span>
+                )}
+              </div>
 
-                <div className="flex items-center gap-2">
-                  <Link
-                    to={`/consultations/${apt.appointmentId}`}
-                    className="px-4 py-2 bg-gradient-to-r from-teal-600 to-blue-600 hover:from-teal-700 hover:to-blue-700 text-white font-extrabold text-xs rounded-xl shadow-md transition flex items-center gap-1.5 active:scale-95"
+              {nextScheduledPatient ? (
+                <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200/70 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-base font-extrabold text-slate-900">
+                        {nextScheduledPatient.patientName}
+                      </p>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          nextScheduledPatient.consultationType === 'VIDEO'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-blue-100 text-blue-800'
+                        }`}
+                      >
+                        {nextScheduledPatient.consultationType === 'VIDEO' ? 'Google Meet Video' : 'In-Person Clinic'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-600">
+                      <strong>Contact:</strong> {nextScheduledPatient.patientEmail || 'Email not specified'} • {nextScheduledPatient.patientPhone || ''}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      <strong>Reason:</strong> {nextScheduledPatient.reason || 'General Consultation'}
+                    </p>
+                    {nextScheduledPatient.consultationType === 'VIDEO' && (
+                      <div className="pt-1 flex items-center gap-2 text-xs">
+                        {nextScheduledPatient.videoLinkSent ? (
+                          <span className="text-emerald-700 font-bold flex items-center gap-1">
+                            <Check className="w-3.5 h-3.5 text-emerald-600" />
+                            Google Meet invitation sent to patient
+                          </span>
+                        ) : (
+                          <span className="text-amber-700 font-bold flex items-center gap-1">
+                            <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                            Google Meet link pending dispatch
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Actions for next patient */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {nextScheduledPatient.consultationType === 'VIDEO' && (
+                      <>
+                        {nextScheduledPatient.videoLinkSent && nextScheduledPatient.googleMeetLink ? (
+                          <a
+                            href={nextScheduledPatient.googleMeetLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <Video className="w-3.5 h-3.5" />
+                            <span>Join Google Meet</span>
+                          </a>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenMeetModal(nextScheduledPatient)}
+                            className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <Send className="w-3.5 h-3.5" />
+                            <span>Send Google Meet Invitation</span>
+                          </button>
+                        )}
+                      </>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleStatusChange(nextScheduledPatient.appointmentId, 'COMPLETED')}
+                      className="px-3.5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs rounded-xl transition cursor-pointer"
+                    >
+                      Complete
+                    </button>
+                    <Link
+                      to={`/doctor/prescriptions/new?appointmentId=${nextScheduledPatient.appointmentId}`}
+                      className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1 cursor-pointer"
+                    >
+                      <FilePlus className="w-3.5 h-3.5" />
+                      <span>Write Rx</span>
+                    </Link>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-slate-400 space-y-2">
+                  <Clock className="w-8 h-8 mx-auto text-slate-300" />
+                  <p className="text-xs font-bold text-slate-600">No upcoming appointments scheduled</p>
+                  <p className="text-[11px] text-slate-400">
+                    When patients book appointments with you, your next scheduled consultation will appear right here.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Quick Overview Split: Today's visits & Google Meet Telehealth */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Box 1: Today's Appointments Preview */}
+              <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-teal-600" /> Today's Consultation Schedule
+                  </h3>
+                  <button
+                    onClick={() => setActiveTab('schedule')}
+                    className="text-xs font-bold text-teal-600 hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    View Timeline <ChevronRight className="w-3 h-3" />
+                  </button>
+                </div>
+
+                {todayAppointments.length === 0 ? (
+                  <div className="py-8 text-center text-slate-400 text-xs">
+                    No consultations scheduled for today ({todayStr}).
+                  </div>
+                ) : (
+                  <div className="space-y-2.5">
+                    {todayAppointments.slice(0, 3).map((apt) => (
+                      <div
+                        key={apt.appointmentId}
+                        className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between gap-3 text-xs"
+                      >
+                        <div>
+                          <p className="font-extrabold text-slate-900">{apt.patientName}</p>
+                          <span className="text-[11px] text-slate-500">
+                            {apt.appointmentTime} • {apt.consultationType === 'VIDEO' ? 'Google Meet' : 'In-Person'}
+                          </span>
+                        </div>
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                            apt.status === 'CONFIRMED'
+                              ? 'bg-teal-100 text-teal-800'
+                              : apt.status === 'COMPLETED'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-amber-100 text-amber-800'
+                          }`}
+                        >
+                          {apt.status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Box 2: Google Meet Quick Hub */}
+              <div className="bg-gradient-to-br from-emerald-50 via-teal-50 to-blue-50/40 rounded-3xl p-6 border border-emerald-200/70 shadow-xs space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center">
+                      <Video className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="font-extrabold text-sm text-slate-900">Google Meet Telehealth Hub</h3>
+                      <p className="text-[11px] text-emerald-800">Direct authorized consultations</p>
+                    </div>
+                  </div>
+                  <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 font-bold text-[10px] rounded-full">
+                    {stats.videoCount} Total Video Visits
+                  </span>
+                </div>
+
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  QuickCare uses Google Meet exclusively for all video consultations. You can generate meeting links, dispatch invitation emails to patients, and launch sessions in 1 click.
+                </p>
+
+                <div className="flex flex-wrap items-center gap-2 pt-2">
+                  <button
+                    onClick={() => setActiveTab('video')}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
                   >
                     <Video className="w-3.5 h-3.5" />
-                    <span>Admit & Start Live Video</span>
-                  </Link>
+                    <span>Manage Video Consultations</span>
+                  </button>
                   <a
-                    href={`https://meet.jit.si/QuickCare-${(apt.appointmentId || 'live').replace(/[^a-zA-Z0-9]/g, '')}`}
+                    href="https://meet.google.com/new"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition flex items-center gap-1"
-                    title="Open in Separate Window"
+                    className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 transition flex items-center gap-1.5 cursor-pointer"
                   >
-                    <ExternalLink className="w-3 h-3 text-slate-600" />
-                    <span className="hidden sm:inline">Direct Tab</span>
+                    <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Generate Instant Link</span>
                   </a>
                 </div>
               </div>
-            ))}
+            </div>
           </div>
         )}
-      </div>
 
-      {/* Pending Appointment Requests */}
-      {pendingRequests.length > 0 && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-              <span className="w-2.5 h-2.5 bg-amber-500 rounded-full animate-ping" />
-              Pending Patient Requests ({pendingRequests.length})
-            </h2>
+        {/* =========================================================================
+            TAB 2: APPOINTMENTS MANAGEMENT (Requirement 4)
+        ========================================================================= */}
+        {currentTab === 'appointments' && (
+          <div className="space-y-6 animate-in fade-in">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h1 className="text-2xl font-black text-slate-900">Appointments Management</h1>
+                <p className="text-xs text-slate-500 mt-1">
+                  Review incoming requests, approve/reject bookings, manage Google Meet invitations, and write prescriptions.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={fetchDoctorData}
+                  className="px-3 py-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" /> Refresh
+                </button>
+              </div>
+            </div>
+
+            {/* Filters & Search Toolbar */}
+            <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                {/* Status Filter Tabs */}
+                <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                  {['ALL', 'PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED'].map((st) => (
+                    <button
+                      key={st}
+                      type="button"
+                      onClick={() => setAptStatusFilter(st)}
+                      className={`px-3 py-1.5 rounded-xl font-bold transition cursor-pointer ${
+                        aptStatusFilter === st
+                          ? 'bg-teal-600 text-white shadow-xs'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      {st}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Consultation Type Selector */}
+                <div className="flex items-center gap-1.5 text-xs">
+                  <span className="text-slate-400 text-[11px] font-bold">Type:</span>
+                  <select
+                    value={aptTypeFilter}
+                    onChange={(e) => setAptTypeFilter(e.target.value)}
+                    className="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-hidden"
+                  >
+                    <option value="ALL">All Types</option>
+                    <option value="VIDEO">Google Meet Video</option>
+                    <option value="IN_PERSON">In-Person Clinic</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Search Bar */}
+              <div className="relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={aptSearchQuery}
+                  onChange={(e) => setAptSearchQuery(e.target.value)}
+                  placeholder="Search appointments by patient name, reason, or appointment ID..."
+                  className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
+                />
+              </div>
+            </div>
+
+            {/* Appointments List / Cards */}
+            {appointments.length === 0 ? (
+              <div className="p-12 text-center bg-white rounded-3xl border border-slate-200 text-slate-400 space-y-2">
+                <Calendar className="w-10 h-10 mx-auto text-slate-300" />
+                <h3 className="text-sm font-extrabold text-slate-700">No Appointments Found</h3>
+                <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                  There are no appointments registered under Dr. {cleanDoctorDisplay}. When patients select your profile, their appointments will appear here.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {appointments
+                  .filter((a) => {
+                    const matchStatus = aptStatusFilter === 'ALL' || a.status === aptStatusFilter;
+                    const matchType = aptTypeFilter === 'ALL' || a.consultationType === aptTypeFilter;
+                    const q = aptSearchQuery.toLowerCase().trim();
+                    const matchSearch =
+                      !q ||
+                      a.patientName?.toLowerCase().includes(q) ||
+                      a.reason?.toLowerCase().includes(q) ||
+                      a.appointmentId?.toLowerCase().includes(q);
+                    return matchStatus && matchType && matchSearch;
+                  })
+                  .map((apt) => (
+                    <AppointmentCard
+                      key={apt.appointmentId}
+                      appointment={apt}
+                      role="DOCTOR"
+                      onStatusChange={handleStatusChange}
+                      onRefresh={fetchDoctorData}
+                    />
+                  ))}
+              </div>
+            )}
           </div>
+        )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {pendingRequests.map((apt) => (
-              <AppointmentCard
-                key={apt.appointmentId}
-                appointment={apt}
-                role="DOCTOR"
-                onStatusChange={handleStatusChange}
-                onRefresh={fetchDoctorData}
+        {/* =========================================================================
+            TAB 3: TODAY'S SCHEDULE (Requirement 5)
+        ========================================================================= */}
+        {currentTab === 'schedule' && (
+          <div className="space-y-6 animate-in fade-in">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h1 className="text-2xl font-black text-slate-900">Today's Schedule</h1>
+                <p className="text-xs text-slate-500 mt-1">
+                  Chronological timeline of all consultations scheduled for today ({todayStr}).
+                </p>
+              </div>
+              <div className="px-3.5 py-1.5 bg-teal-50 border border-teal-200 text-teal-800 text-xs font-extrabold rounded-xl">
+                {todayAppointments.length} Consultations Today
+              </div>
+            </div>
+
+            {todayAppointments.length === 0 ? (
+              <div className="p-16 text-center bg-white rounded-3xl border border-slate-200 text-slate-400 space-y-3">
+                <Clock className="w-12 h-12 mx-auto text-slate-300" />
+                <h3 className="text-base font-extrabold text-slate-800">No Appointments Scheduled for Today</h3>
+                <p className="text-xs text-slate-500 max-w-md mx-auto">
+                  You have a clear schedule today ({todayStr}). You can manage your availability for upcoming days or write digital prescriptions for past cases.
+                </p>
+                <button
+                  onClick={() => setActiveTab('availability')}
+                  className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer"
+                >
+                  Manage Availability Schedule
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {todayAppointments.map((apt, index) => {
+                  const isNext = index === 0;
+                  return (
+                    <div
+                      key={apt.appointmentId}
+                      className={`p-5 rounded-3xl border bg-white shadow-xs transition space-y-3 ${
+                        isNext ? 'border-teal-500 ring-2 ring-teal-500/20' : 'border-slate-200/80'
+                      }`}
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                        <div className="flex items-center gap-2">
+                          <span className="px-3 py-1 bg-teal-50 text-teal-800 font-mono font-black text-xs rounded-full">
+                            {apt.appointmentTime}
+                          </span>
+                          {isNext && (
+                            <span className="px-2.5 py-0.5 bg-emerald-100 text-emerald-800 font-extrabold text-[10px] rounded-full animate-pulse">
+                              NEXT UP
+                            </span>
+                          )}
+                          <span
+                            className={`px-2.5 py-0.5 text-[10px] font-bold rounded-full ${
+                              apt.consultationType === 'VIDEO'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : 'bg-blue-50 text-blue-700 border border-blue-200'
+                            }`}
+                          >
+                            {apt.consultationType === 'VIDEO' ? 'Google Meet Video' : 'In-Person Clinic Visit'}
+                          </span>
+                        </div>
+                        <span
+                          className={`px-2.5 py-1 text-xs font-extrabold rounded-full ${
+                            apt.status === 'CONFIRMED'
+                              ? 'bg-teal-100 text-teal-800'
+                              : apt.status === 'COMPLETED'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-amber-100 text-amber-800'
+                          }`}
+                        >
+                          {apt.status}
+                        </span>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                        <div className="space-y-1">
+                          <p className="font-extrabold text-sm text-slate-900">{apt.patientName}</p>
+                          <p className="text-xs text-slate-600">
+                            Email: {apt.patientEmail || 'Not specified'} • Phone: {apt.patientPhone || 'Not specified'}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            <strong>Chief Complaint:</strong> {apt.reason || 'General Health Consultation'}
+                          </p>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex flex-wrap items-center gap-2">
+                          {apt.consultationType === 'VIDEO' && (
+                            <>
+                              {apt.videoLinkSent && apt.googleMeetLink ? (
+                                <a
+                                  href={apt.googleMeetLink}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                                >
+                                  <Video className="w-3.5 h-3.5" />
+                                  <span>Launch Google Meet</span>
+                                </a>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenMeetModal(apt)}
+                                  className="px-3.5 py-2 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                                >
+                                  <Send className="w-3.5 h-3.5" />
+                                  <span>Send Meet Link</span>
+                                </button>
+                              )}
+                            </>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleStatusChange(apt.appointmentId, 'COMPLETED')}
+                            className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl transition cursor-pointer"
+                          >
+                            Mark Completed
+                          </button>
+                          <Link
+                            to={`/doctor/prescriptions/new?appointmentId=${apt.appointmentId}`}
+                            className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1 cursor-pointer"
+                          >
+                            <FilePlus className="w-3.5 h-3.5" />
+                            <span>Write Rx</span>
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* =========================================================================
+            TAB 4: PATIENTS ROSTER (Requirement 6)
+        ========================================================================= */}
+        {currentTab === 'patients' && (
+          <div className="space-y-6 animate-in fade-in">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h1 className="text-2xl font-black text-slate-900">Assigned Patients</h1>
+                <p className="text-xs text-slate-500 mt-1">
+                  Directory of distinct patients who have consulted with Dr. {cleanDoctorDisplay}.
+                </p>
+              </div>
+              <div className="px-3.5 py-1.5 bg-teal-50 border border-teal-200 text-teal-800 text-xs font-extrabold rounded-xl">
+                {patientRoster.length} Total Patients
+              </div>
+            </div>
+
+            {/* Search Bar */}
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={patientSearch}
+                onChange={(e) => setPatientSearch(e.target.value)}
+                placeholder="Search patient roster by name or email..."
+                className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs text-slate-800 placeholder-slate-400 shadow-xs focus:outline-hidden focus:ring-2 focus:ring-teal-500"
               />
-            ))}
+            </div>
+
+            {/* Patients Table / Cards */}
+            {patientRoster.length === 0 ? (
+              <div className="p-16 text-center bg-white rounded-3xl border border-slate-200 text-slate-400 space-y-2">
+                <Users className="w-12 h-12 mx-auto text-slate-300" />
+                <h3 className="text-sm font-extrabold text-slate-800">No Patients in Roster</h3>
+                <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                  When patients book consultations with you, their medical records and contact details will appear here.
+                </p>
+              </div>
+            ) : (
+              <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-extrabold uppercase text-[10px] tracking-wider">
+                      <tr>
+                        <th className="px-5 py-3.5">Patient Name</th>
+                        <th className="px-5 py-3.5">Contact Details</th>
+                        <th className="px-5 py-3.5">Total Visits</th>
+                        <th className="px-5 py-3.5">Last Visit Date</th>
+                        <th className="px-5 py-3.5">Latest Reason</th>
+                        <th className="px-5 py-3.5 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {patientRoster
+                        .filter((p) => {
+                          const q = patientSearch.toLowerCase().trim();
+                          return (
+                            !q ||
+                            p.patientName.toLowerCase().includes(q) ||
+                            p.patientEmail.toLowerCase().includes(q)
+                          );
+                        })
+                        .map((pat) => (
+                          <tr key={pat.patientUid || pat.patientEmail} className="hover:bg-slate-50/70 transition">
+                            <td className="px-5 py-4 font-extrabold text-slate-900">{pat.patientName}</td>
+                            <td className="px-5 py-4 text-slate-600">
+                              <p className="font-mono text-[11px]">{pat.patientEmail}</p>
+                              <p className="text-[10px] text-slate-400">{pat.patientPhone}</p>
+                            </td>
+                            <td className="px-5 py-4">
+                              <span className="px-2.5 py-0.5 rounded-full bg-teal-50 text-teal-800 font-black text-xs">
+                                {pat.totalVisits} visit{pat.totalVisits > 1 ? 's' : ''}
+                              </span>
+                            </td>
+                            <td className="px-5 py-4 text-slate-600 font-medium">
+                              {pat.lastVisitDate} <span className="text-slate-400 text-[10px]">({pat.lastVisitTime})</span>
+                            </td>
+                            <td className="px-5 py-4 text-slate-600 max-w-xs truncate">{pat.latestReason}</td>
+                            <td className="px-5 py-4 text-right">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedPatientHistory(pat)}
+                                className="px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold rounded-xl transition cursor-pointer"
+                              >
+                                View History
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* =========================================================================
+            TAB 5: VIDEO CONSULTATIONS (GOOGLE MEET HUB - Requirement 7)
+        ========================================================================= */}
+        {currentTab === 'video' && (
+          <div className="space-y-6 animate-in fade-in">
+            {/* Header with Google Meet branding */}
+            <div className="bg-gradient-to-r from-emerald-700 via-teal-800 to-blue-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1 bg-white/20 text-white font-extrabold text-xs rounded-full backdrop-blur-md">
+                    Telehealth Portal
+                  </span>
+                  <span className="px-3 py-1 bg-emerald-400/20 text-emerald-300 font-bold text-xs rounded-full border border-emerald-400/30">
+                    Google Meet Exclusively
+                  </span>
+                </div>
+                <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+                  Google Meet Telemedicine Hub
+                </h1>
+                <p className="text-teal-100 text-xs sm:text-sm max-w-xl">
+                  QuickCare uses Google Meet as the ONLY video consultation method. Enter or generate valid Google Meet links and dispatch invitation emails to your patients with 1 click.
+                </p>
+              </div>
+
+              <a
+                href="https://meet.google.com/new"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-5 py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-lg shadow-emerald-500/25 transition active:scale-95 flex items-center gap-2 cursor-pointer"
+              >
+                <Video className="w-4 h-4" />
+                <span>Create New Google Meet</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            </div>
+
+            {/* Video Filters */}
+            <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                {[
+                  { id: 'ALL', label: 'All Video Requests' },
+                  { id: 'PENDING', label: 'Link Pending (Action Required)' },
+                  { id: 'SENT', label: 'Link Sent (Ready to Join)' },
+                  { id: 'COMPLETED', label: 'Completed' },
+                ].map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => setVideoFilter(f.id)}
+                    className={`px-3 py-1.5 rounded-xl font-bold transition cursor-pointer ${
+                      videoFilter === f.id
+                        ? 'bg-emerald-600 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={videoSearch}
+                  onChange={(e) => setVideoSearch(e.target.value)}
+                  placeholder="Search video appointments..."
+                  className="pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden"
+                />
+              </div>
+            </div>
+
+            {/* Video Appointments List */}
+            {appointments.filter((a) => a.consultationType === 'VIDEO').length === 0 ? (
+              <div className="p-16 text-center bg-white rounded-3xl border border-slate-200 text-slate-400 space-y-2">
+                <Video className="w-12 h-12 mx-auto text-slate-300" />
+                <h3 className="text-sm font-extrabold text-slate-800">No Google Meet Consultations</h3>
+                <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                  You do not have any pending video consultations at this time. When a patient books an online video slot, it will appear here.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {appointments
+                  .filter((a) => a.consultationType === 'VIDEO')
+                  .filter((a) => {
+                    if (videoFilter === 'PENDING') return !a.videoLinkSent && a.status !== 'CANCELLED';
+                    if (videoFilter === 'SENT') return a.videoLinkSent && a.status !== 'CANCELLED' && a.status !== 'COMPLETED';
+                    if (videoFilter === 'COMPLETED') return a.status === 'COMPLETED';
+                    return true;
+                  })
+                  .filter((a) => {
+                    const q = videoSearch.toLowerCase().trim();
+                    return !q || a.patientName?.toLowerCase().includes(q) || a.patientEmail?.toLowerCase().includes(q);
+                  })
+                  .map((apt) => (
+                    <div
+                      key={apt.appointmentId}
+                      className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs space-y-4"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                        <div className="flex items-center gap-2">
+                          <span className="px-3 py-1 bg-emerald-50 text-emerald-800 font-extrabold text-xs rounded-full flex items-center gap-1.5">
+                            <Video className="w-3.5 h-3.5 text-emerald-600" /> Google Meet Video
+                          </span>
+                          <span className="text-xs font-bold text-slate-700">
+                            {apt.appointmentDate} at {apt.appointmentTime}
+                          </span>
+                        </div>
+
+                        {apt.videoLinkSent ? (
+                          <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 font-extrabold text-xs flex items-center gap-1">
+                            <Check className="w-3.5 h-3.5 text-emerald-600" /> Google Meet Invitation Sent
+                          </span>
+                        ) : (
+                          <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-800 font-extrabold text-xs flex items-center gap-1">
+                            <AlertCircle className="w-3.5 h-3.5 text-amber-600" /> Pending Doctor Invitation
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                        <div className="space-y-1">
+                          <p className="font-extrabold text-sm text-slate-900">{apt.patientName}</p>
+                          <p className="text-xs text-slate-600">
+                            Registered Email: <strong>{apt.patientEmail || 'Not specified'}</strong>
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            <strong>Reason:</strong> {apt.reason || 'General Online Telehealth Consultation'}
+                          </p>
+                          {apt.googleMeetLink && (
+                            <p className="text-xs font-mono text-emerald-700 font-semibold pt-1 truncate max-w-md">
+                              Link: {apt.googleMeetLink}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex flex-wrap items-center gap-2">
+                          {apt.videoLinkSent && apt.googleMeetLink ? (
+                            <>
+                              <a
+                                href={apt.googleMeetLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                              >
+                                <Video className="w-3.5 h-3.5" />
+                                <span>Launch Google Meet</span>
+                              </a>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenMeetModal(apt)}
+                                className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
+                              >
+                                Update Link
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenMeetModal(apt)}
+                              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl shadow-md transition flex items-center gap-2 cursor-pointer"
+                            >
+                              <Send className="w-3.5 h-3.5" />
+                              <span>Send Google Meet Invitation</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* =========================================================================
+            TAB 6: MY AVAILABILITY (Requirement 8)
+        ========================================================================= */}
+        {currentTab === 'availability' && (
+          <div className="max-w-4xl space-y-6 animate-in fade-in">
+            <div>
+              <h1 className="text-2xl font-black text-slate-900">Manage Availability</h1>
+              <p className="text-xs text-slate-500 mt-1">
+                Configure your active consulting days, operational hours, slot durations, and break windows.
+              </p>
+            </div>
+
+            {availabilitySuccess && (
+              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs font-bold text-emerald-800 flex items-center gap-2">
+                <Check className="w-4 h-4 text-emerald-600" />
+                <span>{availabilitySuccess}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveAvailability} className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs space-y-6">
+              {/* Available Days */}
+              <div className="space-y-3">
+                <label className="text-xs font-black uppercase tracking-wider text-slate-600 block">
+                  1. Working Days (Available for Appointments)
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+                  {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((day) => {
+                    const isChecked = availableDays.includes(day);
+                    return (
+                      <button
+                        key={day}
+                        type="button"
+                        onClick={() => {
+                          if (isChecked) {
+                            if (availableDays.length > 1) {
+                              setAvailableDays(availableDays.filter((d) => d !== day));
+                            }
+                          } else {
+                            setAvailableDays([...availableDays, day]);
+                          }
+                        }}
+                        className={`p-3 rounded-2xl border text-xs font-bold transition flex items-center justify-between cursor-pointer ${
+                          isChecked
+                            ? 'bg-teal-50 border-teal-500 text-teal-800'
+                            : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100'
+                        }`}
+                      >
+                        <span>{day.slice(0, 3)}</span>
+                        {isChecked && <Check className="w-3.5 h-3.5 text-teal-600" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Working Hours */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700">Working Start Time</label>
+                  <input
+                    type="text"
+                    value={workingStartTime}
+                    onChange={(e) => setWorkingStartTime(e.target.value)}
+                    placeholder="e.g. 09:00 AM"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700">Working End Time</label>
+                  <input
+                    type="text"
+                    value={workingEndTime}
+                    onChange={(e) => setWorkingEndTime(e.target.value)}
+                    placeholder="e.g. 05:00 PM"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+              </div>
+
+              {/* Slot Duration & Break Time */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700">Slot Duration</label>
+                  <select
+                    value={slotDuration}
+                    onChange={(e) => setSlotDuration(Number(e.target.value))}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
+                  >
+                    <option value={15}>15 Minutes</option>
+                    <option value={20}>20 Minutes</option>
+                    <option value={30}>30 Minutes</option>
+                    <option value={45}>45 Minutes</option>
+                    <option value={60}>60 Minutes</option>
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700">Break Start Time</label>
+                  <input
+                    type="text"
+                    value={breakStartTime}
+                    onChange={(e) => setBreakStartTime(e.target.value)}
+                    placeholder="e.g. 01:00 PM"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700">Break End Time</label>
+                  <input
+                    type="text"
+                    value={breakEndTime}
+                    onChange={(e) => setBreakEndTime(e.target.value)}
+                    placeholder="e.g. 02:00 PM"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  disabled={savingAvailability}
+                  className="px-6 py-3 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-extrabold text-xs uppercase tracking-wider rounded-2xl shadow-md transition cursor-pointer"
+                >
+                  {savingAvailability ? 'Saving Schedule...' : 'Save Availability Schedule'}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* =========================================================================
+            TAB 7: NOTIFICATIONS (Requirement 9)
+        ========================================================================= */}
+        {currentTab === 'notifications' && (
+          <div className="max-w-3xl space-y-6 animate-in fade-in">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-2xl font-black text-slate-900">Doctor Notifications</h1>
+                <p className="text-xs text-slate-500 mt-1">
+                  Updates on new appointment requests, Google Meet actions, and patient check-ins.
+                </p>
+              </div>
+              {notifications.length > 0 && (
+                <button
+                  onClick={() => {
+                    localStorage.removeItem('quickcare_notifications');
+                    setNotifications([]);
+                  }}
+                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold rounded-xl transition cursor-pointer"
+                >
+                  Clear All
+                </button>
+              )}
+            </div>
+
+            {notifications.length === 0 ? (
+              <div className="p-16 text-center bg-white rounded-3xl border border-slate-200 text-slate-400 space-y-2">
+                <Bell className="w-12 h-12 mx-auto text-slate-300" />
+                <h3 className="text-sm font-extrabold text-slate-800">No Notifications</h3>
+                <p className="text-xs text-slate-400">You are all caught up!</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {notifications.map((n, i) => (
+                  <div
+                    key={i}
+                    className="p-4 bg-white rounded-2xl border border-slate-200/80 shadow-xs flex items-start gap-3"
+                  >
+                    <div className="p-2 rounded-xl bg-teal-50 text-teal-600 shrink-0">
+                      <Bell className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <p className="font-extrabold text-xs text-slate-900">{n.title}</p>
+                        <span className="text-[10px] text-slate-400">{n.timestamp || 'Recent'}</span>
+                      </div>
+                      <p className="text-xs text-slate-600 leading-relaxed">{n.message}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* =========================================================================
+            TAB 8: MY PROFILE (Requirement 10)
+        ========================================================================= */}
+        {currentTab === 'profile' && (
+          <div className="max-w-4xl space-y-6 animate-in fade-in">
+            <div>
+              <h1 className="text-2xl font-black text-slate-900">Doctor Profile</h1>
+              <p className="text-xs text-slate-500 mt-1">
+                Maintain your clinical credentials, specialization, consultation fee, and clinic details.
+              </p>
+            </div>
+
+            {profileSuccess && (
+              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs font-bold text-emerald-800 flex items-center gap-2">
+                <Check className="w-4 h-4 text-emerald-600" />
+                <span>{profileSuccess}</span>
+              </div>
+            )}
+
+            {profileError && (
+              <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl text-xs font-bold text-rose-800 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600" />
+                <span>{profileError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveProfile} className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700">Full Name</label>
+                  <div className="flex items-center">
+                    <span className="px-3 py-2.5 bg-slate-100 border border-r-0 border-slate-200 rounded-l-xl text-xs font-extrabold text-slate-600">
+                      Dr.
+                    </span>
+                    <input
+                      type="text"
+                      value={profileForm.fullName}
+                      onChange={(e) => setProfileForm({ ...profileForm, fullName: e.target.value })}
+                      placeholder="e.g. Atharva"
+                      required
+                      className="w-full px-3.5 py-2.5 rounded-r-xl border border-slate-200 bg-slate-50 text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700">Specialization</label>
+                  <select
+                    value={profileForm.specialization}
+                    onChange={(e) => setProfileForm({ ...profileForm, specialization: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
+                  >
+                    <option value="General Physician">General Physician</option>
+                    <option value="Cardiology">Cardiology</option>
+                    <option value="Dermatology">Dermatology</option>
+                    <option value="Pediatrics">Pediatrics</option>
+                    <option value="Orthopedics">Orthopedics</option>
+                    <option value="Neurology">Neurology</option>
+                    <option value="Dentistry">Dentistry</option>
+                    <option value="Psychiatry">Psychiatry</option>
+                    <option value="ENT Specialist">ENT Specialist</option>
+                    <option value="Ophthalmology">Ophthalmology</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700">Qualifications</label>
+                  <input
+                    type="text"
+                    value={profileForm.qualification}
+                    onChange={(e) => setProfileForm({ ...profileForm, qualification: e.target.value })}
+                    placeholder="e.g. MBBS, MD"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700">Years of Experience</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="60"
+                    value={profileForm.experience}
+                    onChange={(e) => setProfileForm({ ...profileForm, experience: Number(e.target.value) })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700">Consultation Fee (₹)</label>
+                  <input
+                    type="number"
+                    min="100"
+                    max="10000"
+                    value={profileForm.consultationFee}
+                    onChange={(e) => setProfileForm({ ...profileForm, consultationFee: Number(e.target.value) })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700">Medical Council Registration No.</label>
+                  <input
+                    type="text"
+                    value={profileForm.medicalRegistrationNumber}
+                    onChange={(e) => setProfileForm({ ...profileForm, medicalRegistrationNumber: e.target.value })}
+                    placeholder="e.g. MCI-12345"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700">Clinic / Hospital Affiliation</label>
+                  <input
+                    type="text"
+                    value={profileForm.clinicAddress}
+                    onChange={(e) => setProfileForm({ ...profileForm, clinicAddress: e.target.value })}
+                    placeholder="e.g. QuickCare Telehealth Center"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700">Doctor Bio & Specialty Summary</label>
+                <textarea
+                  rows="3"
+                  value={profileForm.bio}
+                  onChange={(e) => setProfileForm({ ...profileForm, bio: e.target.value })}
+                  placeholder="Summarize your clinical expertise and practice philosophy..."
+                  className="w-full p-3.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-medium text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-teal-500 leading-relaxed"
+                />
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  disabled={savingProfile}
+                  className="px-6 py-3 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-extrabold text-xs uppercase tracking-wider rounded-2xl shadow-md transition cursor-pointer"
+                >
+                  {savingProfile ? 'Saving Profile...' : 'Save Profile Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+      </main>
+
+      {/* =========================================================================
+          MODAL: SEND / UPDATE GOOGLE MEET INVITATION (Requirement Part 1)
+      ========================================================================= */}
+      {selectedVideoApt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 max-w-lg w-full space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-100 flex items-center justify-center text-emerald-700">
+                  <Video className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900">
+                    Send Google Meet Invitation
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Patient: {selectedVideoApt.patientName} ({selectedVideoApt.patientEmail})
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedVideoApt(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl text-xs text-emerald-900 space-y-1">
+              <p className="font-bold flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>Google Meet is the only video consultation platform</span>
+              </p>
+              <p className="text-[11px] text-emerald-800">
+                When you click "Send Google Meet Invitation", an invitation email will be dispatched to <strong>{selectedVideoApt.patientEmail}</strong> with appointment details and the direct Google Meet link.
+              </p>
+            </div>
+
+            <form onSubmit={handleSendGoogleMeetSubmit} className="space-y-4">
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700">
+                    Google Meet URL <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleAutoGenerateMeetLink}
+                      className="text-[10px] font-bold text-teal-600 hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <Sparkles className="w-3 h-3" /> Auto-Fill Room
+                    </button>
+                    <a
+                      href="https://meet.google.com/new"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[10px] font-bold text-emerald-600 hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <ExternalLink className="w-3 h-3" /> Create on Google Meet
+                    </a>
+                  </div>
+                </div>
+                <input
+                  type="url"
+                  value={meetLinkInput}
+                  onChange={(e) => {
+                    setMeetLinkInput(e.target.value);
+                    setMeetModalError('');
+                  }}
+                  placeholder="https://meet.google.com/xxx-yyyy-zzz"
+                  required
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-slate-50 text-slate-900 font-mono text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                />
+                <p className="text-[10px] text-slate-400">
+                  Must be a valid Google Meet link (e.g. https://meet.google.com/abc-defg-hij)
+                </p>
+              </div>
+
+              {meetModalError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs font-bold flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>{meetModalError}</span>
+                </div>
+              )}
+
+              {meetModalSuccess && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-bold flex items-center gap-2">
+                  <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{meetModalSuccess}</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setSelectedVideoApt(null)}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingMeetLink || !meetLinkInput.trim()}
+                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition flex items-center gap-2 cursor-pointer active:scale-95"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>{submittingMeetLink ? 'Sending Invitation...' : 'Send Google Meet Invitation'}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
 
-      {/* Confirmed Schedule */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">
-            Confirmed Telehealth & Clinic Schedule ({confirmed.length})
-          </h2>
-          <Link
-            to="/doctor/appointments"
-            className="text-xs font-bold text-teal-700 dark:text-teal-400 hover:text-teal-900 flex items-center gap-1"
-          >
-            <span>All Appointments</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
-        </div>
-
-        {confirmed.length === 0 ? (
-          <div className="bg-white dark:bg-slate-900 rounded-3xl p-8 text-center border border-slate-200/80 dark:border-slate-800">
-            <Calendar className="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
-            <p className="text-sm font-bold text-slate-700 dark:text-slate-300">No confirmed appointments scheduled</p>
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-              New patient bookings will appear here once approved.
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {confirmed.map((apt) => (
-              <AppointmentCard
-                key={apt.appointmentId}
-                appointment={apt}
-                role="DOCTOR"
-                onStatusChange={handleStatusChange}
-                onRefresh={fetchDoctorData}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* DOCTOR SEND VIDEO CONSULTATION LINK MODAL */}
-      {sendLinkApt && (
+      {/* =========================================================================
+          MODAL: VIEW PATIENT MEDICAL HISTORY (Requirement 6)
+      ========================================================================= */}
+      {selectedPatientHistory && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-lg w-full space-y-4 shadow-2xl">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-teal-100 dark:bg-teal-900/60 flex items-center justify-center text-teal-600 dark:text-teal-400">
-                <Video className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
-                  Send Video Consultation Link
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Doctor controls meeting link dispatch to patient's registered email.
-                </p>
-              </div>
-            </div>
-
-            {/* Patient & Appointment Details */}
-            <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 space-y-2 text-xs">
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Patient Name</span>
-                  <span className="font-extrabold text-slate-800 dark:text-slate-200">{sendLinkApt.patientName}</span>
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 max-w-xl w-full space-y-4 shadow-2xl max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-teal-50 text-teal-700 flex items-center justify-center">
+                  <User className="w-5 h-5" />
                 </div>
                 <div>
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Appointment Status</span>
-                  <span className="font-extrabold text-teal-600 dark:text-teal-400">{sendLinkApt.status || 'CONFIRMED'}</span>
+                  <h3 className="text-base font-extrabold text-slate-900">
+                    {selectedPatientHistory.patientName} - Consultation History
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    {selectedPatientHistory.patientEmail} • {selectedPatientHistory.patientPhone}
+                  </p>
                 </div>
               </div>
-
-              <div>
-                <span className="text-[10px] uppercase font-bold text-slate-400 block">Patient Registered Email</span>
-                <div className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300 font-mono mt-0.5">
-                  <Mail className="w-3.5 h-3.5 text-teal-600" />
-                  <span>{sendLinkApt.patientEmail || 'No email provided'}</span>
-                  <span className="text-[9px] font-normal px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 ml-auto">
-                    Registered Email (Read-Only)
-                  </span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200/60 dark:border-slate-700/60 text-[11px]">
-                <div>
-                  <span className="text-slate-500">Date:</span> <strong className="text-slate-700 dark:text-slate-300">{sendLinkApt.appointmentDate}</strong>
-                </div>
-                <div>
-                  <span className="text-slate-500">Time:</span> <strong className="text-slate-700 dark:text-slate-300">{sendLinkApt.appointmentTime}</strong>
-                </div>
-              </div>
-            </div>
-
-            {/* Video Link Input Form */}
-            <div className="space-y-3 text-xs">
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="font-bold text-slate-700 dark:text-slate-300">
-                    Video Consultation URL <span className="text-rose-500">*</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const clean = (sendLinkApt.appointmentId || 'live').replace(/[^a-zA-Z0-9]/g, '').slice(0, 8);
-                      setVideoLinkInput(`https://meet.google.com/qck-care-${clean}`);
-                    }}
-                    className="text-[10px] font-bold text-teal-600 hover:text-teal-700 dark:text-teal-400 flex items-center gap-1"
-                  >
-                    <Sparkles className="w-3 h-3" />
-                    <span>Auto-Fill Google Meet URL</span>
-                  </button>
-                </div>
-                <input
-                  type="url"
-                  value={videoLinkInput}
-                  onChange={(e) => {
-                    setVideoLinkInput(e.target.value);
-                    setSendLinkError('');
-                  }}
-                  placeholder="Paste Google Meet, Zoom, or video conference URL (e.g. https://meet.google.com/abc-defg-hij)"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono text-xs focus:ring-2 focus:ring-teal-500 focus:outline-hidden"
-                />
-                <p className="text-[11px] text-slate-400 mt-1">
-                  Accepts any valid video conferencing URL (Google Meet, Zoom, Microsoft Teams, etc.)
-                </p>
-              </div>
-
-              {/* Review Before Sending */}
-              {videoLinkInput && (
-                <div className="p-3 rounded-xl bg-teal-50/70 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-900/60 space-y-1.5">
-                  <span className="text-[11px] font-bold text-teal-800 dark:text-teal-300 block">
-                    Review Consultation Link Before Sending:
-                  </span>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-mono text-xs font-semibold text-teal-900 dark:text-teal-200 truncate">
-                      {videoLinkInput}
-                    </span>
-                    <a
-                      href={videoLinkInput}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-teal-600 text-white hover:bg-teal-700 transition flex items-center gap-1 shrink-0"
-                    >
-                      <span>Test / Preview</span>
-                      <ExternalLink className="w-2.5 h-2.5" />
-                    </a>
-                  </div>
-                </div>
-              )}
-
-              {/* Feedback messages */}
-              {sendLinkSuccess && (
-                <div className="p-3 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 rounded-xl text-xs font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>{sendLinkSuccess}</span>
-                </div>
-              )}
-              {sendLinkError && (
-                <div className="p-3 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 rounded-xl text-xs font-bold text-rose-800 dark:text-rose-300 flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                  <span>{sendLinkError}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Modal Actions */}
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
               <button
                 type="button"
-                disabled={submittingLink}
-                onClick={() => {
-                  setSendLinkApt(null);
-                  setSendLinkError('');
-                }}
-                className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl"
+                onClick={() => setSelectedPatientHistory(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
               >
-                Cancel
+                <X className="w-5 h-5" />
               </button>
+            </div>
+
+            <div className="space-y-3">
+              <h4 className="text-xs font-black uppercase tracking-wider text-slate-500">
+                Visits with Dr. {cleanDoctorDisplay} ({selectedPatientHistory.appointments.length})
+              </h4>
+              {selectedPatientHistory.appointments.map((apt) => (
+                <div key={apt.appointmentId} className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-1 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-extrabold text-slate-900">
+                      {apt.appointmentDate} at {apt.appointmentTime}
+                    </span>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        apt.status === 'COMPLETED'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : apt.status === 'CONFIRMED'
+                          ? 'bg-teal-100 text-teal-800'
+                          : 'bg-amber-100 text-amber-800'
+                      }`}
+                    >
+                      {apt.status}
+                    </span>
+                  </div>
+                  <p className="text-slate-600">
+                    <strong>Type:</strong> {apt.consultationType === 'VIDEO' ? 'Google Meet Video' : 'In-Person Clinic Visit'}
+                  </p>
+                  <p className="text-slate-500">
+                    <strong>Chief Complaint:</strong> {apt.reason || 'General Consultation'}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 flex justify-end">
               <button
                 type="button"
-                disabled={submittingLink || !videoLinkInput.trim()}
-                onClick={handleSendLinkSubmit}
-                className="px-5 py-2 text-xs font-extrabold text-white bg-gradient-to-r from-teal-600 to-blue-600 hover:from-teal-700 hover:to-blue-700 disabled:opacity-50 rounded-xl shadow-md transition flex items-center gap-1.5 active:scale-95"
+                onClick={() => setSelectedPatientHistory(null)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl cursor-pointer"
               >
-                <Send className="w-3.5 h-3.5" />
-                <span>{submittingLink ? 'Sending Link & Email...' : 'Send Link to Patient'}</span>
+                Close
               </button>
             </div>
           </div>

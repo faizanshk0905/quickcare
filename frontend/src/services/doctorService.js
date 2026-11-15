@@ -246,90 +246,117 @@ export const doctorService = {
       }
     } catch (e) {}
 
-    // 2. Attempt fetching from backend /doctors/me
-    try {
-      const res = await api.get('/doctors/me');
-      if (res && res.data && (res.data.data?.doctorId || res.data.doctorId)) {
-        return res.data;
-      }
-    } catch (err) {
-      console.warn('Backend /doctors/me offline or mock, resolving authenticated doctor profile:', err.message);
-    }
+    const normEmail = (currentUser?.email || '').toLowerCase().trim();
+    const currentUid = currentUser?.userId || currentUser?.uid;
 
-    // 3. Resolve from persistent shared doctor registry for this specific user
+    // 2. Attempt fetching from backend /doctors/me ONLY IF it matches authenticated user
     if (currentUser) {
-      const normEmail = (currentUser.email || '').toLowerCase().trim();
-      const currentUid = currentUser.userId || currentUser.uid;
+      try {
+        const res = await api.get('/doctors/me');
+        const docCandidate = res?.data?.data || res?.data;
+        if (docCandidate && (docCandidate.doctorId || docCandidate.uid)) {
+          const candidateEmail = (docCandidate.email || '').toLowerCase().trim();
+          const candidateUid = docCandidate.uid || docCandidate.userId;
+          // Verify that candidate truly belongs to this authenticated user
+          if (
+            (candidateEmail && candidateEmail === normEmail) ||
+            (candidateUid && candidateUid === currentUid)
+          ) {
+            return { success: true, data: docCandidate };
+          }
+        }
+      } catch (err) {
+        console.warn('Backend /doctors/me offline or mock, resolving authenticated doctor profile:', err.message);
+      }
 
-      // Look in quickcare_shared_doctors
+      // 3. Resolve from persistent shared doctor registry for THIS specific user
       try {
         const rawDocs = localStorage.getItem('quickcare_shared_doctors');
         if (rawDocs) {
           const list = JSON.parse(rawDocs);
           const found = list.find(
-            (d) => (d.email || '').toLowerCase().trim() === normEmail ||
-                   (currentUid && (d.uid === currentUid || d.doctorId === currentUid || d.doctorId === `doc_${currentUid}`))
+            (d) =>
+              (normEmail && (d.email || '').toLowerCase().trim() === normEmail) ||
+              (currentUid && (d.uid === currentUid || d.doctorId === currentUid || d.doctorId === `doc_${currentUid}`))
           );
           if (found) {
-            return { success: true, data: found };
+            // Ensure clean title without double 'Dr. Dr.'
+            const cleanTitle = (found.fullName || '').replace(/^(?:dr\.?\s*)+/i, '').trim();
+            return {
+              success: true,
+              data: {
+                ...found,
+                fullName: `Dr. ${cleanTitle || 'Doctor'}`,
+              },
+            };
           }
         }
       } catch (e) {}
 
-      // If user is a DOCTOR, build and return their distinct personal doctor profile
-      if ((currentUser.role || '').toUpperCase() === 'DOCTOR') {
-        const rawName = currentUser.fullName || 'Doctor';
-        const cleanName = rawName.replace(/^dr\.\s*/i, '').trim();
-        const docId = currentUser.doctorId || (currentUid ? (currentUid.startsWith('doc_') ? currentUid : `doc_${currentUid}`) : `doc_${Date.now().toString(36)}`);
+      // 4. Build and return distinct personal doctor profile for this authenticated user
+      const rawName = currentUser.fullName || 'Doctor';
+      const cleanName = rawName.replace(/^(?:dr\.?\s*)+/i, '').trim();
+      const docId =
+        currentUser.doctorId ||
+        (currentUid ? (currentUid.startsWith('doc_') ? currentUid : `doc_${currentUid}`) : `doc_${Date.now().toString(36)}`);
 
-        const distinctProfile = {
-          doctorId: docId,
-          uid: currentUid || `usr_${Date.now().toString(36)}`,
-          fullName: `Dr. ${cleanName}`,
-          email: currentUser.email,
-          phone: currentUser.phone || '',
-          gender: currentUser.gender || 'Male',
-          specialization: currentUser.specialization || 'General Physician',
-          qualification: currentUser.qualification || 'MBBS, MD',
-          experience: Number(currentUser.experience) || 5,
-          medicalRegistrationNumber: currentUser.medicalRegistrationNumber || ('REG-' + Date.now().toString().slice(-6)),
-          consultationFee: Number(currentUser.consultationFee) || 600,
-          clinicAddress: currentUser.clinicAddress || currentUser.address || 'QuickCare Telehealth Center',
-          bio: currentUser.bio || `Senior consultant practitioner specializing in ${currentUser.specialization || 'Clinical Medicine'}.`,
-          verificationStatus: currentUser.verificationStatus || 'VERIFIED',
-          profileImage: currentUser.profileImage || (currentUser.gender === 'Female'
+      const distinctProfile = {
+        doctorId: docId,
+        uid: currentUid || `usr_${Date.now().toString(36)}`,
+        fullName: `Dr. ${cleanName}`,
+        email: currentUser.email || '',
+        phone: currentUser.phone || '',
+        gender: currentUser.gender || 'Male',
+        specialization: currentUser.specialization || 'General Physician',
+        qualification: currentUser.qualification || 'MBBS, MD',
+        experience: Number(currentUser.experience) || 5,
+        medicalRegistrationNumber: currentUser.medicalRegistrationNumber || ('MCI-' + Date.now().toString().slice(-6)),
+        consultationFee: Number(currentUser.consultationFee) || 600,
+        clinicAddress: currentUser.clinicAddress || currentUser.address || 'QuickCare Telehealth Center',
+        bio:
+          currentUser.bio ||
+          `Senior consultant practitioner specializing in ${currentUser.specialization || 'Clinical Medicine'} with dedication to patient outcomes.`,
+        verificationStatus: currentUser.verificationStatus || 'VERIFIED',
+        profileImage:
+          currentUser.profileImage ||
+          (currentUser.gender === 'Female'
             ? 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=400'
             : 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400'),
-          workingHours: currentUser.workingHours || '09:00 AM - 05:00 PM',
-          workingStartTime: '09:00 AM',
-          workingEndTime: '05:00 PM',
-          slotDurationMinutes: 15,
-          availableDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
-          onlineStatus: 'AVAILABLE_FOR_VIDEO',
-          videoConsultationAvailable: true,
-          rating: 5.0,
-          reviewCount: 0,
-        };
+        workingHours: currentUser.workingHours || '09:00 AM - 05:00 PM',
+        workingStartTime: '09:00 AM',
+        workingEndTime: '05:00 PM',
+        breakStartTime: '01:00 PM',
+        breakEndTime: '02:00 PM',
+        slotDurationMinutes: 15,
+        availableDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+        onlineStatus: 'AVAILABLE_FOR_VIDEO',
+        videoConsultationAvailable: true,
+        rating: 5.0,
+        reviewCount: 0,
+      };
 
-        // Persist to quickcare_shared_doctors so it stays persistent
-        try {
-          const rawDocs = localStorage.getItem('quickcare_shared_doctors');
-          const list = rawDocs ? JSON.parse(rawDocs) : [];
-          const idx = list.findIndex(d => (d.email || '').toLowerCase().trim() === normEmail);
-          if (idx >= 0) {
-            list[idx] = { ...list[idx], ...distinctProfile };
-          } else {
-            list.unshift(distinctProfile);
-          }
-          localStorage.setItem('quickcare_shared_doctors', JSON.stringify(list));
-        } catch (e) {}
+      // Persist to quickcare_shared_doctors so it stays persistent
+      try {
+        const rawDocs = localStorage.getItem('quickcare_shared_doctors');
+        const list = rawDocs ? JSON.parse(rawDocs) : [];
+        const idx = list.findIndex(
+          (d) =>
+            (normEmail && (d.email || '').toLowerCase().trim() === normEmail) ||
+            (currentUid && (d.uid === currentUid || d.doctorId === docId))
+        );
+        if (idx >= 0) {
+          list[idx] = { ...list[idx], ...distinctProfile };
+        } else {
+          list.unshift(distinctProfile);
+        }
+        localStorage.setItem('quickcare_shared_doctors', JSON.stringify(list));
+      } catch (e) {}
 
-        return { success: true, data: distinctProfile };
-      }
+      return { success: true, data: distinctProfile };
     }
 
-    // 4. Fallback ONLY if completely unauthenticated
-    return { success: true, data: DEFAULT_DOCTORS[0] };
+    // 5. Unauthenticated fallback: return null
+    return { success: true, data: null };
   },
 
   async updateDoctorProfile(data) {

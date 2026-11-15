@@ -84,8 +84,8 @@ export const AuthProvider = ({ children }) => {
     const initAuth = async () => {
       const storedToken = localStorage.getItem('quickcare_token');
       if (storedToken) {
-        // If it was a demo session or offline/resilient session, restore immediately from local storage
-        const storedUserJson = localStorage.getItem('quickcare_demo_user') || localStorage.getItem('quickcare_current_user');
+        // Prioritize authenticated current user over any demo user
+        const storedUserJson = localStorage.getItem('quickcare_current_user') || localStorage.getItem('quickcare_demo_user');
         if (storedUserJson) {
           try {
             const parsed = JSON.parse(storedUserJson);

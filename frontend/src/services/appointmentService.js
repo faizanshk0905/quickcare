@@ -251,6 +251,7 @@ export const appointmentService = {
     } catch (err) {}
 
     let docId = targetDoctorId;
+    let docUid = null;
     let docEmail = null;
     let docName = null;
 
@@ -259,32 +260,38 @@ export const appointmentService = {
       if (rawUser) {
         const u = JSON.parse(rawUser);
         docId = docId || u.doctorId || u.userId || u.uid;
+        docUid = u.uid || u.userId;
         docEmail = (u.email || '').toLowerCase().trim();
-        docName = (u.fullName || '').toLowerCase().replace(/^dr\.\s*/i, '').trim();
+        docName = (u.fullName || '').toLowerCase().replace(/^(?:dr\.?\s*)+/i, '').trim();
       }
     } catch (e) {}
+
+    // If completely unauthenticated and no targetDoctorId, return empty list
+    if (!docId && !docUid && !docEmail && !docName) {
+      return { success: true, data: [] };
+    }
 
     const localList = getLocalAppointments();
     const remoteIds = new Set(remoteList.map((a) => a.appointmentId));
     const merged = [...localList.filter((l) => !remoteIds.has(l.appointmentId)), ...remoteList];
 
     const filtered = merged.filter((a) => {
-      if (!docId && !docEmail && !docName) return true;
-
       const aDocId = a.doctorId || '';
+      const aDocUid = a.doctorUid || '';
       const aDocEmail = (a.doctorEmail || '').toLowerCase().trim();
-      const aDocName = (a.doctorName || '').toLowerCase().replace(/^dr\.\s*/i, '').trim();
+      const aDocName = (a.doctorName || '').toLowerCase().replace(/^(?:dr\.?\s*)+/i, '').trim();
 
-      const matchId = docId && (
-        aDocId === docId ||
-        aDocId === `doc_${docId}` ||
-        docId === `doc_${aDocId}`
-      );
-      const matchEmail = docEmail && aDocEmail && aDocEmail === docEmail;
-      const matchName = docName && aDocName && (
-        aDocName === docName ||
-        aDocName.includes(docName) ||
-        docName.includes(aDocName)
+      const matchId =
+        (docId && (aDocId === docId || aDocId === `doc_${docId}` || docId === `doc_${aDocId}`)) ||
+        (docUid && (aDocUid === docUid || aDocId === docUid || aDocId === `doc_${docUid}`));
+
+      const matchEmail = Boolean(docEmail && aDocEmail && aDocEmail === docEmail);
+
+      const matchName = Boolean(
+        docName &&
+        docName.length >= 3 &&
+        aDocName &&
+        (aDocName === docName || aDocName.startsWith(docName) || docName.startsWith(aDocName))
       );
 
       return matchId || matchEmail || matchName;
@@ -432,8 +439,14 @@ export const appointmentService = {
 
   async sendVideoConsultationLink(appointmentId, videoConsultationLink) {
     const trimmed = (videoConsultationLink || '').trim();
+    if (!trimmed || !trimmed.toLowerCase().includes('meet.google.com')) {
+      throw new Error('Please enter a valid Google Meet link (e.g., https://meet.google.com/xxx-yyyy-zzz)');
+    }
+
     const list = getLocalAppointments();
     const idx = list.findIndex((a) => a.appointmentId === appointmentId);
+    let updatedApt = null;
+
     if (idx !== -1) {
       list[idx].videoConsultationLink = trimmed;
       list[idx].googleMeetLink = trimmed;
@@ -445,18 +458,31 @@ export const appointmentService = {
         list[idx].status = 'CONFIRMED';
         list[idx].appointmentStatus = 'CONFIRMED';
       }
+      updatedApt = list[idx];
       saveLocalAppointments(list);
+
+      // Create notification for patient
+      addLocalNotification({
+        recipientUid: updatedApt.patientUid || updatedApt.patientId,
+        recipientEmail: updatedApt.patientEmail,
+        title: 'Google Meet Consultation Link Sent',
+        message: `Your doctor has sent the Google Meet link for your consultation on ${updatedApt.appointmentDate} at ${updatedApt.appointmentTime}. Link: ${trimmed}`,
+        type: 'GOOGLE_MEET_INVITATION',
+        appointmentId,
+      });
     }
+
     try {
       const res = await api.post(`/appointments/${appointmentId}/send-video-link`, {
         videoConsultationLink: trimmed,
+        googleMeetLink: trimmed,
       });
       return res.data;
     } catch (err) {
       return {
         success: true,
-        message: 'Video consultation link dispatched to patient email successfully',
-        data: idx !== -1 ? list[idx] : null,
+        message: `Google Meet invitation sent to ${updatedApt?.patientEmail || 'patient'} successfully!`,
+        data: updatedApt,
       };
     }
   },
@@ -501,8 +527,8 @@ export const appointmentService = {
         videoConsultationLink: isSent ? (apt?.videoConsultationLink || apt?.googleMeetLink) : null,
         videoLinkSent: isSent,
         videoConsultationStatus: isSent ? 'LINK_SENT' : 'WAITING_FOR_LINK',
-        meetingRoomId: isSent ? `QuickCare-${cleanId}` : null,
-        liveVideoUrl: isSent ? `https://meet.jit.si/QuickCare-${cleanId}` : null,
+        meetingRoomId: isSent ? (apt?.googleMeetLink || apt?.videoConsultationLink) : null,
+        liveVideoUrl: isSent ? (apt?.googleMeetLink || apt?.videoConsultationLink) : null,
       },
     };
   },
