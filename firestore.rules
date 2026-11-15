@@ -42,11 +42,13 @@ service cloud.firestore {
     match /appointments/{appointmentId} {
       allow read: if isAuthenticated() && 
         (request.auth.uid == resource.data.patientUid || 
+         request.auth.uid == resource.data.patientId ||
          request.auth.uid == resource.data.doctorUid || 
          isAdmin());
       allow create: if isAuthenticated();
       allow update: if isAuthenticated() && 
         (request.auth.uid == resource.data.patientUid || 
+         request.auth.uid == resource.data.patientId ||
          request.auth.uid == resource.data.doctorUid || 
          isAdmin());
       allow delete: if isAdmin();

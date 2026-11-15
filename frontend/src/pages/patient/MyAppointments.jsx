@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { appointmentService } from '../../services/appointmentService';
 import { doctorService } from '../../services/doctorService';
 import { prescriptionService } from '../../services/prescriptionService';
@@ -13,6 +14,7 @@ import {
   AlertCircle,
   RotateCcw,
   X,
+  Search,
 } from 'lucide-react';
 
 export const MyAppointments = () => {
@@ -35,46 +37,14 @@ export const MyAppointments = () => {
     try {
       setLoading(true);
       const res = await appointmentService.getPatientAppointments();
-      if (res && res.data && res.data.length > 0) {
+      if (res && Array.isArray(res.data)) {
         setAppointments(res.data);
       } else {
-        setAppointments([
-          {
-            appointmentId: 'apt_101',
-            doctorName: 'Dr. Priya Deshmukh',
-            doctorSpecialization: 'Cardiologist',
-            appointmentDate: new Date().toISOString().split('T')[0],
-            appointmentTime: '10:00 AM',
-            status: 'CONFIRMED',
-            confirmationStatus: 'CONFIRMED',
-            consultationType: 'VIDEO',
-            googleMeetLink: 'https://meet.google.com/qck-card-hms',
-            doctorNotes: 'Please have your latest ECG, lipid profile reports, and blood pressure monitor ready.',
-            meetingRoomId: 'quickcare-room-101',
-            consultationFee: 800,
-            slotReleased: false,
-          }
-        ]);
+        setAppointments([]);
       }
     } catch (err) {
-      console.warn('Using resilient patient appointments state:', err.message);
-      setAppointments([
-        {
-          appointmentId: 'apt_101',
-          doctorName: 'Dr. Priya Deshmukh',
-          doctorSpecialization: 'Cardiologist',
-          appointmentDate: new Date().toISOString().split('T')[0],
-          appointmentTime: '10:00 AM',
-          status: 'CONFIRMED',
-          confirmationStatus: 'CONFIRMED',
-          consultationType: 'VIDEO',
-          googleMeetLink: 'https://meet.google.com/qck-card-hms',
-          doctorNotes: 'Please have your latest ECG, lipid profile reports, and blood pressure monitor ready.',
-          meetingRoomId: 'quickcare-room-101',
-          consultationFee: 800,
-          slotReleased: false,
-        }
-      ]);
+      console.warn('Could not load appointments:', err.message);
+      setAppointments([]);
     } finally {
       setLoading(false);
     }
@@ -82,6 +52,9 @@ export const MyAppointments = () => {
 
   useEffect(() => {
     fetchAppointments();
+    const handleAppointmentsUpdated = () => fetchAppointments();
+    window.addEventListener('quickcare_appointments_updated', handleAppointmentsUpdated);
+    return () => window.removeEventListener('quickcare_appointments_updated', handleAppointmentsUpdated);
   }, []);
 
   // When opening reschedule modal, fetch slots
@@ -199,14 +172,42 @@ export const MyAppointments = () => {
 
       {/* Grid of Appointments */}
       {loading ? (
-        <div className="py-20 text-center text-slate-400 text-sm">Loading appointments...</div>
-      ) : filtered.length === 0 ? (
-        <div className="bg-white dark:bg-slate-900 rounded-3xl p-12 text-center border border-slate-200 dark:border-slate-800">
-          <Calendar className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
-          <h3 className="text-base font-bold text-slate-800 dark:text-slate-200">No {activeTab.toLowerCase()} appointments</h3>
-          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-            Appointments matching this filter will show up here.
+        <div className="py-20 text-center text-slate-400 text-sm">
+          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+          Loading your appointments...
+        </div>
+      ) : appointments.length === 0 ? (
+        <div className="bg-white rounded-3xl p-12 text-center border border-slate-200/80 shadow-xs space-y-3 max-w-lg mx-auto">
+          <div className="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto">
+            <Calendar className="w-7 h-7" />
+          </div>
+          <h3 className="text-lg font-extrabold text-slate-800">No appointments yet!</h3>
+          <p className="text-xs text-slate-500 max-w-sm mx-auto">
+            Book your first appointment with a doctor to get started.
           </p>
+          <div className="pt-2">
+            <Link
+              to="/doctors"
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-md shadow-blue-500/20 transition"
+            >
+              <Search className="w-4 h-4" />
+              <span>Book an Appointment</span>
+            </Link>
+          </div>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="bg-white rounded-3xl p-10 text-center border border-slate-200/80 shadow-xs space-y-2 max-w-md mx-auto">
+          <Calendar className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+          <h3 className="text-base font-bold text-slate-800">No {activeTab.toLowerCase()} appointments</h3>
+          <p className="text-xs text-slate-400">
+            You do not currently have any appointments with {activeTab.toLowerCase()} status.
+          </p>
+          <button
+            onClick={() => setActiveTab('ALL')}
+            className="text-xs font-bold text-blue-600 hover:underline pt-1 cursor-pointer"
+          >
+            View all appointments ({appointments.length})
+          </button>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

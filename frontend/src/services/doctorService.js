@@ -1,4 +1,4 @@
-import api from './api';
+import api from './api.js';
 
 export const DEFAULT_DOCTORS = [
   {
@@ -354,10 +354,44 @@ export const doctorService = {
   },
 
   async getDoctorAvailability(doctorId, date) {
+    let dynamicallyBookedSlots = [];
+    try {
+      const rawApts = localStorage.getItem('quickcare_shared_appointments');
+      if (rawApts) {
+        const apts = JSON.parse(rawApts);
+        if (Array.isArray(apts)) {
+          dynamicallyBookedSlots = apts
+            .filter((a) => {
+              const matchDoctor =
+                a.doctorId === doctorId ||
+                a.doctorId === `doc_${doctorId}` ||
+                doctorId === `doc_${a.doctorId}`;
+              const matchDate = a.appointmentDate === date;
+              const isActive =
+                a.status !== 'CANCELLED' &&
+                a.status !== 'REJECTED' &&
+                a.status !== 'DECLINED' &&
+                !a.slotReleased;
+              return matchDoctor && matchDate && isActive;
+            })
+            .map((a) => (a.appointmentTime || '').trim())
+            .filter(Boolean);
+        }
+      }
+    } catch (e) {}
+
     try {
       const res = await api.get(`/doctors/${doctorId}/availability`, { params: { date } });
       if (res && res.data && (res.data.data?.availableSlots || res.data.availableSlots)) {
-        return { success: true, data: res.data.data || res.data };
+        const remoteData = res.data.data || res.data;
+        const allBooked = [...new Set([...(remoteData.bookedSlots || []), ...dynamicallyBookedSlots])];
+        return {
+          success: true,
+          data: {
+            ...remoteData,
+            bookedSlots: allBooked,
+          },
+        };
       }
     } catch (err) {
       console.warn('Backend availability API offline, calculating dynamic real-time slots:', err.message);
@@ -408,7 +442,7 @@ export const doctorService = {
         doctorId,
         date,
         availableSlots: generatedSlots,
-        bookedSlots: [],
+        bookedSlots: [...new Set(dynamicallyBookedSlots)],
         slotDurationMinutes: duration,
         workingHours: targetDoc.workingHours || '09:00 AM - 05:00 PM',
       },

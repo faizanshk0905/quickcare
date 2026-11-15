@@ -202,13 +202,18 @@ export const DoctorDetails = () => {
     setBookingError('');
     let patientFullName = user?.fullName;
     let patientEmail = user?.email;
-    if (!patientFullName || !patientEmail) {
+    let patientUid = user?.uid || user?.userId;
+    let patientPhone = user?.phone || '';
+
+    if (!patientFullName || !patientEmail || !patientUid) {
       try {
         const stored = localStorage.getItem('quickcare_current_user') || localStorage.getItem('quickcare_demo_user');
         if (stored) {
           const parsed = JSON.parse(stored);
           patientFullName = patientFullName || parsed?.fullName;
           patientEmail = patientEmail || parsed?.email;
+          patientUid = patientUid || parsed?.uid || parsed?.userId;
+          patientPhone = patientPhone || parsed?.phone || '';
         }
       } catch (e) {
         // fallback ignored
@@ -220,8 +225,11 @@ export const DoctorDetails = () => {
         doctorId,
         doctorName: doctor?.fullName || 'Doctor',
         doctorSpecialization: doctor?.specialization || 'General',
-        patientName: patientFullName || 'Patient Aarav Sharma',
-        patientEmail: patientEmail || 'patient@quickcare.com',
+        patientId: patientUid,
+        patientUid: patientUid,
+        patientName: patientFullName || 'Patient',
+        patientEmail: patientEmail || '',
+        patientPhone: patientPhone,
         appointmentDate: selectedDate,
         appointmentTime: selectedSlot,
         consultationType,
@@ -725,7 +733,7 @@ export const DoctorDetails = () => {
                 ) : (
                   <>
                     <Check className="w-4 h-4" />
-                    <span>Confirm Booking</span>
+                    <span>Confirm Appointment</span>
                   </>
                 )}
               </button>

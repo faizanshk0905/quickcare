@@ -18,15 +18,28 @@ export const PatientProfile = () => {
         const res = await api.get('/patients/profile');
         if (res && res.data && res.data.data) {
           setProfile(res.data.data);
+          return;
         }
       } catch (err) {
-        console.error(err);
+        // Fallback to local authenticated user profile
       } finally {
         setLoading(false);
       }
+
+      if (user) {
+        setProfile({
+          patientId: user.userId || user.uid || 'pat_' + Date.now().toString(36),
+          fullName: user.fullName || '',
+          email: user.email || '',
+          phone: user.phone || '',
+          dateOfBirth: user.dateOfBirth || '',
+          gender: user.gender || 'Male',
+          address: user.address || '',
+        });
+      }
     };
     fetchProfile();
-  }, []);
+  }, [user]);
 
   const handleChange = (e) => {
     setProfile((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -39,11 +52,37 @@ export const PatientProfile = () => {
     setSaving(true);
 
     try {
-      const res = await api.put('/patients/profile', profile);
-      if (res && res.data && res.data.data) {
-        setMsg('Profile updated successfully.');
-        updateUser({ fullName: profile.fullName, phone: profile.phone });
-      }
+      const updatedUser = {
+        ...(user || {}),
+        fullName: profile.fullName,
+        phone: profile.phone,
+        dateOfBirth: profile.dateOfBirth,
+        gender: profile.gender,
+        address: profile.address,
+      };
+      updateUser(updatedUser);
+      localStorage.setItem('quickcare_current_user', JSON.stringify(updatedUser));
+
+      // Also update in registered users list
+      try {
+        const raw = localStorage.getItem('quickcare_all_registered_users');
+        if (raw) {
+          const list = JSON.parse(raw);
+          const idx = list.findIndex(
+            (u) => (u.email || '').toLowerCase().trim() === (profile.email || '').toLowerCase().trim()
+          );
+          if (idx >= 0) {
+            list[idx] = { ...list[idx], ...updatedUser };
+            localStorage.setItem('quickcare_all_registered_users', JSON.stringify(list));
+          }
+        }
+      } catch (err) {}
+
+      try {
+        await api.put('/patients/profile', profile);
+      } catch (err) {}
+
+      setMsg('Profile updated successfully.');
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Failed to update profile.');
     } finally {

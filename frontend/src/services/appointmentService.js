@@ -1,71 +1,121 @@
-import api from './api';
+import api from './api.js';
 
 const STORAGE_KEY = 'quickcare_shared_appointments';
+const NOTIFICATIONS_STORAGE_KEY = 'quickcare_shared_notifications';
 
-const getInitialAppointments = () => [
-  {
-    appointmentId: 'apt_seed_101',
-    doctorId: 'doc_001',
-    doctorName: 'Dr. Priya Deshmukh',
-    patientId: 'pat_001',
-    patientName: 'Aarav Sharma',
-    patientEmail: 'patient@quickcare.com',
-    patientPhone: '+91 98765 43210',
-    appointmentDate: new Date().toISOString().split('T')[0],
-    appointmentTime: '11:00 AM',
-    consultationType: 'VIDEO',
-    status: 'CONFIRMED',
-    confirmationStatus: 'CONFIRMED',
-    reason: 'Follow-up consultation for cardiac health & blood pressure monitoring.',
-    consultationFee: 800,
-    googleMeetLink: 'https://meet.google.com/qck-card-hms',
-    meetingRoomId: 'quickcare-room-apt101',
-    createdAt: new Date().toISOString(),
-  },
-];
-
+// Clean retrieval of stored appointments without any fake dummy or seed data
 const getLocalAppointments = () => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      const seed = getInitialAppointments();
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(seed));
-      return seed;
-    }
+    if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : getInitialAppointments();
+    if (!Array.isArray(parsed)) return [];
+    // Permanently remove any legacy hardcoded dummy appointments (e.g. apt_seed_101, apt_101)
+    const cleaned = parsed.filter(
+      (a) => a && a.appointmentId !== 'apt_seed_101' && a.appointmentId !== 'apt_101'
+    );
+    if (cleaned.length !== parsed.length) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
+    }
+    return cleaned;
   } catch (e) {
-    return getInitialAppointments();
+    return [];
   }
 };
 
 const saveLocalAppointments = (list) => {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('quickcare_appointments_updated', { detail: list }));
+    }
   } catch (e) {
-    console.error('LocalStorage write error:', e);
+    console.error('LocalStorage write error for appointments:', e);
   }
 };
 
+const addLocalNotification = (notification) => {
+  try {
+    const raw = localStorage.getItem(NOTIFICATIONS_STORAGE_KEY);
+    const list = raw ? JSON.parse(raw) : [];
+    list.unshift({
+      notificationId: `notif_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`,
+      createdAt: new Date().toISOString(),
+      isRead: false,
+      ...notification,
+    });
+    localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(list));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('quickcare_notifications_updated'));
+    }
+  } catch (e) {}
+};
+
 export const appointmentService = {
+  // Book an appointment explicitly requested by the patient
   async bookAppointment(data) {
+    // 1. Resolve currently authenticated patient details
+    let currentUid = data.patientUid || data.patientId;
+    let currentEmail = data.patientEmail;
+    let currentName = data.patientName;
+    let currentPhone = data.patientPhone || '';
+
+    try {
+      const rawUser = localStorage.getItem('quickcare_current_user') || localStorage.getItem('quickcare_demo_user');
+      if (rawUser) {
+        const u = JSON.parse(rawUser);
+        currentUid = currentUid || u.uid || u.userId;
+        currentEmail = currentEmail || u.email;
+        currentName = currentName || u.fullName;
+        currentPhone = currentPhone || u.phone || '';
+      }
+    } catch (e) {}
+
+    if (!currentUid) {
+      currentUid = `usr_${Date.now().toString(36)}`;
+    }
+
+    // 2. Strict double-booking prevention check
+    const existingList = getLocalAppointments();
+    const isAlreadyBooked = existingList.some(
+      (a) =>
+        a.doctorId === data.doctorId &&
+        a.appointmentDate === data.appointmentDate &&
+        (a.appointmentTime || '').trim().toUpperCase() === (data.appointmentTime || '').trim().toUpperCase() &&
+        a.status !== 'CANCELLED' &&
+        a.status !== 'REJECTED' &&
+        a.status !== 'DECLINED' &&
+        !a.slotReleased
+    );
+
+    if (isAlreadyBooked) {
+      throw new Error('This appointment slot has just been booked. Please select another slot.');
+    }
+
     const isVideo = (data.consultationType || 'VIDEO').toUpperCase() === 'VIDEO';
-    const localApt = {
-      appointmentId: `apt_${Date.now().toString(36)}`,
-      doctorId: data.doctorId || 'doc_001',
-      doctorName: data.doctorName || 'Dr. Priya Deshmukh',
-      doctorSpecialization: data.doctorSpecialization || 'Cardiology',
-      patientId: 'pat_001',
-      patientName: data.patientName || 'Aarav Sharma',
-      patientEmail: data.patientEmail || 'patient@quickcare.com',
-      patientPhone: '+91 98765 43210',
+    const cleanId = `apt_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`;
+
+    // 3. Construct fully qualified appointment record
+    const newAppointment = {
+      appointmentId: cleanId,
+      doctorId: data.doctorId,
+      doctorUid: data.doctorUid || data.doctorId,
+      doctorName: data.doctorName,
+      doctorSpecialization: data.doctorSpecialization || 'General Healthcare',
+      patientId: currentUid,
+      patientUid: currentUid,
+      patientName: currentName || 'Patient',
+      patientEmail: currentEmail || '',
+      patientPhone: currentPhone,
       appointmentDate: data.appointmentDate,
       appointmentTime: data.appointmentTime,
       consultationType: data.consultationType || 'VIDEO',
+      consultationFee: Number(data.consultationFee) || 500,
+      reason: data.reason || 'General Consultation',
       status: 'PENDING',
+      appointmentStatus: 'PENDING',
       confirmationStatus: 'PENDING',
-      reason: data.reason || 'Telehealth Consultation',
-      consultationFee: data.consultationFee || 800,
+      slotReleased: false,
       googleMeetLink: null,
       videoConsultationLink: null,
       videoLinkSent: false,
@@ -74,29 +124,53 @@ export const appointmentService = {
       createdAt: new Date().toISOString(),
     };
 
-    // Always immediately persist locally so Doctor and Patient dashboards see it
-    const list = getLocalAppointments();
-    list.unshift(localApt);
-    saveLocalAppointments(list);
+    // 4. Save immediately so slot is locked and patient dashboard shows it
+    existingList.unshift(newAppointment);
+    saveLocalAppointments(existingList);
 
+    // 5. Send notifications
+    addLocalNotification({
+      recipientUid: currentUid,
+      recipientEmail: currentEmail,
+      title: 'Appointment Request Submitted',
+      message: `Your appointment request with ${data.doctorName} on ${data.appointmentDate} at ${data.appointmentTime} has been submitted.`,
+      type: 'APPOINTMENT_BOOKED',
+      appointmentId: cleanId,
+    });
+
+    addLocalNotification({
+      recipientUid: data.doctorId,
+      recipientEmail: data.doctorEmail || '',
+      title: 'New Patient Appointment',
+      message: `${currentName} booked a consultation for ${data.appointmentDate} at ${data.appointmentTime}.`,
+      type: 'APPOINTMENT_REQUEST',
+      appointmentId: cleanId,
+    });
+
+    // 6. Attempt server/Firestore sync
     try {
-      const res = await api.post('/appointments', data);
-      if (res && res.data) {
-        if (res.data.data?.appointmentId) {
-          localApt.appointmentId = res.data.data.appointmentId;
-          localApt.videoConsultationStatus = res.data.data.videoConsultationStatus || localApt.videoConsultationStatus;
-          saveLocalAppointments(list);
-        }
+      const res = await api.post('/appointments', {
+        ...data,
+        patientId: currentUid,
+        patientUid: currentUid,
+        patientName: currentName,
+        patientEmail: currentEmail,
+        patientPhone: currentPhone,
+      });
+      if (res && res.data && res.data.data?.appointmentId) {
+        newAppointment.appointmentId = res.data.data.appointmentId;
+        newAppointment.videoConsultationStatus = res.data.data.videoConsultationStatus || newAppointment.videoConsultationStatus;
+        saveLocalAppointments(existingList);
         return res.data;
       }
     } catch (err) {
-      console.warn('Backend server appointment booking offline, saved to synchronized storage:', err.message);
+      console.warn('Backend server appointment booking offline, synchronized locally:', err.message);
     }
 
     return {
       success: true,
       message: 'Appointment requested successfully',
-      data: localApt,
+      data: newAppointment,
     };
   },
 
@@ -111,6 +185,7 @@ export const appointmentService = {
     return { success: true, data: local };
   },
 
+  // Get appointments strictly for the logged-in patient
   async getPatientAppointments() {
     let remoteList = [];
     try {
@@ -121,16 +196,49 @@ export const appointmentService = {
         remoteList = res.data;
       }
     } catch (err) {
-      console.warn('Backend getPatientAppointments offline, loading local store:', err.message);
+      // Backend offline or standalone mode
+    }
+
+    // Resolve authenticated patient's identity
+    let currentUid = null;
+    let currentUserId = null;
+    let currentEmail = null;
+    try {
+      const rawUser = localStorage.getItem('quickcare_current_user') || localStorage.getItem('quickcare_demo_user');
+      if (rawUser) {
+        const u = JSON.parse(rawUser);
+        currentUid = u.uid;
+        currentUserId = u.userId;
+        currentEmail = (u.email || '').toLowerCase().trim();
+      }
+    } catch (e) {}
+
+    // If completely unauthenticated, return 0 appointments
+    if (!currentUid && !currentUserId && !currentEmail) {
+      return { success: true, data: [] };
     }
 
     const localList = getLocalAppointments();
     const remoteIds = new Set(remoteList.map((a) => a.appointmentId));
     const merged = [...localList.filter((l) => !remoteIds.has(l.appointmentId)), ...remoteList];
 
-    return { success: true, data: merged };
+    // Filter strictly by THIS patient's identity
+    const filtered = merged.filter((a) => {
+      const aPatientUid = a.patientUid || '';
+      const aPatientId = a.patientId || '';
+      const aPatientEmail = (a.patientEmail || '').toLowerCase().trim();
+
+      const matchUid = currentUid && (aPatientUid === currentUid || aPatientId === currentUid);
+      const matchUserId = currentUserId && (aPatientUid === currentUserId || aPatientId === currentUserId);
+      const matchEmail = currentEmail && aPatientEmail && aPatientEmail === currentEmail;
+
+      return matchUid || matchUserId || matchEmail;
+    });
+
+    return { success: true, data: filtered };
   },
 
+  // Get appointments strictly for a doctor
   async getDoctorAppointments(targetDoctorId = null) {
     let remoteList = [];
     try {
@@ -140,11 +248,8 @@ export const appointmentService = {
       } else if (res && Array.isArray(res.data)) {
         remoteList = res.data;
       }
-    } catch (err) {
-      console.warn('Backend getDoctorAppointments offline, loading local store:', err.message);
-    }
+    } catch (err) {}
 
-    // Determine current doctor identity
     let docId = targetDoctorId;
     let docEmail = null;
     let docName = null;
@@ -163,7 +268,6 @@ export const appointmentService = {
     const remoteIds = new Set(remoteList.map((a) => a.appointmentId));
     const merged = [...localList.filter((l) => !remoteIds.has(l.appointmentId)), ...remoteList];
 
-    // Filter appointments: ONLY return appointments belonging to THIS doctor!
     const filtered = merged.filter((a) => {
       if (!docId && !docEmail && !docName) return true;
 
@@ -189,14 +293,31 @@ export const appointmentService = {
     return { success: true, data: filtered };
   },
 
+  // Update appointment status and release slot on cancellation
   async updateStatus(appointmentId, status, reason = '') {
-    // Update locally
     const list = getLocalAppointments();
     const idx = list.findIndex((a) => a.appointmentId === appointmentId);
     if (idx !== -1) {
       list[idx].status = status;
+      list[idx].appointmentStatus = status;
       if (reason) list[idx].cancellationReason = reason;
+
+      if (status === 'CANCELLED' || status === 'REJECTED' || status === 'DECLINED') {
+        list[idx].slotReleased = true;
+        list[idx].cancelledAt = new Date().toISOString();
+      }
+
       saveLocalAppointments(list);
+
+      // Create notification
+      addLocalNotification({
+        recipientUid: list[idx].patientUid || list[idx].patientId,
+        recipientEmail: list[idx].patientEmail,
+        title: `Appointment ${status}`,
+        message: `Your appointment with ${list[idx].doctorName} on ${list[idx].appointmentDate} has been ${status.toLowerCase()}.${reason ? ` Reason: ${reason}` : ''}`,
+        type: `APPOINTMENT_${status}`,
+        appointmentId,
+      });
     }
 
     try {
@@ -213,6 +334,8 @@ export const appointmentService = {
     if (idx !== -1) {
       list[idx].appointmentDate = date;
       list[idx].appointmentTime = time;
+      list[idx].status = 'PENDING';
+      list[idx].appointmentStatus = 'PENDING';
       saveLocalAppointments(list);
     }
 
@@ -320,6 +443,7 @@ export const appointmentService = {
       list[idx].videoConsultationStatus = 'LINK_SENT';
       if (list[idx].status === 'PENDING') {
         list[idx].status = 'CONFIRMED';
+        list[idx].appointmentStatus = 'CONFIRMED';
       }
       saveLocalAppointments(list);
     }
@@ -329,7 +453,6 @@ export const appointmentService = {
       });
       return res.data;
     } catch (err) {
-      console.warn('Backend sendVideoConsultationLink offline, saved locally:', err.message);
       return {
         success: true,
         message: 'Video consultation link dispatched to patient email successfully',
@@ -358,9 +481,7 @@ export const appointmentService = {
     }
     try {
       await api.put(`/appointments/${appointmentId}/meeting-link`, { googleMeetLink: link });
-    } catch (err) {
-      console.warn('Backend update meeting link:', err.message);
-    }
+    } catch (err) {}
     return { success: true, googleMeetLink: link };
   },
 
@@ -368,9 +489,7 @@ export const appointmentService = {
     try {
       const res = await api.get(`/appointments/${appointmentId}/google-meet`);
       if (res && res.data) return res.data;
-    } catch (err) {
-      console.warn('Backend getGoogleMeetDetails offline, loading local store:', err.message);
-    }
+    } catch (err) {}
     const apt = getLocalAppointments().find((a) => a.appointmentId === appointmentId);
     const cleanId = (appointmentId || 'session').replace(/[^a-zA-Z0-9]/g, '');
     const isSent = apt?.videoLinkSent || Boolean(apt?.videoConsultationLink);

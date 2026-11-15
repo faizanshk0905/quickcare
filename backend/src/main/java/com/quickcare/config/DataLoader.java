@@ -152,7 +152,7 @@ public class DataLoader implements CommandLineRunner {
         Appointment apt2 = new Appointment();
         apt2.setAppointmentId("apt_102");
         apt2.setPatientId("pat_002");
-        apt2.setPatientUid(patUser1.getUid());
+        apt2.setPatientUid("usr_pat_02");
         apt2.setPatientName("Rohan Patel");
         apt2.setPatientEmail("rohan.patel@example.com");
         apt2.setPatientPhone("+91 98330 22334");
@@ -179,7 +179,7 @@ public class DataLoader implements CommandLineRunner {
         Appointment apt3 = new Appointment();
         apt3.setAppointmentId("apt_103");
         apt3.setPatientId("pat_003");
-        apt3.setPatientUid(patUser1.getUid());
+        apt3.setPatientUid("usr_pat_03");
         apt3.setPatientName("Sneha Rao");
         apt3.setPatientEmail("sneha.rao@example.com");
         apt3.setPatientPhone("+91 98440 33445");
