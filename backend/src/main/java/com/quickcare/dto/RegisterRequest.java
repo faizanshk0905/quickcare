@@ -31,11 +31,18 @@ public class RegisterRequest {
     private String clinicAddress;
     private String bio;
     private String profileImage;
+    private String certificatePath;
+    private String certificateFileName;
+    private String certificateFileType;
 
     // Patient specific fields
     private String dateOfBirth;
     private String gender;
     private String address;
+    private Integer age;
+
+    // Verification
+    private String otp;
 
     public RegisterRequest() {}
 
@@ -92,4 +99,19 @@ public class RegisterRequest {
 
     public String getAddress() { return address; }
     public void setAddress(String address) { this.address = address; }
+
+    public String getCertificatePath() { return certificatePath; }
+    public void setCertificatePath(String certificatePath) { this.certificatePath = certificatePath; }
+
+    public String getCertificateFileName() { return certificateFileName; }
+    public void setCertificateFileName(String certificateFileName) { this.certificateFileName = certificateFileName; }
+
+    public String getCertificateFileType() { return certificateFileType; }
+    public void setCertificateFileType(String certificateFileType) { this.certificateFileType = certificateFileType; }
+
+    public Integer getAge() { return age; }
+    public void setAge(Integer age) { this.age = age; }
+
+    public String getOtp() { return otp; }
+    public void setOtp(String otp) { this.otp = otp; }
 }

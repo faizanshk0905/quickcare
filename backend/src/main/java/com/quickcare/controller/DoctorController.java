@@ -22,6 +22,9 @@ public class DoctorController {
     @Autowired
     private DoctorService doctorService;
 
+    @Autowired
+    private com.quickcare.service.CertificateStorageService certificateStorageService;
+
     @GetMapping
     public ResponseEntity<ApiResponse<List<Doctor>>> searchDoctors(
             @RequestParam(required = false) String query,
@@ -37,6 +40,33 @@ public class DoctorController {
     public ResponseEntity<ApiResponse<Doctor>> getDoctor(@PathVariable String doctorId) {
         Doctor doctor = doctorService.getDoctorById(doctorId);
         return ResponseEntity.ok(ApiResponse.ok(doctor));
+    }
+
+    @GetMapping("/{doctorId}/certificate")
+    public ResponseEntity<byte[]> getCertificate(@PathVariable String doctorId) {
+        Doctor doctor = doctorService.getDoctorById(doctorId);
+        String path = doctor.getCertificatePath();
+        byte[] bytes = certificateStorageService.getCertificateBytes(path != null ? path : doctor.getUid());
+        if (bytes == null && doctor.getUid() != null) {
+            bytes = certificateStorageService.getCertificateBytes(doctor.getUid());
+        }
+        if (bytes == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        String mime = doctor.getCertificateFileType();
+        if (mime == null || mime.trim().isEmpty()) {
+            mime = (doctor.getCertificateFileName() != null && doctor.getCertificateFileName().toLowerCase().endsWith(".pdf"))
+                    ? "application/pdf"
+                    : "image/jpeg";
+        }
+
+        String filename = doctor.getCertificateFileName() != null ? doctor.getCertificateFileName() : "qualification_certificate.pdf";
+
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_TYPE, mime)
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + filename + "\"")
+                .body(bytes);
     }
 
     @GetMapping("/me")

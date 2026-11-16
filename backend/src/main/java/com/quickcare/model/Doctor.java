@@ -28,6 +28,13 @@ public class Doctor {
     private String onlineStatus = "AVAILABLE_FOR_VIDEO"; // ONLINE, AVAILABLE_FOR_VIDEO, BUSY, OFFLINE
     private boolean videoConsultationAvailable = true;
     private String verificationStatus; // PENDING, VERIFIED, REJECTED
+    private String approvalStatus = "PENDING"; // PENDING, APPROVED, REJECTED
+    private boolean emailVerified = false;
+    private String certificatePath;
+    private String certificateFileName;
+    private String certificateUploadedAt;
+    private String certificateFileType;
+    private String rejectionReason;
     private String profileImage;
     private String gender; // Male, Female, Other
     private double rating;
@@ -39,6 +46,7 @@ public class Doctor {
     public Doctor() {
         this.createdAt = Instant.now();
         this.verificationStatus = "PENDING";
+        this.approvalStatus = "PENDING";
         this.rating = 4.8;
         this.reviewCount = 0;
     }
@@ -110,7 +118,44 @@ public class Doctor {
     public void setVideoConsultationAvailable(boolean videoConsultationAvailable) { this.videoConsultationAvailable = videoConsultationAvailable; }
 
     public String getVerificationStatus() { return verificationStatus; }
-    public void setVerificationStatus(String verificationStatus) { this.verificationStatus = verificationStatus; }
+    public void setVerificationStatus(String verificationStatus) {
+        this.verificationStatus = verificationStatus;
+        if ("VERIFIED".equalsIgnoreCase(verificationStatus)) {
+            this.approvalStatus = "APPROVED";
+        } else if ("REJECTED".equalsIgnoreCase(verificationStatus)) {
+            this.approvalStatus = "REJECTED";
+        }
+    }
+
+    public String getApprovalStatus() { return approvalStatus != null ? approvalStatus : ("VERIFIED".equalsIgnoreCase(verificationStatus) ? "APPROVED" : verificationStatus); }
+    public void setApprovalStatus(String approvalStatus) {
+        this.approvalStatus = approvalStatus;
+        if ("APPROVED".equalsIgnoreCase(approvalStatus)) {
+            this.verificationStatus = "VERIFIED";
+        } else if ("REJECTED".equalsIgnoreCase(approvalStatus)) {
+            this.verificationStatus = "REJECTED";
+        } else if ("PENDING".equalsIgnoreCase(approvalStatus)) {
+            this.verificationStatus = "PENDING";
+        }
+    }
+
+    public boolean isEmailVerified() { return emailVerified; }
+    public void setEmailVerified(boolean emailVerified) { this.emailVerified = emailVerified; }
+
+    public String getCertificatePath() { return certificatePath; }
+    public void setCertificatePath(String certificatePath) { this.certificatePath = certificatePath; }
+
+    public String getCertificateFileName() { return certificateFileName; }
+    public void setCertificateFileName(String certificateFileName) { this.certificateFileName = certificateFileName; }
+
+    public String getCertificateUploadedAt() { return certificateUploadedAt; }
+    public void setCertificateUploadedAt(String certificateUploadedAt) { this.certificateUploadedAt = certificateUploadedAt; }
+
+    public String getCertificateFileType() { return certificateFileType; }
+    public void setCertificateFileType(String certificateFileType) { this.certificateFileType = certificateFileType; }
+
+    public String getRejectionReason() { return rejectionReason; }
+    public void setRejectionReason(String rejectionReason) { this.rejectionReason = rejectionReason; }
 
     public String getProfileImage() { return profileImage; }
     public void setProfileImage(String profileImage) { this.profileImage = profileImage; }

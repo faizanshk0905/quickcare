@@ -246,6 +246,8 @@ export const adminService = {
       localDocs[docIdx] = {
         ...localDocs[docIdx],
         verificationStatus: newStatus,
+        approvalStatus: newStatus,
+        rejectionReason: approve ? '' : (feedback || 'Credentials could not be verified by medical board.'),
         isRecentlyAdded: false,
         verifiedAt: new Date().toISOString(),
         feedback,
@@ -259,6 +261,8 @@ export const adminService = {
         updatedDoctor = {
           ...seed,
           verificationStatus: newStatus,
+          approvalStatus: newStatus,
+          rejectionReason: approve ? '' : (feedback || 'Credentials could not be verified by medical board.'),
           isRecentlyAdded: false,
           verifiedAt: new Date().toISOString(),
           feedback,
@@ -279,8 +283,32 @@ export const adminService = {
         if (uIdx >= 0) {
           users[uIdx].accountStatus = approve ? 'ACTIVE' : 'INACTIVE';
           users[uIdx].verificationStatus = newStatus;
+          users[uIdx].approvalStatus = newStatus;
+          users[uIdx].rejectionReason = approve ? '' : (feedback || 'Credentials could not be verified by medical board.');
           localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
         }
+      }
+    } catch (e) {}
+
+    // Dispatch notification to doctor
+    try {
+      const notifRaw = localStorage.getItem('quickcare_shared_notifications');
+      const notifList = notifRaw ? JSON.parse(notifRaw) : [];
+      notifList.unshift({
+        notificationId: `notif_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`,
+        recipientUid: doctorId,
+        recipientEmail: updatedDoctor?.email || '',
+        title: approve ? 'Medical Registration Approved' : 'Registration Application Review Notice',
+        message: approve
+          ? 'Congratulations! Your medical qualification certificates have been verified by the medical board. Your profile is now active for patient bookings.'
+          : `Your doctor registration application was rejected. Reason: ${feedback || 'Credentials could not be verified'}. You may update your documents and resubmit.`,
+        type: approve ? 'DOCTOR_VERIFIED' : 'DOCTOR_REJECTED',
+        createdAt: new Date().toISOString(),
+        isRead: false,
+      });
+      localStorage.setItem('quickcare_shared_notifications', JSON.stringify(notifList));
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('quickcare_notifications_updated'));
       }
     } catch (e) {}
 
@@ -291,7 +319,11 @@ export const adminService = {
 
     // Call backend asynchronously
     try {
-      const res = await api.put(`/admin/doctors/${doctorId}/verify`, { approve, feedback });
+      const res = await api.put(`/admin/doctors/${doctorId}/verify`, {
+        approve,
+        feedback,
+        rejectionReason: feedback,
+      });
       if (res && res.data) {
         return res.data;
       }
@@ -301,7 +333,7 @@ export const adminService = {
 
     return {
       success: true,
-      message: `Doctor verification status updated to ${newStatus}`,
+      message: `Doctor status updated to ${newStatus}`,
       data: updatedDoctor,
     };
   },

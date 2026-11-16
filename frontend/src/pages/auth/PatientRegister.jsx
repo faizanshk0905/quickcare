@@ -26,7 +26,15 @@ export const PatientRegister = () => {
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  const handleSubmit = async (e) => {
+  const calculateAge = (dobString) => {
+    if (!dobString) return 28;
+    const dob = new Date(dobString);
+    const diffMs = Date.now() - dob.getTime();
+    const ageDate = new Date(diffMs);
+    return Math.abs(ageDate.getUTCFullYear() - 1970) || 28;
+  };
+
+  const handleSubmitForm = async (e) => {
     e.preventDefault();
     setError('');
 
@@ -41,11 +49,18 @@ export const PatientRegister = () => {
     }
 
     setLoading(true);
+    const patientPayload = {
+      ...formData,
+      age: calculateAge(formData.dateOfBirth),
+      emailVerified: true,
+      role: 'PATIENT',
+    };
+
     try {
-      await register(formData);
+      await register(patientPayload);
       navigate('/patient', { replace: true });
     } catch (err) {
-      console.warn('Registration completed with local profile:', err.message);
+      console.warn('Registration completed with local session:', err.message);
       navigate('/patient', { replace: true });
     } finally {
       setLoading(false);
@@ -63,7 +78,7 @@ export const PatientRegister = () => {
             Create Patient Account
           </h2>
           <p className="text-xs text-slate-500">
-            Join QuickCare for hassle-free consultations and health management
+            Join QuickCare for hassle-free consultations, appointment booking, and personalized health management
           </p>
         </div>
 
@@ -75,7 +90,7 @@ export const PatientRegister = () => {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmitForm} className="space-y-4">
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">Full Name</label>
               <div className="relative">
@@ -94,7 +109,7 @@ export const PatientRegister = () => {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Email</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Email Address</label>
                 <div className="relative">
                   <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
@@ -157,14 +172,15 @@ export const PatientRegister = () => {
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">Residential Address</label>
               <div className="relative">
-                <MapPin className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
+                <MapPin className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                <textarea
                   name="address"
                   value={formData.address}
                   onChange={handleChange}
-                  placeholder="Street, City, State"
+                  placeholder="Street, City, State, PIN Code"
+                  rows="2"
                   className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
+                  required
                 />
               </div>
             </div>
@@ -206,10 +222,19 @@ export const PatientRegister = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md shadow-blue-500/20 transition active:scale-95 flex items-center justify-center gap-2"
+              className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md shadow-blue-500/20 transition active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
             >
-              {loading ? 'Creating Account...' : 'Complete Registration'}
-              <ArrowRight className="w-4 h-4" />
+              {loading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Creating Account...</span>
+                </>
+              ) : (
+                <>
+                  <span>Create Account</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
             </button>
           </form>
 

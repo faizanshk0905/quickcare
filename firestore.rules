@@ -19,26 +19,35 @@ service cloud.firestore {
 
     // Users Collection
     match /users/{userId} {
-      allow read: if isAuthenticated();
+      allow read: if isOwner(userId) || isAdmin();
       allow write: if isOwner(userId) || isAdmin();
-    }
-
-    // Patients Collection
-    match /patients/{patientId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && (request.auth.uid == resource.data.uid || isAdmin());
       allow create: if isAuthenticated();
     }
 
-    // Doctors Collection
+    // Patients Collection (Requirement 2: Strictly own profile or Admin)
+    match /patients/{patientId} {
+      allow read: if isAuthenticated() && 
+        (request.auth.uid == resource.data.uid || 
+         request.auth.uid == patientId || 
+         isAdmin());
+      allow write: if isAuthenticated() && 
+        (request.auth.uid == resource.data.uid || 
+         request.auth.uid == patientId || 
+         isAdmin());
+      allow create: if isAuthenticated();
+    }
+
+    // Doctors Collection (Requirement 3: Public only sees approved doctors; pending seen only by owner & admin)
     match /doctors/{doctorId} {
-      allow read: if true; // Public can search verified doctors
+      allow read: if resource.data.verificationStatus == 'VERIFIED' || 
+                     resource.data.approvalStatus == 'APPROVED' || 
+                     (isAuthenticated() && (request.auth.uid == resource.data.uid || isAdmin()));
       allow create: if isAuthenticated();
       allow update: if isAuthenticated() && (request.auth.uid == resource.data.uid || isAdmin());
       allow delete: if isAdmin();
     }
 
-    // Appointments Collection
+    // Appointments Collection (Strict Patient & Doctor isolation)
     match /appointments/{appointmentId} {
       allow read: if isAuthenticated() && 
         (request.auth.uid == resource.data.patientUid || 
@@ -56,7 +65,10 @@ service cloud.firestore {
 
     // Prescriptions Collection
     match /prescriptions/{prescriptionId} {
-      allow read: if isAuthenticated();
+      allow read: if isAuthenticated() && 
+        (request.auth.uid == resource.data.patientUid || 
+         request.auth.uid == resource.data.doctorUid || 
+         isAdmin());
       allow write: if isAuthenticated() && 
         (request.auth.token.role == 'DOCTOR' || isAdmin());
     }

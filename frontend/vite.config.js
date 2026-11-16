@@ -23,7 +23,10 @@ function autoBackendPlugin() {
       })
 
       checkReq.on('error', () => {
-        const jarPath = path.resolve(__dirname, '../backend/target/quickcare-backend-1.0.0.jar')
+        let jarPath = path.resolve(__dirname, '../backend/target/quickcare-backend.jar')
+        if (!fs.existsSync(jarPath)) {
+          jarPath = path.resolve(__dirname, '../backend/target/quickcare-backend-1.0.0.jar')
+        }
         if (fs.existsSync(jarPath)) {
           const javaPaths = [
             'C:\\tools\\jdk17\\bin\\java.exe',

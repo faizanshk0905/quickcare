@@ -78,6 +78,12 @@ public class AdminService {
             newStatus = "PENDING";
         }
         doctor.setVerificationStatus(newStatus);
+        doctor.setApprovalStatus(approve ? "APPROVED" : ("PENDING".equalsIgnoreCase(feedback) ? "PENDING" : "REJECTED"));
+        if (!approve && feedback != null && !feedback.trim().isEmpty()) {
+            doctor.setRejectionReason(feedback.trim());
+        } else if (approve) {
+            doctor.setRejectionReason(null);
+        }
         Doctor saved = db.saveDoctor(doctor);
 
         // Update User account status as well

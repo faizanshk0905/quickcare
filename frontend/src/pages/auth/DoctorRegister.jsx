@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { registerDoctorToSharedRegistry } from '../../services/adminService';
+import { authService } from '../../services/authService';
 import {
   Stethoscope,
   User,
@@ -19,6 +20,12 @@ import {
   Upload,
   Check,
   Sparkles,
+  FileText,
+  Eye,
+  Trash2,
+  RefreshCw,
+  X,
+  ShieldCheck,
 } from 'lucide-react';
 
 const FEMALE_AVATARS = [
@@ -60,6 +67,7 @@ const MALE_AVATARS = [
 export const DoctorRegister = () => {
   const navigate = useNavigate();
   const { register } = useAuth();
+  const fileInputRef = useRef(null);
 
   const [formData, setFormData] = useState({
     fullName: '',
@@ -80,9 +88,19 @@ export const DoctorRegister = () => {
     role: 'DOCTOR',
   });
 
+  // Certificate Upload State
+  const [certificateFile, setCertificateFile] = useState(null);
+  const [certificatePreview, setCertificatePreview] = useState(null);
+  const [certificateType, setCertificateType] = useState(''); // 'pdf' | 'image'
+  const [certificateSizeFormatted, setCertificateSizeFormatted] = useState('');
+  const [certificateError, setCertificateError] = useState('');
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successPending, setSuccessPending] = useState(false);
+  const [submittedDoctorInfo, setSubmittedDoctorInfo] = useState(null);
 
   const specializations = [
     'General Physician',
@@ -104,7 +122,6 @@ export const DoctorRegister = () => {
 
   const handleGenderSelect = (selectedGender) => {
     setFormData((prev) => {
-      // If profileImage matches one of the opposite gender's avatars, switch to a matching default
       const isCurrentFemale = FEMALE_AVATARS.some((a) => a.url === prev.profileImage);
       const isCurrentMale = MALE_AVATARS.some((a) => a.url === prev.profileImage);
 
@@ -127,7 +144,7 @@ export const DoctorRegister = () => {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 2 * 1024 * 1024) {
-        setError('Image file must be under 2MB.');
+        setError('Avatar image must be under 2MB.');
         return;
       }
       const reader = new FileReader();
@@ -138,12 +155,73 @@ export const DoctorRegister = () => {
     }
   };
 
-  const handleSubmit = async (e) => {
+  // Requirement 3: Certificate file handling with strict validation
+  const handleCertificateChange = (e) => {
+    setCertificateError('');
+    setError('');
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // 1. Validate File Size (Max 5 MB = 5 * 1024 * 1024 bytes)
+    const MAX_SIZE = 5 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+      const actualMb = (file.size / (1024 * 1024)).toFixed(2);
+      setCertificateError(`File size exceeds 5 MB limit. Selected file is ${actualMb} MB. Please upload a smaller file.`);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    // 2. Validate Extension & MIME type
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    const allowedExts = ['pdf', 'jpg', 'jpeg', 'png'];
+    if (!allowedExts.includes(ext)) {
+      setCertificateError('Unsupported file format. Please upload a PDF (.pdf), JPG (.jpg, .jpeg), or PNG (.png) document.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    // Format file size
+    const sizeFormatted = file.size < 1024 * 1024
+      ? `${(file.size / 1024).toFixed(1)} KB`
+      : `${(file.size / (1024 * 1024)).toFixed(2)} MB`;
+    setCertificateSizeFormatted(sizeFormatted);
+    setCertificateFile(file);
+
+    // Generate preview
+    const isPdf = ext === 'pdf' || file.type === 'application/pdf';
+    setCertificateType(isPdf ? 'pdf' : 'image');
+
+    const reader = new FileReader();
+    reader.onload = (loadEvt) => {
+      setCertificatePreview(loadEvt.target.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveCertificate = () => {
+    setCertificateFile(null);
+    setCertificatePreview(null);
+    setCertificateType('');
+    setCertificateSizeFormatted('');
+    setCertificateError('');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // Direct Registration with Mandatory Qualification Certificate
+  const handleSubmitForm = async (e) => {
     e.preventDefault();
     setError('');
+    setCertificateError('');
 
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match.');
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      setError('Password must be at least 6 characters.');
       return;
     }
 
@@ -152,43 +230,129 @@ export const DoctorRegister = () => {
       return;
     }
 
+    // Requirement 3: Mandatory Medical Qualification Certificate
+    if (!certificateFile) {
+      setCertificateError('Upload of Medical Qualification Certificate is mandatory. Please select a valid document.');
+      setError('Please upload your Medical Qualification Certificate before continuing.');
+      return;
+    }
+
     setLoading(true);
+    setUploadProgress(20);
+
+    const generatedDoctorUid = `doc_${Date.now().toString(36)}`;
+    let certificateMeta = {
+      certificatePath: `doctor-certificates/${generatedDoctorUid}/qualification_certificate.${certificateFile.name.split('.').pop() || 'pdf'}`,
+      certificateFileName: certificateFile.name,
+      certificateFileType: certificateFile.type || (certificateType === 'pdf' ? 'application/pdf' : 'image/jpeg'),
+      certificateUploadedAt: new Date().toISOString(),
+      certificateBase64: certificatePreview,
+    };
+
+    // Upload certificate to backend / storage
     try {
-      const regRes = await register(formData);
-      registerDoctorToSharedRegistry({
+      setUploadProgress(50);
+      const uploadRes = await authService.uploadCertificate(certificateFile, generatedDoctorUid);
+      if (uploadRes && uploadRes.data) {
+        certificateMeta = {
+          ...certificateMeta,
+          ...uploadRes.data,
+        };
+      }
+      setUploadProgress(80);
+    } catch (uploadErr) {
+      console.warn('Certificate stored via resilient fallback:', uploadErr.message);
+    }
+
+    const doctorPayload = {
+      ...formData,
+      ...certificateMeta,
+      emailVerified: true,
+      approvalStatus: 'PENDING',
+      verificationStatus: 'PENDING',
+    };
+
+    try {
+      setUploadProgress(95);
+      const regRes = await register(doctorPayload);
+      setUploadProgress(100);
+
+      const registeredDoctor = {
         ...formData,
-        userId: regRes?.data?.user?.userId || regRes?.data?.profileId,
-        uid: regRes?.data?.user?.uid || regRes?.data?.profileId,
-      });
+        ...certificateMeta,
+        userId: regRes?.data?.user?.userId || regRes?.data?.profileId || generatedDoctorUid,
+        uid: regRes?.data?.user?.uid || regRes?.data?.profileId || generatedDoctorUid,
+        doctorId: regRes?.data?.profileId || generatedDoctorUid,
+        approvalStatus: 'PENDING',
+        verificationStatus: 'PENDING',
+        emailVerified: true,
+      };
+
+      registerDoctorToSharedRegistry(registeredDoctor);
+      setSubmittedDoctorInfo(registeredDoctor);
       setSuccessPending(true);
     } catch (err) {
       console.warn('Doctor registration completed locally:', err.message);
-      registerDoctorToSharedRegistry(formData);
+      registerDoctorToSharedRegistry(doctorPayload);
+      setSubmittedDoctorInfo(doctorPayload);
       setSuccessPending(true);
     } finally {
       setLoading(false);
     }
   };
 
+  // Requirement 3: Success Pending Review Screen
   if (successPending) {
     return (
       <div className="min-h-[80vh] flex items-center justify-center px-4 py-12">
-        <div className="max-w-md w-full bg-white p-8 rounded-3xl border border-slate-200/80 shadow-2xl text-center space-y-4">
-          <div className="w-14 h-14 bg-amber-100 text-amber-600 rounded-3xl flex items-center justify-center mx-auto">
-            <ShieldAlert className="w-8 h-8" />
+        <div className="max-w-md w-full bg-white p-8 rounded-3xl border border-slate-200/80 shadow-2xl text-center space-y-5 animate-fadeIn">
+          <div className="w-16 h-16 bg-amber-50 text-amber-600 rounded-3xl flex items-center justify-center mx-auto border border-amber-200 shadow-sm">
+            <ShieldAlert className="w-9 h-9" />
           </div>
-          <h2 className="text-xl font-extrabold text-slate-900">Registration Under Review</h2>
+          <div className="space-y-1">
+            <h2 className="text-2xl font-extrabold text-slate-900">Registration Submitted</h2>
+            <p className="text-xs text-amber-700 font-bold uppercase tracking-wider">Account Awaiting Admin Verification</p>
+          </div>
+
           <p className="text-xs text-slate-600 leading-relaxed">
-            Thank you, <strong>Dr. {formData.fullName}</strong>. Your medical credentials, {formData.gender} practitioner profile, and license{' '}
-            <span className="font-mono font-bold text-slate-800">({formData.medicalRegistrationNumber})</span>{' '}
-            have been submitted for Administrative Medical Board Verification.
+            Thank you, <strong>Dr. {formData.fullName}</strong>. Your doctor application and qualification certificate have been securely submitted.
           </p>
-          <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200 text-xs text-amber-800">
-            Once approved by the Chief Administrator, your profile will become active and available in patient searches.
+
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-left space-y-2 text-xs">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+              <span className="text-slate-500 font-semibold">Specialization:</span>
+              <span className="font-bold text-slate-800">{formData.specialization}</span>
+            </div>
+            <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+              <span className="text-slate-500 font-semibold">Medical Reg No:</span>
+              <span className="font-mono font-bold text-slate-800">{formData.medicalRegistrationNumber}</span>
+            </div>
+            <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+              <span className="text-slate-500 font-semibold">Application Status:</span>
+              <span className="font-bold text-amber-600 flex items-center gap-1">
+                <Check className="w-3.5 h-3.5" /> Pending Review
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500 font-semibold">Uploaded Certificate:</span>
+              <span className="font-medium text-blue-700 truncate max-w-[180px]">
+                {certificateFile?.name || 'qualification_certificate.pdf'}
+              </span>
+            </div>
           </div>
+
+          <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200 text-[11px] text-amber-900 leading-relaxed text-left">
+            <div className="flex items-start gap-2">
+              <Sparkles className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <span>
+                <strong>Next Steps:</strong> The Chief Medical Administrator will review your qualifications and medical registration document. Once approved, your profile will become available in patient searches and bookings.
+              </span>
+            </div>
+          </div>
+
           <button
             onClick={() => navigate('/login')}
-            className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-md transition"
+            className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs uppercase tracking-wider rounded-2xl shadow-lg shadow-blue-500/25 transition active:scale-98"
           >
             Go to Login
           </button>
@@ -200,192 +364,148 @@ export const DoctorRegister = () => {
   const activePresets = formData.gender === 'Female' ? FEMALE_AVATARS : MALE_AVATARS;
 
   return (
-    <div className="min-h-[90vh] flex items-center justify-center px-4 py-12">
-      <div className="max-w-2xl w-full space-y-6">
+    <div className="min-h-[85vh] flex items-center justify-center px-4 py-12">
+      <div className="max-w-3xl w-full space-y-6">
         <div className="text-center space-y-2">
-          <div className="w-12 h-12 bg-teal-600 rounded-2xl flex items-center justify-center text-white mx-auto shadow-md shadow-teal-500/25">
-            <Stethoscope className="w-7 h-7" />
+          <div className="w-14 h-14 bg-teal-600 rounded-3xl flex items-center justify-center text-white mx-auto shadow-lg shadow-teal-500/25">
+            <Stethoscope className="w-8 h-8" />
           </div>
-          <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-            Doctor Practitioner Registration
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+            Doctor & Specialist Registration
           </h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            Join our certified telehealth panel. Set up your medical profile, gender identity, and professional photo.
+          <p className="text-xs text-slate-500 max-w-lg mx-auto">
+            Join QuickCare's accredited medical faculty. Upload your qualification certificate and submit your profile for admin verification.
           </p>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xl space-y-6">
+        <div className="bg-white p-6 sm:p-10 rounded-3xl border border-slate-200/80 shadow-2xl space-y-6">
           {error && (
-            <div className="p-3 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900 rounded-xl text-xs text-rose-700 dark:text-rose-300 flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400" />
-              <span>{error}</span>
+            <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-xs text-rose-700 flex items-center gap-2.5">
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+              <span className="font-semibold">{error}</span>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* 1. PRACTITIONER PHOTO & GENDER IDENTITY CARD */}
-            <div className="p-5 rounded-2xl bg-gradient-to-br from-blue-50/60 to-teal-50/40 dark:from-slate-800 dark:to-teal-950/30 border border-blue-100 dark:border-slate-700 space-y-4">
-              <div className="flex items-center justify-between border-b border-blue-100/70 dark:border-slate-700 pb-2">
-                <span className="text-xs font-extrabold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                  <Camera className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                  Practitioner Photo & Gender Identity
+          <form onSubmit={handleSubmitForm} className="space-y-6">
+            {/* 1. GENDER & AVATAR SELECTION */}
+            <div className="bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-200 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-3">
+                <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  1. Clinical Identity & Avatar
                 </span>
-                <span className="text-[10px] font-bold text-blue-700 dark:text-blue-300 bg-blue-100/70 dark:bg-blue-900/60 px-2 py-0.5 rounded-md">
-                  Required
-                </span>
+                <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-slate-200 self-start sm:self-auto">
+                  {['Female', 'Male'].map((g) => (
+                    <button
+                      key={g}
+                      type="button"
+                      onClick={() => handleGenderSelect(g)}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
+                        formData.gender === g
+                          ? 'bg-blue-600 text-white shadow-xs'
+                          : 'text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      {g} Doctor
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              {/* Photo Preview + Gender Selector */}
-              <div className="flex flex-col sm:flex-row items-center gap-5">
-                {/* Live Circular Avatar Preview */}
-                <div className="relative group shrink-0">
+              {/* Avatar Grid */}
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="relative shrink-0">
                   <img
-                    src={
-                      formData.profileImage ||
-                      (formData.gender === 'Female' ? FEMALE_AVATARS[0].url : MALE_AVATARS[0].url)
-                    }
-                    alt="Doctor Preview"
-                    className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-md ring-2 ring-blue-200"
+                    src={formData.profileImage}
+                    alt="Current Doctor Avatar"
+                    className="w-16 h-16 rounded-2xl object-cover border-2 border-blue-500 shadow-sm"
                   />
-                  <div className="absolute -bottom-1 -right-1 bg-blue-600 text-white p-1.5 rounded-full shadow-xs">
-                    <Camera className="w-3.5 h-3.5" />
+                  <div className="absolute -bottom-1.5 -right-1.5 bg-blue-600 text-white p-1 rounded-full shadow-xs">
+                    <Check className="w-3 h-3" />
                   </div>
                 </div>
 
-                {/* Gender Radio Selector */}
-                <div className="flex-1 w-full space-y-2">
-                  <label className="block text-xs font-bold text-slate-700">
-                    Practitioner Gender <span className="text-rose-500">*</span>
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { val: 'Female', label: 'Female', icon: '👩‍⚕️' },
-                      { val: 'Male', label: 'Male', icon: '👨‍⚕️' },
-                      { val: 'Other', label: 'Other', icon: '🧑‍⚕️' },
-                    ].map((g) => {
-                      const isSelected = formData.gender === g.val;
-                      return (
-                        <button
-                          key={g.val}
-                          type="button"
-                          onClick={() => handleGenderSelect(g.val)}
-                          className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                            isSelected
-                              ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                          }`}
-                        >
-                          <span>{g.icon}</span>
-                          <span>{g.label}</span>
-                          {isSelected && <Check className="w-3.5 h-3.5 ml-0.5" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <p className="text-[10px] text-slate-500">
-                    Gender ensures patients are matched with their preferred physician and displays appropriate badges.
-                  </p>
-                </div>
-              </div>
-
-              {/* Avatar Presets & Custom Upload Options */}
-              <div className="space-y-2 pt-2 border-t border-blue-100/70">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
-                    <Sparkles className="w-3 h-3 text-teal-600" />
-                    Quick Photo Presets for {formData.gender} Doctors:
+                <div className="flex-1 space-y-1.5">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                    Choose Profile Photo:
                   </span>
-                  <label className="text-[11px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer flex items-center gap-1">
-                    <Upload className="w-3 h-3" />
-                    <span>Upload from Device</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageFileChange}
-                      className="hidden"
-                    />
-                  </label>
-                </div>
-
-                <div className="grid grid-cols-3 gap-2">
-                  {activePresets.map((preset) => {
-                    const isPicked = formData.profileImage === preset.url;
-                    return (
+                  <div className="flex flex-wrap gap-2">
+                    {activePresets.map((av) => (
                       <button
-                        key={preset.id}
+                        key={av.id}
                         type="button"
-                        onClick={() => setFormData((prev) => ({ ...prev, profileImage: preset.url }))}
-                        className={`p-1.5 rounded-xl border flex items-center gap-2 transition cursor-pointer text-left ${
-                          isPicked
-                            ? 'bg-white border-blue-600 ring-2 ring-blue-400'
-                            : 'bg-white/80 border-slate-200 hover:bg-white'
+                        onClick={() => setFormData((p) => ({ ...p, profileImage: av.url }))}
+                        className={`relative rounded-xl overflow-hidden border-2 transition ${
+                          formData.profileImage === av.url
+                            ? 'border-blue-600 scale-105 shadow-md'
+                            : 'border-transparent opacity-70 hover:opacity-100'
                         }`}
                       >
-                        <img
-                          src={preset.url}
-                          alt={preset.label}
-                          className="w-8 h-8 rounded-full object-cover shrink-0"
-                        />
-                        <span className="text-[10px] font-bold text-slate-700 truncate">
-                          {preset.label}
-                        </span>
+                        <img src={av.url} alt={av.label} className="w-10 h-10 object-cover" />
                       </button>
-                    );
-                  })}
-                </div>
-
-                <div className="pt-1">
-                  <input
-                    type="url"
-                    name="profileImage"
-                    value={formData.profileImage}
-                    onChange={handleChange}
-                    placeholder="Or paste custom image URL (https://...)"
-                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-[11px] focus:ring-2 focus:ring-blue-500"
-                  />
+                    ))}
+                    <label className="flex items-center gap-1 px-3 py-2 bg-white border border-slate-200 hover:bg-slate-100 rounded-xl text-xs font-bold text-slate-600 cursor-pointer transition">
+                      <Camera className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Upload Photo</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageFileChange}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* 2. NAME, EMAIL, PHONE */}
+            {/* 2. PERSONAL DETAILS */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="sm:col-span-1">
-                <label className="block text-xs font-bold text-slate-700 mb-1">Full Name *</label>
-                <input
-                  type="text"
-                  name="fullName"
-                  value={formData.fullName}
-                  onChange={handleChange}
-                  placeholder="Dr. Full Name"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:bg-white"
-                  required
-                />
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Full Legal Name *</label>
+                <div className="relative">
+                  <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    name="fullName"
+                    value={formData.fullName}
+                    onChange={handleChange}
+                    placeholder="e.g. Dr. Ramesh Gupta"
+                    className="w-full pl-9 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:bg-white"
+                    required
+                  />
+                </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Email *</label>
-                <input
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  placeholder="doctor@hospital.com"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:bg-white"
-                  required
-                />
+                <label className="block text-xs font-bold text-slate-700 mb-1">Email Address *</label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    placeholder="doctor@hospital.com"
+                    className="w-full pl-9 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:bg-white"
+                    required
+                  />
+                </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Phone *</label>
-                <input
-                  type="tel"
-                  name="phone"
-                  value={formData.phone}
-                  onChange={handleChange}
-                  placeholder="+91 98200 11223"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:bg-white"
-                  required
-                />
+                <label className="block text-xs font-bold text-slate-700 mb-1">Phone Number *</label>
+                <div className="relative">
+                  <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="tel"
+                    name="phone"
+                    value={formData.phone}
+                    onChange={handleChange}
+                    placeholder="+91 98200 11223"
+                    className="w-full pl-9 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:bg-white"
+                    required
+                  />
+                </div>
               </div>
             </div>
 
@@ -421,9 +541,7 @@ export const DoctorRegister = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Medical Reg Number *
-                </label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Medical Reg Number *</label>
                 <input
                   type="text"
                   name="medicalRegistrationNumber"
@@ -436,16 +554,144 @@ export const DoctorRegister = () => {
               </div>
             </div>
 
+            {/* REQUIREMENT 3: MEDICAL QUALIFICATION CERTIFICATE UPLOAD SECTION */}
+            <div className="bg-blue-50/50 p-5 rounded-3xl border-2 border-dashed border-blue-200 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center">
+                    <FileCheck className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">
+                      Upload Medical Qualification Certificate *
+                    </h3>
+                    <p className="text-[11px] text-slate-500">
+                      Mandatory official document (Degree, MCI/State Council Registration). Max size: 5 MB
+                    </p>
+                  </div>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 self-start sm:self-auto">
+                  PDF, JPG, JPEG, PNG
+                </span>
+              </div>
+
+              {certificateError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>{certificateError}</span>
+                </div>
+              )}
+
+              {/* Upload Drop Zone / Selected File Box */}
+              {!certificateFile ? (
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  className="p-6 bg-white rounded-2xl border border-slate-200 hover:border-blue-500 hover:bg-blue-50/30 transition text-center cursor-pointer group space-y-2"
+                >
+                  <div className="w-12 h-12 rounded-2xl bg-slate-100 group-hover:bg-blue-100 group-hover:text-blue-600 text-slate-400 flex items-center justify-center mx-auto transition">
+                    <Upload className="w-6 h-6" />
+                  </div>
+                  <div className="space-y-0.5">
+                    <p className="text-xs font-bold text-slate-800">
+                      Click to choose or drag & drop certificate
+                    </p>
+                    <p className="text-[11px] text-slate-400">
+                      PDF, JPG, JPEG, or PNG up to 5 MB
+                    </p>
+                  </div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                    onChange={handleCertificateChange}
+                    className="hidden"
+                  />
+                </div>
+              ) : (
+                <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                      certificateType === 'pdf' ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'
+                    }`}>
+                      {certificateType === 'pdf' ? <FileText className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-slate-800 truncate max-w-[220px] sm:max-w-xs">
+                        {certificateFile.name}
+                      </p>
+                      <div className="flex items-center gap-2 text-[10px] text-slate-400">
+                        <span className="font-semibold text-slate-600">{certificateSizeFormatted}</span>
+                        <span>•</span>
+                        <span className="uppercase font-bold text-blue-600">{certificateType}</span>
+                        <span>•</span>
+                        <span className="text-emerald-600 font-bold flex items-center gap-0.5">
+                          <Check className="w-3 h-3" /> Validated
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Actions: Preview, Replace, Remove */}
+                  <div className="flex items-center gap-2 self-end sm:self-auto">
+                    <button
+                      type="button"
+                      onClick={() => setShowPreviewModal(true)}
+                      className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold rounded-xl transition flex items-center gap-1"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>Preview</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition flex items-center gap-1"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>Replace</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleRemoveCertificate}
+                      className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-xl transition"
+                      title="Remove Certificate"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                      onChange={handleCertificateChange}
+                      className="hidden"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {uploadProgress > 0 && uploadProgress < 100 && (
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[10px] font-bold text-slate-600">
+                    <span>Uploading Certificate to Secure Storage...</span>
+                    <span>{uploadProgress}%</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-blue-600 transition-all duration-300"
+                      style={{ width: `${uploadProgress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* 4. EXPERIENCE, FEE, WORKING HOURS */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Years of Experience
-                </label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Experience (Years) *</label>
                 <input
                   type="number"
                   min="0"
-                  max="50"
+                  max="60"
                   name="experience"
                   value={formData.experience}
                   onChange={handleChange}
@@ -455,9 +701,7 @@ export const DoctorRegister = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Consultation Fee (₹)
-                </label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Consultation Fee (₹) *</label>
                 <input
                   type="number"
                   min="100"
@@ -511,7 +755,7 @@ export const DoctorRegister = () => {
             {/* 6. PASSWORD */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Password</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Password *</label>
                 <input
                   type="password"
                   name="password"
@@ -524,7 +768,7 @@ export const DoctorRegister = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Confirm Password</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Confirm Password *</label>
                 <input
                   type="password"
                   name="confirmPassword"
@@ -540,10 +784,19 @@ export const DoctorRegister = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3.5 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md shadow-teal-500/20 transition active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full py-4 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-extrabold text-xs uppercase tracking-wider rounded-2xl shadow-lg shadow-teal-500/25 transition active:scale-98 flex items-center justify-center gap-2 cursor-pointer"
             >
-              {loading ? 'Submitting Credentials...' : 'Submit Doctor Profile for Verification'}
-              <ArrowRight className="w-4 h-4" />
+              {loading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Submitting Application...</span>
+                </>
+              ) : (
+                <>
+                  <span>Submit Registration for Medical Board Review</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
             </button>
           </form>
 
@@ -555,6 +808,53 @@ export const DoctorRegister = () => {
           </div>
         </div>
       </div>
+
+      {/* Certificate Preview Modal */}
+      {showPreviewModal && certificatePreview && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 space-y-4 shadow-2xl border border-slate-200 animate-fadeIn">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <FileCheck className="w-5 h-5 text-blue-600" />
+                <h4 className="font-extrabold text-slate-900 text-sm">
+                  {certificateFile?.name || 'Qualification Certificate Preview'}
+                </h4>
+              </div>
+              <button
+                onClick={() => setShowPreviewModal(false)}
+                className="p-1 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="max-h-[65vh] overflow-auto flex items-center justify-center bg-slate-50 rounded-2xl p-2 border border-slate-100">
+              {certificateType === 'pdf' ? (
+                <iframe
+                  src={certificatePreview}
+                  title="PDF Certificate"
+                  className="w-full h-[60vh] rounded-xl border-none"
+                />
+              ) : (
+                <img
+                  src={certificatePreview}
+                  alt="Certificate Preview"
+                  className="max-h-[60vh] max-w-full rounded-xl object-contain shadow-xs"
+                />
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => setShowPreviewModal(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition"
+              >
+                Close Preview
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

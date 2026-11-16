@@ -615,6 +615,27 @@ export const DoctorDashboard = () => {
           </div>
         )}
 
+        {/* Verification Warning if doctor was rejected */}
+        {doctor?.verificationStatus === 'REJECTED' && (
+          <div className="p-4 bg-rose-50 border border-rose-300 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-rose-900 shadow-xs">
+            <div className="flex items-start sm:items-center gap-3">
+              <XCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5 sm:mt-0" />
+              <div>
+                <p className="font-extrabold text-xs">Medical Registration Application Declined</p>
+                <p className="text-[11px] text-rose-800">
+                  Reason: {doctor?.rejectionReason || 'Uploaded qualification credentials could not be verified by the medical board.'}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setActiveTab('profile')}
+              className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs shrink-0 shadow-xs cursor-pointer"
+            >
+              Update Documents & Re-submit
+            </button>
+          </div>
+        )}
+
         {/* =========================================================================
             TAB 1: DASHBOARD OVERVIEW
         ========================================================================= */}

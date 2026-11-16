@@ -1,6 +1,7 @@
 package com.quickcare.config;
 
 import com.quickcare.security.FirebaseTokenFilter;
+import jakarta.servlet.DispatcherType;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -40,26 +41,30 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
+                // Allow internal forward and error dispatching without auth check
+                .dispatcherTypeMatchers(DispatcherType.FORWARD, DispatcherType.ERROR).permitAll()
+
                 // Allow all CORS preflight OPTIONS requests
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
                 // Public authentication and onboarding endpoints
-                .requestMatchers("/api/auth/**").permitAll()
+                .requestMatchers("/api/auth/**", "/auth/**", "/error").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/auth/**", "/auth/**", "/api/doctors/upload-certificate").permitAll()
                 
                 // Public doctor search and view
-                .requestMatchers(HttpMethod.GET, "/api/doctors", "/api/doctors/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/doctors", "/api/doctors/**", "/doctors/**").permitAll()
 
                 // Public doctor reviews
-                .requestMatchers(HttpMethod.GET, "/api/reviews/doctor/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/reviews/doctor/**", "/reviews/doctor/**").permitAll()
 
                 // AI Healthcare Assistant
-                .requestMatchers("/api/ai/**").permitAll()
+                .requestMatchers("/api/ai/**", "/ai/**").permitAll()
                 
                 // Swagger and OpenAPI docs
                 .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "/api-docs/**").permitAll()
                 
                 // Health check & System info
-                .requestMatchers("/api/health", "/api/public/**").permitAll()
+                .requestMatchers("/api/health", "/api/public/**", "/public/**").permitAll()
 
                 // Admin endpoints strictly restricted
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")

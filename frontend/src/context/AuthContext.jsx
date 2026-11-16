@@ -264,6 +264,14 @@ export const AuthProvider = ({ children }) => {
       medicalRegistrationNumber: registerData.medicalRegistrationNumber || '',
       hospitalAffiliation: registerData.hospitalAffiliation || '',
       consultationFee: registerData.consultationFee || 800,
+      emailVerified: true,
+      approvalStatus: role === 'DOCTOR' ? 'PENDING' : 'APPROVED',
+      verificationStatus: role === 'DOCTOR' ? 'PENDING' : 'VERIFIED',
+      certificatePath: registerData.certificatePath || '',
+      certificateFileName: registerData.certificateFileName || '',
+      certificateUploadedAt: registerData.certificateUploadedAt || new Date().toISOString(),
+      certificateFileType: registerData.certificateFileType || '',
+      age: registerData.age || 28,
     };
 
     let serverSuccess = false;

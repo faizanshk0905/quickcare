@@ -8,6 +8,21 @@ service firebase.storage {
       allow write: if request.auth != null && request.auth.uid == userId;
     }
 
+    // Doctor Qualification Certificates (Requirement 3: Secure, non-public, <=5MB, PDF/JPG/PNG)
+    match /doctor-certificates/{doctorUid}/{fileName} {
+      // Only the doctor owner or authenticated Admin can access
+      allow read: if request.auth != null && (
+        request.auth.uid == doctorUid || 
+        request.auth.token.role == 'ADMIN' ||
+        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'ADMIN'
+      );
+      // Validated upload: max 5MB, PDF and images only
+      allow write: if request.auth != null && request.auth.uid == doctorUid
+        && request.resource.size <= 5 * 1024 * 1024
+        && (request.resource.contentType.matches('application/pdf') ||
+            request.resource.contentType.matches('image/(jpeg|jpg|png)'));
+    }
+
     // Doctor medical credentials & verification documents
     match /doctor-docs/{doctorId}/{allPaths=**} {
       allow read: if request.auth != null;

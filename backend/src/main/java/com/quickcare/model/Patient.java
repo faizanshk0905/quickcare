@@ -12,6 +12,8 @@ public class Patient {
     private String gender;
     private String address;
     private String profileImage;
+    private boolean emailVerified = false;
+    private int age;
     private Instant createdAt;
 
     public Patient() {
@@ -44,6 +46,12 @@ public class Patient {
 
     public String getProfileImage() { return profileImage; }
     public void setProfileImage(String profileImage) { this.profileImage = profileImage; }
+
+    public boolean isEmailVerified() { return emailVerified; }
+    public void setEmailVerified(boolean emailVerified) { this.emailVerified = emailVerified; }
+
+    public int getAge() { return age; }
+    public void setAge(int age) { this.age = age; }
 
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }

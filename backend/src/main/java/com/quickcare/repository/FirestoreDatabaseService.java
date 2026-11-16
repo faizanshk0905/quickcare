@@ -122,6 +122,17 @@ public class FirestoreDatabaseService {
                 doctor.setVideoConsultationAvailable((Boolean) data.get("videoConsultationAvailable"));
             }
             if (data.get("verificationStatus") != null) doctor.setVerificationStatus(String.valueOf(data.get("verificationStatus")));
+            if (data.get("approvalStatus") != null) doctor.setApprovalStatus(String.valueOf(data.get("approvalStatus")));
+            if (data.get("emailVerified") instanceof Boolean) {
+                doctor.setEmailVerified((Boolean) data.get("emailVerified"));
+            } else if (data.get("emailVerified") != null) {
+                doctor.setEmailVerified(Boolean.parseBoolean(String.valueOf(data.get("emailVerified"))));
+            }
+            if (data.get("certificatePath") != null) doctor.setCertificatePath(String.valueOf(data.get("certificatePath")));
+            if (data.get("certificateFileName") != null) doctor.setCertificateFileName(String.valueOf(data.get("certificateFileName")));
+            if (data.get("certificateUploadedAt") != null) doctor.setCertificateUploadedAt(String.valueOf(data.get("certificateUploadedAt")));
+            if (data.get("certificateFileType") != null) doctor.setCertificateFileType(String.valueOf(data.get("certificateFileType")));
+            if (data.get("rejectionReason") != null) doctor.setRejectionReason(String.valueOf(data.get("rejectionReason")));
             if (data.get("profileImage") != null) doctor.setProfileImage(String.valueOf(data.get("profileImage")));
             if (data.get("gender") != null) doctor.setGender(String.valueOf(data.get("gender")));
             if (data.get("rating") instanceof Number) {
@@ -184,6 +195,11 @@ public class FirestoreDatabaseService {
             if (data.get("email") != null) user.setEmail(String.valueOf(data.get("email")));
             if (data.get("phone") != null) user.setPhone(String.valueOf(data.get("phone")));
             if (data.get("role") != null) user.setRole(String.valueOf(data.get("role")));
+            if (data.get("emailVerified") instanceof Boolean) {
+                user.setEmailVerified((Boolean) data.get("emailVerified"));
+            } else if (data.get("emailVerified") != null) {
+                user.setEmailVerified(Boolean.parseBoolean(String.valueOf(data.get("emailVerified"))));
+            }
             if (data.get("accountStatus") != null) user.setAccountStatus(String.valueOf(data.get("accountStatus")));
             if (data.get("profileImage") != null) user.setProfileImage(String.valueOf(data.get("profileImage")));
             if (data.get("password") != null) user.setPassword(String.valueOf(data.get("password")));
@@ -369,7 +385,11 @@ public class FirestoreDatabaseService {
 
     public List<Doctor> findVerifiedDoctors() {
         return doctors.values().stream()
-                .filter(d -> "VERIFIED".equalsIgnoreCase(d.getVerificationStatus()))
+                .filter(d -> ("VERIFIED".equalsIgnoreCase(d.getVerificationStatus()) || "APPROVED".equalsIgnoreCase(d.getApprovalStatus()))
+                        && !"REJECTED".equalsIgnoreCase(d.getVerificationStatus())
+                        && !"PENDING".equalsIgnoreCase(d.getVerificationStatus())
+                        && !"REJECTED".equalsIgnoreCase(d.getApprovalStatus())
+                        && !"PENDING".equalsIgnoreCase(d.getApprovalStatus()))
                 .collect(Collectors.toList());
     }
 

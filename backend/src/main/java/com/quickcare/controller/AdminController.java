@@ -51,6 +51,9 @@ public class AdminController {
             @RequestBody Map<String, Object> body) {
         boolean approve = Boolean.TRUE.equals(body.get("approve"));
         String feedback = (String) body.get("feedback");
+        if (feedback == null && body.get("rejectionReason") != null) {
+            feedback = String.valueOf(body.get("rejectionReason"));
+        }
         Doctor doctor = adminService.verifyDoctor(doctorId, approve, feedback);
         return ResponseEntity.ok(ApiResponse.ok("Doctor verification status updated", doctor));
     }

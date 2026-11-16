@@ -83,6 +83,14 @@ export function App() {
                   }
                 />
                 <Route
+                  path="/patient/dashboard"
+                  element={
+                    <ProtectedRoute allowedRoles={['PATIENT']}>
+                      <PatientDashboard />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
                   path="/patient/appointments"
                   element={
                     <ProtectedRoute allowedRoles={['PATIENT']}>

@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.List;
@@ -36,6 +37,9 @@ public class AuthService {
     @Autowired
     private NotificationService notificationService;
 
+    @Autowired
+    private OtpService otpService;
+
     public AuthResponse register(RegisterRequest req) {
         // Enforce security rule: Public cannot register as ADMIN
         String requestedRole = req.getRole() != null ? req.getRole().toUpperCase() : "PATIENT";
@@ -48,9 +52,17 @@ public class AuthService {
             throw new BadRequestException("An account with this email already exists.");
         }
 
+        // Enforce Email OTP verification
+        if (req.getOtp() != null && !req.getOtp().trim().isEmpty()) {
+            otpService.verifyOtp(req.getEmail(), req.getOtp());
+        } else if (!otpService.isEmailVerified(req.getEmail())) {
+            throw new BadRequestException("Email verification required. Please verify your email with the 6-digit OTP before completing registration.");
+        }
+
         String uid = "usr_" + UUID.randomUUID().toString().substring(0, 8);
         User user = new User(uid, req.getFullName(), req.getEmail(), req.getPhone(), requestedRole);
         user.setPassword(passwordEncoder.encode(req.getPassword()));
+        user.setEmailVerified(true);
 
         String profileId = null;
 
@@ -72,6 +84,14 @@ public class AuthService {
             doctor.setClinicAddress(req.getClinicAddress() != null ? req.getClinicAddress() : "QuickCare Medical Center");
             doctor.setBio(req.getBio() != null ? req.getBio() : "Experienced healthcare specialist committed to compassionate patient care.");
             doctor.setVerificationStatus("PENDING");
+            doctor.setApprovalStatus("PENDING");
+            doctor.setEmailVerified(true);
+            if (req.getCertificatePath() != null) {
+                doctor.setCertificatePath(req.getCertificatePath());
+                doctor.setCertificateFileName(req.getCertificateFileName() != null ? req.getCertificateFileName() : "qualification_certificate");
+                doctor.setCertificateFileType(req.getCertificateFileType() != null ? req.getCertificateFileType() : "application/pdf");
+                doctor.setCertificateUploadedAt(Instant.now().toString());
+            }
 
             String docGender = req.getGender() != null && !req.getGender().trim().isEmpty() ? req.getGender().trim() : "Male";
             doctor.setGender(docGender);
@@ -129,6 +149,10 @@ public class AuthService {
             patient.setDateOfBirth(req.getDateOfBirth() != null ? req.getDateOfBirth() : "1995-01-01");
             patient.setGender(req.getGender() != null ? req.getGender() : "Not specified");
             patient.setAddress(req.getAddress() != null ? req.getAddress() : "City Center");
+            patient.setEmailVerified(true);
+            if (req.getAge() != null && req.getAge() > 0) {
+                patient.setAge(req.getAge());
+            }
 
             db.savePatient(patient);
             profileId = patient.getPatientId();

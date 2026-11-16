@@ -236,4 +236,55 @@ public class EmailService {
     public List<Map<String, Object>> getEmailLogs() {
         return new ArrayList<>(sentEmailLogs.values());
     }
+
+    /**
+     * Requirement 1: Sends secure 6-digit email OTP verification code to patient or doctor.
+     */
+    public boolean sendOtpVerificationEmail(String toEmail, String otpCode, String role, String recipientName) {
+        if (toEmail == null || toEmail.trim().isEmpty()) {
+            logger.warn("Cannot dispatch OTP email: missing destination email.");
+            return false;
+        }
+
+        String to = toEmail.trim().toLowerCase();
+        String name = (recipientName != null && !recipientName.trim().isEmpty())
+                ? recipientName.trim()
+                : ("DOCTOR".equalsIgnoreCase(role) ? "Doctor" : "Patient");
+        String subject = "Quick Care – " + otpCode + " is your registration verification OTP";
+
+        String roleDesc = "DOCTOR".equalsIgnoreCase(role)
+                ? "Healthcare Practitioner Portal"
+                : "Patient Health & Appointment Portal";
+
+        String htmlBody = "<!DOCTYPE html><html><body style=\"font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #1e293b; background-color: #f8fafc; margin: 0; padding: 24px;\">" +
+                "<div style=\"max-width: 580px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);\">" +
+                "<div style=\"background: linear-gradient(135deg, #1e40af 0%, #2563eb 50%, #0d9488 100%); padding: 32px 24px; text-align: center; color: white;\">" +
+                "<div style=\"display: inline-block; background: rgba(255,255,255,0.2); width: 48px; height: 48px; line-height: 48px; border-radius: 14px; margin-bottom: 12px; font-size: 26px;\">🏥</div>" +
+                "<h1 style=\"margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.5px;\">QUICK CARE</h1>" +
+                "<p style=\"margin: 6px 0 0; font-size: 13px; opacity: 0.95; font-weight: 500;\">Email OTP Verification • " + roleDesc + "</p>" +
+                "</div>" +
+                "<div style=\"padding: 32px 28px;\">" +
+                "<p style=\"font-size: 15px; margin-top: 0;\">Dear <strong>" + name + "</strong>,</p>" +
+                "<p style=\"font-size: 14px; color: #475569;\">Thank you for registering with <strong>Quick Care Doctor Appointment Management System</strong>. To complete your account verification and ensure the security of your healthcare profile, please use the 6-digit One-Time Password (OTP) below:</p>" +
+                "<div style=\"text-align: center; margin: 28px 0; background: #f0fdf4; border: 2px dashed #16a34a; border-radius: 14px; padding: 22px 16px;\">" +
+                "<div style=\"font-size: 12px; font-weight: 700; text-transform: uppercase; color: #15803d; letter-spacing: 1px; margin-bottom: 8px;\">Your 6-Digit Verification Code</div>" +
+                "<div style=\"font-family: 'Courier New', Courier, monospace; font-size: 38px; font-weight: 900; letter-spacing: 12px; color: #166534; padding-left: 12px;\">" + otpCode + "</div>" +
+                "<div style=\"font-size: 12px; color: #64748b; margin-top: 10px;\">⏱️ Valid for <strong>5 minutes</strong>. Single use only.</div>" +
+                "</div>" +
+                "<div style=\"background: #f8fafc; border-left: 4px solid #2563eb; padding: 14px 16px; border-radius: 6px; margin: 24px 0;\">" +
+                "<p style=\"margin: 0; font-size: 13px; color: #334155; font-weight: 600;\">Security Notice:</p>" +
+                "<ul style=\"margin: 6px 0 0; padding-left: 18px; font-size: 12px; color: #64748b; line-height: 1.6;\">" +
+                "<li>Quick Care will never ask for your OTP via phone call or messaging.</li>" +
+                "<li>Do not share this code with anyone, including healthcare staff.</li>" +
+                "<li>If you did not initiate this registration, please disregard this email.</li>" +
+                "</ul>" +
+                "</div>" +
+                "<p style=\"font-size: 13px; color: #64748b; margin-bottom: 0;\">Best regards,<br/><strong style=\"color: #1e293b;\">Quick Care Healthcare Security Team</strong></p>" +
+                "</div>" +
+                "<div style=\"background: #f1f5f9; padding: 16px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0;\">" +
+                "This is an automated security transmission from Quick Care Healthcare Network. Please do not reply directly to this email." +
+                "</div></div></body></html>";
+
+        return recordAndDispatchEmail(null, to, subject, htmlBody, "EMAIL_OTP_VERIFICATION", null);
+    }
 }

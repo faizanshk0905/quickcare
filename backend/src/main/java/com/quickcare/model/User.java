@@ -9,6 +9,7 @@ public class User {
     private String phone;
     private String role; // ADMIN, DOCTOR, PATIENT
     private String profileImage;
+    private boolean emailVerified = false;
     private String accountStatus; // ACTIVE, PENDING, INACTIVE
     private String preferredLanguage; // en, hi, mr
     private String password; // hashed if local
@@ -46,6 +47,9 @@ public class User {
 
     public String getProfileImage() { return profileImage; }
     public void setProfileImage(String profileImage) { this.profileImage = profileImage; }
+
+    public boolean isEmailVerified() { return emailVerified; }
+    public void setEmailVerified(boolean emailVerified) { this.emailVerified = emailVerified; }
 
     public String getAccountStatus() { return accountStatus; }
     public void setAccountStatus(String accountStatus) { this.accountStatus = accountStatus; }
