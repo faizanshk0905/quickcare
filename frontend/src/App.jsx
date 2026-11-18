@@ -6,7 +6,6 @@ import './i18n';
 
 // Common Components
 import { AccessibilityBar } from './components/common/AccessibilityBar';
-import { EmergencyHelplineBanner } from './components/common/EmergencyHelplineBanner';
 import { Navbar } from './components/common/Navbar';
 import { Footer } from './components/common/Footer';
 import { AiChatWidget } from './components/ai/AiChatWidget';
@@ -59,7 +58,6 @@ export function App() {
         <BrowserRouter>
           <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800">
             <AccessibilityBar />
-            <EmergencyHelplineBanner />
             <Navbar />
 
             <main className="flex-1">
