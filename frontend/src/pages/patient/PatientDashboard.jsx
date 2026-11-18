@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { appointmentService } from '../../services/appointmentService';
 import { doctorService } from '../../services/doctorService';
 import { notificationService } from '../../services/notificationService';
+import { prescriptionService } from '../../services/prescriptionService';
 import { DoctorCard } from '../../components/common/DoctorCard';
 import { PrescriptionModal } from '../../components/common/PrescriptionModal';
 import api from '../../services/api';
@@ -37,22 +38,34 @@ import {
   Camera,
   Activity,
   HeartPulse,
+  LogOut,
+  Menu,
+  Eye,
+  Pill,
+  Download,
 } from 'lucide-react';
 
 export const PatientDashboard = () => {
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, logout } = useAuth();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // Active tab from query param (?tab=overview|appointments|doctors|profile|notifications)
+  // Active tab from query param (?tab=overview|appointments|doctors|video|prescriptions|profile|notifications)
   const activeTab = searchParams.get('tab') || 'overview';
   const setActiveTab = (tab) => {
     setSearchParams({ tab });
+    setMobileMenuOpen(false);
   };
+
+  // Mobile menu toggle
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // State
   const [appointments, setAppointments] = useState([]);
   const [doctors, setDoctors] = useState([]);
   const [notifications, setNotifications] = useState([]);
+  const [prescriptions, setPrescriptions] = useState([]);
+  const [prescriptionSearch, setPrescriptionSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [selectedPrescription, setSelectedPrescription] = useState(null);
   const [istTime, setIstTime] = useState('');
@@ -133,10 +146,11 @@ export const PatientDashboard = () => {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const [aptRes, docRes, notifRes] = await Promise.all([
+      const [aptRes, docRes, notifRes, rxRes] = await Promise.all([
         appointmentService.getPatientAppointments().catch(() => ({ data: [] })),
         doctorService.searchDoctors().catch(() => ({ data: [] })),
         notificationService.getNotifications().catch(() => ({ data: [] })),
+        prescriptionService.getPatientPrescriptions().catch(() => ({ data: [] })),
       ]);
 
       if (aptRes && Array.isArray(aptRes.data)) {
@@ -155,11 +169,19 @@ export const PatientDashboard = () => {
       if (notifRes && Array.isArray(notifRes.data)) {
         setNotifications(notifRes.data);
       }
+      if (rxRes && Array.isArray(rxRes.data)) {
+        setPrescriptions(rxRes.data);
+      }
     } catch (err) {
       console.error('Error fetching patient dashboard data', err);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
   };
 
   useEffect(() => {
@@ -379,171 +401,294 @@ export const PatientDashboard = () => {
     return ['ALL', ...Array.from(set)];
   }, [doctors]);
 
+  // Video Consultations
+  const videoAppointments = useMemo(() => {
+    return appointments.filter((a) => a.consultationType === 'VIDEO');
+  }, [appointments]);
+
+  const upcomingVideoCount = useMemo(() => {
+    return videoAppointments.filter(
+      (a) => ['PENDING', 'CONFIRMED', 'APPROVED'].includes(a.status?.toUpperCase())
+    ).length;
+  }, [videoAppointments]);
+
+  // Filtered Prescriptions
+  const filteredPrescriptions = useMemo(() => {
+    if (!prescriptionSearch.trim()) return prescriptions;
+    const q = prescriptionSearch.toLowerCase().trim();
+    return prescriptions.filter(
+      (p) =>
+        p.doctorName?.toLowerCase().includes(q) ||
+        p.diagnosis?.toLowerCase().includes(q) ||
+        p.doctorSpecialization?.toLowerCase().includes(q) ||
+        p.medicines?.some((m) => (m.name || m.medicineName || '').toLowerCase().includes(q))
+    );
+  }, [prescriptions, prescriptionSearch]);
+
+  // Sidebar Navigation Items (Matching Doctor Portal Structure)
+  const navItems = [
+    { id: 'overview', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'appointments', label: 'My Appointments', icon: Calendar, badge: upcoming > 0 ? upcoming : null },
+    { id: 'doctors', label: 'Find Doctors', icon: Stethoscope, badge: doctors.length > 0 ? doctors.length : null },
+    { id: 'video', label: 'Video Consultations', icon: Video, badge: upcomingVideoCount > 0 ? upcomingVideoCount : null, isMeet: true },
+    { id: 'prescriptions', label: 'Digital Prescriptions', icon: FileText, badge: prescriptions.length > 0 ? prescriptions.length : null },
+    { id: 'notifications', label: 'Notifications', icon: Bell, badge: unreadNotifsCount > 0 ? unreadNotifsCount : null, alert: unreadNotifsCount > 0 },
+    { id: 'profile', label: 'My Profile', icon: User },
+  ];
+
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 min-h-screen">
-      {/* =========================================================================
-          TOP BAR: LIVE CLOCK & DATE
-      ========================================================================= */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs font-semibold text-slate-500 border-b border-slate-200/80 pb-3">
+    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row">
+      {/* MOBILE TOP BAR */}
+      <div className="md:hidden bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between sticky top-0 z-40 shadow-xs">
         <div className="flex items-center gap-2">
-          <Calendar className="w-4 h-4 text-blue-600" />
-          <span>
-            {new Date().toLocaleDateString('en-US', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric',
-              timeZone: 'Asia/Kolkata',
-            })}
+          <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black text-sm">
+            QC
+          </div>
+          <span className="font-extrabold text-sm text-slate-900 truncate max-w-[180px]">
+            {profileForm.fullName || user?.fullName || 'Patient Portal'}
           </span>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="hidden sm:inline text-slate-400">Standard IST Timezone</span>
-          <div className="flex items-center gap-2 px-3 py-1 bg-slate-900 text-white rounded-full font-mono text-[11px] shadow-xs">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-slate-300">IST:</span>
-            <span className="font-bold text-emerald-300 tracking-wider">
-              {istTime || 'Loading...'}
+        <button
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          className="p-2 text-slate-700 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+        >
+          {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+        </button>
+      </div>
+
+      {/* MOBILE DRAWER BACKDROP */}
+      {mobileMenuOpen && (
+        <div
+          onClick={() => setMobileMenuOpen(false)}
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-40 md:hidden"
+        />
+      )}
+
+      {/* SIDEBAR NAVIGATION (Desktop: Sticky Left, Mobile: Slide-Out Drawer) */}
+      <aside
+        className={`fixed md:sticky top-0 inset-y-0 left-0 z-50 w-72 bg-white border-r border-slate-200 flex flex-col justify-between transition-transform duration-300 ease-in-out md:translate-x-0 h-screen ${
+          mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        {/* Brand & Patient Mini Profile */}
+        <div className="p-5 border-b border-slate-100 space-y-4">
+          <div className="flex items-center justify-between">
+            <Link to="/" className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20">
+                <HeartPulse className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="font-black text-base tracking-tight text-slate-900">QUICKCARE</span>
+                <span className="block text-[10px] font-bold text-blue-600 uppercase tracking-wider">
+                  Patient Portal
+                </span>
+              </div>
+            </Link>
+            <button
+              onClick={() => setMobileMenuOpen(false)}
+              className="md:hidden p-1.5 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Patient Info Card */}
+          <div className="p-3 bg-gradient-to-br from-blue-50 to-indigo-50/50 border border-blue-100/80 rounded-2xl flex items-center gap-3">
+            <div className="relative shrink-0">
+              <div className="w-11 h-11 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black text-base border-2 border-white shadow-xs overflow-hidden">
+                {profileForm.profileImage ? (
+                  <img src={profileForm.profileImage} alt="Patient" className="w-full h-full object-cover" />
+                ) : (
+                  (profileForm.fullName || user?.fullName || 'P').charAt(0).toUpperCase()
+                )}
+              </div>
+              <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-white" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-extrabold text-xs text-slate-900 truncate">
+                {profileForm.fullName || user?.fullName || 'Patient'}
+              </p>
+              <p className="text-[11px] font-medium text-blue-700 truncate">
+                {profileForm.email || user?.email || 'patient@quickcare.com'}
+              </p>
+              <span className="inline-block mt-0.5 px-2 py-0.5 rounded-md bg-blue-100/80 text-blue-800 text-[10px] font-bold">
+                Verified Patient
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Navigation List */}
+        <nav className="p-3 space-y-1 overflow-y-auto flex-1">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setActiveTab(item.id)}
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  isActive
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/25'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-500'}`} />
+                  <span>{item.label}</span>
+                </div>
+                {item.badge !== null && item.badge > 0 && (
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                      isActive
+                        ? 'bg-white text-blue-800'
+                        : item.alert
+                        ? 'bg-rose-500 text-white animate-pulse'
+                        : item.isMeet
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : 'bg-blue-100 text-blue-800'
+                    }`}
+                  >
+                    {item.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Sidebar Footer with Logout */}
+        <div className="p-3 border-t border-slate-100 space-y-2">
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>Logout</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* MAIN CONTENT AREA */}
+      <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 space-y-6">
+        {/* TOP BAR: LIVE CLOCK & DATE */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs font-semibold text-slate-500 border-b border-slate-200/80 pb-3">
+          <div className="flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-blue-600" />
+            <span>
+              {new Date().toLocaleDateString('en-US', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                timeZone: 'Asia/Kolkata',
+              })}
             </span>
           </div>
-        </div>
-      </div>
-
-      {/* =========================================================================
-          WELCOME HERO & PROFILE BANNER
-      ========================================================================= */}
-      <div className="bg-gradient-to-r from-blue-700 via-blue-800 to-indigo-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
-        <div className="flex items-start sm:items-center gap-4">
-          <div className="relative group shrink-0">
-            <img
-              src={
-                profileForm.profileImage ||
-                (profileForm.gender === 'Female'
-                  ? 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=120'
-                  : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120')
-              }
-              alt=""
-              className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover border-2 border-white/30 shadow-md"
-            />
-            <button
-              onClick={() => setActiveTab('profile')}
-              className="absolute -bottom-1 -right-1 p-1 bg-white text-blue-700 rounded-full shadow-md hover:bg-blue-50 transition cursor-pointer"
-              title="Change Photo"
-            >
-              <Camera className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          <div className="space-y-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-full bg-white/20 text-white text-[11px] font-bold backdrop-blur-md">
-                Patient Portal
+          <div className="flex items-center gap-3">
+            <span className="hidden sm:inline text-slate-400">Standard IST Timezone</span>
+            <div className="flex items-center gap-2 px-3 py-1 bg-slate-900 text-white rounded-full font-mono text-[11px] shadow-xs">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-slate-300">IST:</span>
+              <span className="font-bold text-emerald-300 tracking-wider">
+                {istTime || 'Loading...'}
               </span>
-              {user?.emailVerified ? (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/25 text-emerald-200 border border-emerald-400/30 text-[11px] font-bold">
-                  <CheckCircle className="w-3 h-3 text-emerald-300" />
-                  <span>Email Verified</span>
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/30 text-amber-200 border border-amber-400/30 text-[11px] font-bold">
-                  <ShieldAlert className="w-3 h-3 text-amber-300" />
-                  <span>Pending Email Verification</span>
-                </span>
-              )}
+            </div>
+          </div>
+        </div>
+
+        {/* WELCOME HERO & PROFILE BANNER */}
+        <div className="bg-gradient-to-r from-blue-700 via-blue-800 to-indigo-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+          <div className="flex items-start sm:items-center gap-4">
+            <div className="relative group shrink-0">
+              <img
+                src={
+                  profileForm.profileImage ||
+                  (profileForm.gender === 'Female'
+                    ? 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=120'
+                    : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120')
+                }
+                alt=""
+                className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover border-2 border-white/30 shadow-md"
+              />
+              <button
+                onClick={() => setActiveTab('profile')}
+                className="absolute -bottom-1 -right-1 p-1 bg-white text-blue-700 rounded-full shadow-md hover:bg-blue-50 transition cursor-pointer"
+                title="Change Photo"
+              >
+                <Camera className="w-3.5 h-3.5" />
+              </button>
             </div>
 
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-              {total === 0
-                ? `Welcome, ${profileForm.fullName || 'Patient'}!`
-                : `Welcome back, ${profileForm.fullName || 'Patient'}!`}
-            </h1>
+            <div className="space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-full bg-white/20 text-white text-[11px] font-bold backdrop-blur-md">
+                  Patient Portal
+                </span>
+                {user?.emailVerified ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/25 text-emerald-200 border border-emerald-400/30 text-[11px] font-bold">
+                    <CheckCircle className="w-3 h-3 text-emerald-300" />
+                    <span>Email Verified</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/30 text-amber-200 border border-amber-400/30 text-[11px] font-bold">
+                    <ShieldAlert className="w-3 h-3 text-amber-300" />
+                    <span>Pending Email Verification</span>
+                  </span>
+                )}
+              </div>
 
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-blue-100 font-medium pt-0.5">
-              <span className="flex items-center gap-1">
-                <Mail className="w-3.5 h-3.5 opacity-80" />
-                {profileForm.email || 'patient@example.com'}
-              </span>
-              {profileForm.phone && (
+              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+                {total === 0
+                  ? `Welcome, ${profileForm.fullName || 'Patient'}!`
+                  : `Welcome back, ${profileForm.fullName || 'Patient'}!`}
+              </h1>
+
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-blue-100 font-medium pt-0.5">
                 <span className="flex items-center gap-1">
-                  <Phone className="w-3.5 h-3.5 opacity-80" />
-                  {profileForm.phone}
+                  <Mail className="w-3.5 h-3.5 opacity-80" />
+                  {profileForm.email || 'patient@example.com'}
                 </span>
-              )}
-              {profileForm.age && (
-                <span>
-                  Age: <span className="font-bold">{profileForm.age} yrs</span>
-                </span>
-              )}
-              {profileForm.gender && (
-                <span>
-                  Gender: <span className="font-bold">{profileForm.gender}</span>
-                </span>
-              )}
+                {profileForm.phone && (
+                  <span className="flex items-center gap-1">
+                    <Phone className="w-3.5 h-3.5 opacity-80" />
+                    {profileForm.phone}
+                  </span>
+                )}
+                {profileForm.age && (
+                  <span>
+                    Age: <span className="font-bold">{profileForm.age} yrs</span>
+                  </span>
+                )}
+                {profileForm.gender && (
+                  <span>
+                    Gender: <span className="font-bold">{profileForm.gender}</span>
+                  </span>
+                )}
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Quick CTA Actions */}
-        <div className="flex flex-wrap items-center gap-3 shrink-0 w-full lg:w-auto">
-          <button
-            onClick={() => setActiveTab('doctors')}
-            className="flex-1 sm:flex-none px-5 py-3 bg-white text-blue-800 font-bold text-xs uppercase tracking-wider rounded-2xl shadow-lg hover:bg-blue-50 transition active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
-          >
-            <Search className="w-4 h-4" />
-            <span>Book Appointment</span>
-          </button>
-          <Link
-            to="/patient/prescriptions"
-            className="flex-1 sm:flex-none px-4 py-3 bg-blue-900/60 hover:bg-blue-900 text-white font-bold text-xs uppercase tracking-wider rounded-2xl border border-white/20 backdrop-blur-md transition flex items-center justify-center gap-2"
-          >
-            <FileText className="w-4 h-4" />
-            <span>Prescriptions</span>
-          </Link>
-        </div>
-      </div>
-
-      {/* =========================================================================
-          DASHBOARD NAVIGATION TABS (5 Core Sections)
-      ========================================================================= */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs font-bold no-scrollbar border-b border-slate-200">
-        {[
-          { id: 'overview', label: 'Overview', icon: LayoutDashboard },
-          { id: 'appointments', label: 'My Appointments', icon: Calendar, badge: upcoming > 0 ? upcoming : null },
-          { id: 'doctors', label: 'Find Doctors', icon: Stethoscope, badge: doctors.length > 0 ? doctors.length : null },
-          { id: 'profile', label: 'My Profile', icon: User },
-          { id: 'notifications', label: 'Notifications', icon: Bell, badge: unreadNotifsCount > 0 ? unreadNotifsCount : null, alert: unreadNotifsCount > 0 },
-        ].map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
+          {/* Quick CTA Actions */}
+          <div className="flex flex-wrap items-center gap-3 shrink-0 w-full lg:w-auto">
             <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-3 rounded-t-2xl font-bold transition flex items-center gap-2 shrink-0 border-b-2 cursor-pointer ${
-                isActive
-                  ? 'border-blue-600 text-blue-600 bg-blue-50/70'
-                  : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-              }`}
+              onClick={() => setActiveTab('doctors')}
+              className="flex-1 sm:flex-none px-5 py-3 bg-white text-blue-800 font-bold text-xs uppercase tracking-wider rounded-2xl shadow-lg hover:bg-blue-50 transition active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
             >
-              <Icon className={`w-4 h-4 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
-              <span>{tab.label}</span>
-              {tab.badge !== null && (
-                <span
-                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${
-                    tab.alert
-                      ? 'bg-rose-500 text-white animate-pulse'
-                      : isActive
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-slate-200 text-slate-700'
-                  }`}
-                >
-                  {tab.badge}
-                </span>
-              )}
+              <Search className="w-4 h-4" />
+              <span>Book Appointment</span>
             </button>
-          );
-        })}
-      </div>
+            <button
+              onClick={() => setActiveTab('prescriptions')}
+              className="flex-1 sm:flex-none px-4 py-3 bg-blue-900/60 hover:bg-blue-900 text-white font-bold text-xs uppercase tracking-wider rounded-2xl border border-white/20 backdrop-blur-md transition flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <FileText className="w-4 h-4" />
+              <span>Prescriptions</span>
+            </button>
+          </div>
+        </div>
 
       {/* =========================================================================
           SECTION A: DASHBOARD OVERVIEW
@@ -1148,7 +1293,310 @@ export const PatientDashboard = () => {
       )}
 
       {/* =========================================================================
-          SECTION D: MY PROFILE TAB
+          SECTION D: VIDEO CONSULTATIONS (GOOGLE MEET EXCLUSIVE)
+      ========================================================================= */}
+      {activeTab === 'video' && (
+        <div className="space-y-6 animate-in fade-in">
+          {/* Header */}
+          <div className="bg-gradient-to-r from-teal-700 via-teal-800 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+            <div className="space-y-2">
+              <span className="px-3 py-1 rounded-full bg-white/20 text-xs font-bold backdrop-blur-md flex items-center gap-1.5 w-fit">
+                <Video className="w-3.5 h-3.5 text-emerald-300" />
+                Google Meet Telehealth Hub
+              </span>
+              <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+                Live Video Consultations
+              </h2>
+              <p className="text-xs sm:text-sm text-teal-100 max-w-xl">
+                QuickCare exclusively uses Google Meet for high-definition, encrypted medical video consultations. Your doctor will review and send your personalized Google Meet link.
+              </p>
+            </div>
+            <button
+              onClick={() => setActiveTab('doctors')}
+              className="px-5 py-3 bg-white text-teal-800 font-bold text-xs uppercase tracking-wider rounded-2xl shadow-lg hover:bg-teal-50 transition flex items-center gap-2 cursor-pointer shrink-0"
+            >
+              <Stethoscope className="w-4 h-4" />
+              <span>Book Video Consultation</span>
+            </button>
+          </div>
+
+          {/* Telemedicine Checklist */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="p-4 bg-white rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center shrink-0">
+                <Video className="w-5 h-5" />
+              </div>
+              <div className="text-xs">
+                <p className="font-bold text-slate-800">1. Doctor Approval</p>
+                <p className="text-slate-500 text-[11px]">Doctor reviews and creates your Google Meet room</p>
+              </div>
+            </div>
+            <div className="p-4 bg-white rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                <Mail className="w-5 h-5" />
+              </div>
+              <div className="text-xs">
+                <p className="font-bold text-slate-800">2. Instant Notification</p>
+                <p className="text-slate-500 text-[11px]">Link sent via email & shown on your dashboard</p>
+              </div>
+            </div>
+            <div className="p-4 bg-white rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                <CheckCircle className="w-5 h-5" />
+              </div>
+              <div className="text-xs">
+                <p className="font-bold text-slate-800">3. 1-Click Join</p>
+                <p className="text-slate-500 text-[11px]">Join directly from browser or Google Meet app</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Video Consultations List */}
+          {videoAppointments.length === 0 ? (
+            <div className="bg-white rounded-3xl p-12 text-center border border-slate-200/80 shadow-xs space-y-4">
+              <div className="w-16 h-16 rounded-3xl bg-teal-50 text-teal-600 flex items-center justify-center mx-auto">
+                <Video className="w-8 h-8" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-lg font-extrabold text-slate-900">No Video Consultations Scheduled</h3>
+                <p className="text-xs text-slate-500 max-w-md mx-auto">
+                  When you schedule a consultation with "Video Consultation" selected, your doctor's Google Meet invitation will appear here.
+                </p>
+              </div>
+              <button
+                onClick={() => setActiveTab('doctors')}
+                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md shadow-blue-600/20 transition cursor-pointer"
+              >
+                Find Doctors & Book Call
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {videoAppointments.map((apt) => {
+                const meetLink = apt.googleMeetLink || apt.videoConsultationLink;
+                const isCompleted = (apt.status || '').toUpperCase() === 'COMPLETED';
+                const isCancelled = (apt.status || '').toUpperCase() === 'CANCELLED';
+
+                return (
+                  <div
+                    key={apt.appointmentId}
+                    className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-200/80 shadow-xs hover:border-teal-200 transition space-y-4"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-2xl bg-teal-50 text-teal-700 flex items-center justify-center font-bold text-base shrink-0">
+                          <Stethoscope className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="font-extrabold text-slate-900 text-sm">{apt.doctorName}</h4>
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-100 text-teal-800">
+                              {apt.specialization || 'Specialist'}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
+                            <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                            <span>{apt.appointmentDate} at {apt.appointmentTime}</span>
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`px-3 py-1 rounded-full text-xs font-extrabold ${
+                            isCompleted
+                              ? 'bg-blue-100 text-blue-800'
+                              : isCancelled
+                              ? 'bg-rose-100 text-rose-800'
+                              : meetLink
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-amber-100 text-amber-800'
+                          }`}
+                        >
+                          {isCompleted
+                            ? 'Consultation Completed'
+                            : isCancelled
+                            ? 'Cancelled'
+                            : meetLink
+                            ? 'Google Meet Ready'
+                            : 'Awaiting Doctor Link'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Google Meet Link Display & Actions */}
+                    {meetLink && !isCompleted && !isCancelled && (
+                      <div className="p-4 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 text-emerald-900 font-extrabold text-xs">
+                            <Video className="w-4 h-4 text-emerald-600" />
+                            <span>Google Meet Invitation Ready</span>
+                          </div>
+                          <p className="text-[11px] text-emerald-700 font-mono truncate max-w-md">
+                            {meetLink}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(meetLink);
+                              setCopiedMeetId(apt.appointmentId);
+                              setTimeout(() => setCopiedMeetId(null), 2500);
+                            }}
+                            className="px-3 py-2 bg-white border border-emerald-200 text-emerald-800 hover:bg-emerald-50 font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                          >
+                            {copiedMeetId === apt.appointmentId ? (
+                              <>
+                                <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>Copied!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3.5 h-3.5" />
+                                <span>Copy Link</span>
+                              </>
+                            )}
+                          </button>
+
+                          <a
+                            href={meetLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl shadow-md shadow-emerald-600/25 transition flex items-center gap-2"
+                          >
+                            <Video className="w-4 h-4" />
+                            <span>Join Google Meet</span>
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                        </div>
+                      </div>
+                    )}
+
+                    {!meetLink && !isCompleted && !isCancelled && (
+                      <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl flex items-center gap-3 text-xs text-amber-900">
+                        <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span>
+                          The doctor has received your appointment request. As soon as the doctor approves and sets up the Google Meet session, the join link will appear here and will be emailed to your inbox.
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* =========================================================================
+          SECTION E: DIGITAL PRESCRIPTIONS TAB
+      ========================================================================= */}
+      {activeTab === 'prescriptions' && (
+        <div className="space-y-6 animate-in fade-in">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-extrabold text-slate-900">Digital Prescriptions</h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Review verified digital medical prescriptions, doctor clinical instructions, and prescribed dosages.
+              </p>
+            </div>
+
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={prescriptionSearch}
+                onChange={(e) => setPrescriptionSearch(e.target.value)}
+                placeholder="Search doctor, diagnosis, medicines..."
+                className="pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 w-64"
+              />
+            </div>
+          </div>
+
+          {filteredPrescriptions.length === 0 ? (
+            <div className="bg-white rounded-3xl p-12 text-center border border-slate-200/80 shadow-xs space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto">
+                <FileText className="w-6 h-6" />
+              </div>
+              <h3 className="text-base font-extrabold text-slate-900">No Digital Prescriptions Yet</h3>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                After a completed clinical or Google Meet consultation, your doctor's official digital prescription will appear here.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {filteredPrescriptions.map((rx) => (
+                <div
+                  key={rx.prescriptionId || rx.id}
+                  className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs hover:border-blue-200 transition space-y-3"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                        <FileText className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="font-extrabold text-slate-900 text-sm">
+                          {rx.doctorName || 'Doctor'}
+                        </h4>
+                        <p className="text-xs text-blue-600 font-semibold">
+                          {rx.doctorSpecialization || 'Clinical Specialist'}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      {rx.createdAt ? new Date(rx.createdAt).toLocaleDateString() : 'Recent'}
+                    </span>
+                  </div>
+
+                  <div className="p-3 bg-slate-50 rounded-2xl text-xs space-y-1">
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Diagnosis:</span>
+                      <span className="font-bold text-slate-800">{rx.diagnosis || 'General Checkup'}</span>
+                    </div>
+                    {rx.medicines && rx.medicines.length > 0 && (
+                      <div className="pt-1 border-t border-slate-200/60">
+                        <span className="text-slate-500 block mb-1">Prescribed Medicines ({rx.medicines.length}):</span>
+                        <div className="flex flex-wrap gap-1">
+                          {rx.medicines.slice(0, 3).map((m, idx) => (
+                            <span
+                              key={idx}
+                              className="px-2 py-0.5 rounded-md bg-white border border-slate-200 text-[10px] font-medium text-slate-700"
+                            >
+                              💊 {m.name || m.medicineName} ({m.dosage || 'Standard'})
+                            </span>
+                          ))}
+                          {rx.medicines.length > 3 && (
+                            <span className="text-[10px] text-slate-400 self-center">
+                              +{rx.medicines.length - 3} more
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex justify-end pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPrescription(rx)}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>View Official Prescription</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* =========================================================================
+          SECTION F: MY PROFILE TAB
       ========================================================================= */}
       {activeTab === 'profile' && (
         <div className="max-w-3xl mx-auto space-y-6 animate-in fade-in">
@@ -1644,6 +2092,7 @@ export const PatientDashboard = () => {
           onClose={() => setSelectedPrescription(null)}
         />
       )}
+      </main>
     </div>
   );
 };
