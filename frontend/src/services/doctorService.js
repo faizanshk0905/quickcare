@@ -1,5 +1,42 @@
 import api from './api.js';
 
+// Helper to convert time strings (e.g. "05:00 PM", "7:00 PM", "19:00") into minutes from midnight
+export const parseTimeStringToMinutes = (timeStr, fallbackMinutes = 540) => {
+  if (!timeStr || typeof timeStr !== 'string') return fallbackMinutes;
+  const s = timeStr.trim().toUpperCase();
+
+  // Handle 12-hour AM/PM format (e.g. "05:00 PM", "5:00 PM", "9:30 AM", "09:00AM")
+  if (s.includes('AM') || s.includes('PM')) {
+    const isPM = s.includes('PM');
+    const isAM = s.includes('AM');
+    const clean = s.replace('AM', '').replace('PM', '').trim();
+    const parts = clean.split(':');
+    let h = parseInt(parts[0], 10);
+    const m = parseInt(parts[1] || '0', 10);
+    if (isNaN(h)) return fallbackMinutes;
+    if (isPM && h < 12) h += 12;
+    if (isAM && h === 12) h = 0;
+    return h * 60 + (isNaN(m) ? 0 : m);
+  }
+
+  // Handle 24-hour format (e.g. "17:00", "09:00", "19:30")
+  if (s.includes(':')) {
+    const parts = s.split(':');
+    const h = parseInt(parts[0], 10);
+    const m = parseInt(parts[1] || '0', 10);
+    if (!isNaN(h)) {
+      return h * 60 + (isNaN(m) ? 0 : m);
+    }
+  }
+
+  const num = parseInt(s, 10);
+  if (!isNaN(num)) {
+    return num >= 1 && num <= 12 ? (num < 8 ? (num + 12) * 60 : num * 60) : num * 60;
+  }
+
+  return fallbackMinutes;
+};
+
 export const DEFAULT_DOCTORS = [
   {
     doctorId: 'doc_001',
@@ -219,15 +256,24 @@ export const doctorService = {
       console.warn('Backend getDoctorById API offline, resolving from faculty roster:', err.message);
     }
 
-    let doc = DEFAULT_DOCTORS.find((d) => d.doctorId === id);
+    let doc = null;
+    try {
+      const raw = localStorage.getItem('quickcare_shared_doctors');
+      if (raw) {
+        const local = JSON.parse(raw);
+        doc = local.find(
+          (d) =>
+            d.doctorId === id ||
+            d.uid === id ||
+            `doc_${d.uid}` === id ||
+            (id && d.doctorId && d.doctorId.toLowerCase() === id.toLowerCase()) ||
+            (id && d.uid && d.uid.toLowerCase() === id.toLowerCase())
+        );
+      }
+    } catch (e) {}
+
     if (!doc) {
-      try {
-        const raw = localStorage.getItem('quickcare_shared_doctors');
-        if (raw) {
-          const local = JSON.parse(raw);
-          doc = local.find((d) => d.doctorId === id || d.uid === id);
-        }
-      } catch (e) {}
+      doc = DEFAULT_DOCTORS.find((d) => d.doctorId === id || d.uid === id);
     }
     doc = doc || DEFAULT_DOCTORS[0];
     return {
@@ -362,15 +408,61 @@ export const doctorService = {
   async updateDoctorProfile(data) {
     try {
       const raw = localStorage.getItem('quickcare_shared_doctors');
-      if (raw) {
-        const list = JSON.parse(raw);
-        const idx = list.findIndex(d => d.doctorId === data.doctorId || d.uid === data.uid || d.email === data.email);
-        if (idx >= 0) {
-          list[idx] = { ...list[idx], ...data };
-          localStorage.setItem('quickcare_shared_doctors', JSON.stringify(list));
-        }
+      const list = raw ? JSON.parse(raw) : [];
+      const idx = list.findIndex(
+        (d) =>
+          d.doctorId === data.doctorId ||
+          d.uid === data.uid ||
+          (data.doctorId && d.doctorId && d.doctorId.toLowerCase() === data.doctorId.toLowerCase()) ||
+          (data.uid && d.uid && d.uid.toLowerCase() === data.uid.toLowerCase()) ||
+          (data.email && d.email && d.email.toLowerCase() === data.email.toLowerCase())
+      );
+
+      let updatedDoctor = null;
+      if (idx >= 0) {
+        list[idx] = { ...list[idx], ...data };
+        updatedDoctor = list[idx];
+      } else {
+        const defaultMatch = DEFAULT_DOCTORS.find(
+          (d) => d.doctorId === data.doctorId || d.uid === data.uid
+        );
+        updatedDoctor = { ...(defaultMatch || {}), ...data };
+        list.unshift(updatedDoctor);
       }
-    } catch (e) {}
+      localStorage.setItem('quickcare_shared_doctors', JSON.stringify(list));
+
+      // Also update quickcare_current_user in localStorage if this is current doctor
+      try {
+        const rawUser = localStorage.getItem('quickcare_current_user');
+        if (rawUser) {
+          const u = JSON.parse(rawUser);
+          if (
+            u.doctorId === data.doctorId ||
+            u.userId === data.uid ||
+            u.uid === data.uid ||
+            (data.email && u.email && u.email.toLowerCase() === data.email.toLowerCase())
+          ) {
+            const updatedUser = { ...u, ...data };
+            localStorage.setItem('quickcare_current_user', JSON.stringify(updatedUser));
+          }
+        }
+      } catch (err) {}
+
+      // Also update in-memory DEFAULT_DOCTORS
+      const defIdx = DEFAULT_DOCTORS.findIndex(
+        (d) => d.doctorId === data.doctorId || d.uid === data.uid
+      );
+      if (defIdx >= 0) {
+        DEFAULT_DOCTORS[defIdx] = { ...DEFAULT_DOCTORS[defIdx], ...data };
+      }
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('quickcare_doctors_updated', { detail: updatedDoctor }));
+        window.dispatchEvent(new CustomEvent('quickcare_doctor_availability_updated', { detail: data }));
+      }
+    } catch (e) {
+      console.warn('Error saving doctor profile locally:', e);
+    }
 
     try {
       const res = await api.put('/doctors/profile', data);
@@ -381,6 +473,30 @@ export const doctorService = {
   },
 
   async getDoctorAvailability(doctorId, date) {
+    // 1. Resolve doctor object from shared store or default doctors
+    let targetDoc = null;
+    try {
+      const raw = localStorage.getItem('quickcare_shared_doctors');
+      if (raw) {
+        const local = JSON.parse(raw);
+        targetDoc = local.find(
+          (d) =>
+            d.doctorId === doctorId ||
+            d.uid === doctorId ||
+            `doc_${d.uid}` === doctorId ||
+            (doctorId && d.doctorId && d.doctorId.toLowerCase() === doctorId.toLowerCase()) ||
+            (doctorId && d.uid && d.uid.toLowerCase() === doctorId.toLowerCase())
+        );
+      }
+    } catch (e) {}
+
+    if (!targetDoc) {
+      targetDoc =
+        DEFAULT_DOCTORS.find((d) => d.doctorId === doctorId || d.uid === doctorId) ||
+        DEFAULT_DOCTORS[0];
+    }
+
+    // 2. Collect booked appointments dynamically
     let dynamicallyBookedSlots = [];
     try {
       const rawApts = localStorage.getItem('quickcare_shared_appointments');
@@ -391,6 +507,8 @@ export const doctorService = {
             .filter((a) => {
               const matchDoctor =
                 a.doctorId === doctorId ||
+                a.doctorId === targetDoc.doctorId ||
+                a.doctorId === targetDoc.uid ||
                 a.doctorId === `doc_${doctorId}` ||
                 doctorId === `doc_${a.doctorId}`;
               const matchDate = a.appointmentDate === date;
@@ -407,6 +525,7 @@ export const doctorService = {
       }
     } catch (e) {}
 
+    // 3. Try backend API call
     try {
       const res = await api.get(`/doctors/${doctorId}/availability`, { params: { date } });
       if (res && res.data && (res.data.data?.availableSlots || res.data.availableSlots)) {
@@ -424,9 +543,65 @@ export const doctorService = {
       console.warn('Backend availability API offline, calculating dynamic real-time slots:', err.message);
     }
 
-    // Dynamic fallback generation using real-time system clock in Asia/Kolkata
-    const targetDoc = DEFAULT_DOCTORS.find((d) => d.doctorId === doctorId) || DEFAULT_DOCTORS[0];
-    const duration = targetDoc.slotDurationMinutes || 15;
+    // 4. Check holidays
+    if (targetDoc.holidays && targetDoc.holidays.includes(date)) {
+      return {
+        success: true,
+        data: {
+          availabilityId: `${doctorId}_${date}`,
+          doctorId,
+          date,
+          availableSlots: [],
+          bookedSlots: [],
+          slotDurationMinutes: targetDoc.slotDurationMinutes || 15,
+          workingHours: targetDoc.workingHours || '09:00 AM - 05:00 PM',
+          isHoliday: true,
+          message: 'Doctor is on scheduled holiday on this date.',
+        },
+      };
+    }
+
+    // 5. Check working days (Monday - Sunday)
+    if (date) {
+      const targetDateObj = new Date(date + 'T00:00:00');
+      const dayOfWeekName = targetDateObj.toLocaleDateString('en-US', { weekday: 'long' });
+      const availableDays =
+        targetDoc.availableDays && targetDoc.availableDays.length > 0
+          ? targetDoc.availableDays
+          : ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+
+      const isWorkingDay = availableDays.some(
+        (d) =>
+          d.toLowerCase() === dayOfWeekName.toLowerCase() ||
+          (dayOfWeekName.length >= 3 && d.slice(0, 3).toLowerCase() === dayOfWeekName.slice(0, 3).toLowerCase())
+      );
+
+      if (!isWorkingDay) {
+        return {
+          success: true,
+          data: {
+            availabilityId: `${doctorId}_${date}`,
+            doctorId,
+            date,
+            availableSlots: [],
+            bookedSlots: [],
+            slotDurationMinutes: targetDoc.slotDurationMinutes || 15,
+            workingHours:
+              targetDoc.workingHours ||
+              `${targetDoc.workingStartTime || '09:00 AM'} - ${targetDoc.workingEndTime || '05:00 PM'}`,
+            isNonWorkingDay: true,
+            message: `Doctor does not consult on ${dayOfWeekName}s.`,
+          },
+        };
+      }
+    }
+
+    // 6. Dynamic slot generation using doctor's exact workingStartTime and workingEndTime
+    const duration = Number(targetDoc.slotDurationMinutes) || 15;
+    const startMinutes = parseTimeStringToMinutes(targetDoc.workingStartTime, 9 * 60);
+    const endMinutes = parseTimeStringToMinutes(targetDoc.workingEndTime, 17 * 60);
+    const breakStart = parseTimeStringToMinutes(targetDoc.breakStartTime, 13 * 60);
+    const breakEnd = parseTimeStringToMinutes(targetDoc.breakEndTime, 14 * 60);
 
     // Get current Indian Standard Time (Asia/Kolkata)
     const now = new Date();
@@ -437,23 +612,24 @@ export const doctorService = {
     const istDateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(now);
     const isToday = date === istDateStr;
 
-    // 09:00 AM (540 mins) to 05:00 PM (1020 mins)
-    // Break 01:00 PM (780 mins) to 02:00 PM (840 mins)
-    const startMinutes = 9 * 60; // 09:00 AM
-    const endMinutes = 17 * 60; // 05:00 PM
-    const breakStart = 13 * 60; // 01:00 PM
-    const breakEnd = 14 * 60; // 02:00 PM
-
     const generatedSlots = [];
-    for (let m = startMinutes; m + duration <= endMinutes; m += duration) {
-      // Check break
-      if ((m >= breakStart && m < breakEnd) || (m + duration > breakStart && m + duration <= breakEnd)) {
+    for (let m = startMinutes; m <= endMinutes; m += duration) {
+      // Check break window
+      const slotEnd = m + duration;
+      const inBreak =
+        (m >= breakStart && m < breakEnd) ||
+        (slotEnd > breakStart && slotEnd <= breakEnd) ||
+        (m < breakStart && slotEnd > breakEnd);
+
+      if (inBreak) {
         continue;
       }
-      // If date is today, strictly hide/omit all past time slots
+
+      // If date is today, strictly hide/omit past time slots
       if (isToday && m <= currTotalMinutes) {
         continue;
       }
+
       const h = Math.floor(m / 60);
       const min = m % 60;
       const period = h >= 12 ? 'PM' : 'AM';
@@ -461,6 +637,10 @@ export const doctorService = {
       const slotString = `${String(displayH).padStart(2, '0')}:${String(min).padStart(2, '0')} ${period}`;
       generatedSlots.push(slotString);
     }
+
+    const workingHoursDisplay =
+      targetDoc.workingHours ||
+      `${targetDoc.workingStartTime || '09:00 AM'} - ${targetDoc.workingEndTime || '05:00 PM'}`;
 
     return {
       success: true,
@@ -471,14 +651,23 @@ export const doctorService = {
         availableSlots: generatedSlots,
         bookedSlots: [...new Set(dynamicallyBookedSlots)],
         slotDurationMinutes: duration,
-        workingHours: targetDoc.workingHours || '09:00 AM - 05:00 PM',
+        workingHours: workingHoursDisplay,
+        workingStartTime: targetDoc.workingStartTime || '09:00 AM',
+        workingEndTime: targetDoc.workingEndTime || '05:00 PM',
+        breakStartTime: targetDoc.breakStartTime || '01:00 PM',
+        breakEndTime: targetDoc.breakEndTime || '02:00 PM',
       },
     };
   },
 
   async updateAvailability(data) {
-    const res = await api.put('/doctors/availability', data);
-    return res.data;
+    await this.updateDoctorProfile(data);
+    try {
+      const res = await api.put('/doctors/availability', data);
+      return res.data;
+    } catch (err) {
+      return { success: true, message: 'Availability schedule saved successfully', data };
+    }
   },
 
   async updateDoctorStatus(status) {

@@ -112,7 +112,7 @@ public class AppointmentService {
             LocalTime breakStart = doctorService.parseTimeFlexible(doctor.getBreakStartTime(), LocalTime.of(13, 0));
             LocalTime breakEnd = doctorService.parseTimeFlexible(doctor.getBreakEndTime(), LocalTime.of(14, 0));
 
-            if (slotTime.isBefore(startTime) || slotTime.compareTo(endTime) >= 0) {
+            if (slotTime.isBefore(startTime) || slotTime.isAfter(endTime)) {
                 throw new BadRequestException("Selected time slot is outside Dr. " + doctor.getFullName() + "'s clinic working hours (" + doctor.getWorkingHours() + "). For 24/7 care, select Video Consultation.");
             }
 

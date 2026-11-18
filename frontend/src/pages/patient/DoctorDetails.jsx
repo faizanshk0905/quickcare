@@ -82,6 +82,18 @@ export const DoctorDetails = () => {
       }
     };
     fetchDoc();
+
+    const handleDoctorUpdate = () => {
+      fetchDoc();
+      fetchAvailability(true);
+    };
+
+    window.addEventListener('quickcare_doctors_updated', handleDoctorUpdate);
+    window.addEventListener('quickcare_doctor_availability_updated', handleDoctorUpdate);
+    return () => {
+      window.removeEventListener('quickcare_doctors_updated', handleDoctorUpdate);
+      window.removeEventListener('quickcare_doctor_availability_updated', handleDoctorUpdate);
+    };
   }, [doctorId]);
 
   // Load Doctor Availability for chosen date with Real-Time Polling (Double-booking prevention)
@@ -556,8 +568,18 @@ export const DoctorDetails = () => {
 
                   {/* Doctor Schedule Context */}
                   <div className="mb-2 p-2 rounded-xl bg-slate-50 border border-slate-100 text-[10px] text-slate-500 flex flex-wrap items-center justify-between gap-1">
-                    <span>🕒 Working: {doctor.workingHours || '09:00 AM - 05:00 PM'}</span>
-                    <span>☕ Break: {doctor.breakStartTime || '01:00 PM'} - {doctor.breakEndTime || '02:00 PM'}</span>
+                    <span>
+                      🕒 Working:{' '}
+                      <strong className="text-slate-700">
+                        {doctor.workingHours ||
+                          (doctor.workingStartTime && doctor.workingEndTime
+                            ? `${doctor.workingStartTime} - ${doctor.workingEndTime}`
+                            : '09:00 AM - 05:00 PM')}
+                      </strong>
+                    </span>
+                    <span>
+                      ☕ Break: {doctor.breakStartTime || '01:00 PM'} - {doctor.breakEndTime || '02:00 PM'}
+                    </span>
                   </div>
 
                   {availability?.holiday ? (
@@ -571,7 +593,7 @@ export const DoctorDetails = () => {
                         : 'No open slots on this date. Please select another date.'}
                     </div>
                   ) : (
-                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-48 overflow-y-auto p-1">
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-64 sm:max-h-80 overflow-y-auto p-1 pr-1.5 custom-scrollbar">
                       {validSlots.map((slot) => {
                         const isBooked = bookedSlots.includes(slot);
                         const isSelected = selectedSlot === slot;

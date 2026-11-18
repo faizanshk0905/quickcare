@@ -75,6 +75,12 @@ public class DoctorService {
         if (updated.getConsultationFee() > 0) doc.setConsultationFee(updated.getConsultationFee());
         if (updated.getAvailableDays() != null) doc.setAvailableDays(updated.getAvailableDays());
         if (updated.getWorkingHours() != null) doc.setWorkingHours(updated.getWorkingHours());
+        if (updated.getWorkingStartTime() != null) doc.setWorkingStartTime(updated.getWorkingStartTime());
+        if (updated.getWorkingEndTime() != null) doc.setWorkingEndTime(updated.getWorkingEndTime());
+        if (updated.getBreakStartTime() != null) doc.setBreakStartTime(updated.getBreakStartTime());
+        if (updated.getBreakEndTime() != null) doc.setBreakEndTime(updated.getBreakEndTime());
+        if (updated.getSlotDurationMinutes() > 0) doc.setSlotDurationMinutes(updated.getSlotDurationMinutes());
+        if (updated.getHolidays() != null) doc.setHolidays(updated.getHolidays());
         if (updated.getBio() != null) doc.setBio(updated.getBio());
         if (updated.getClinicAddress() != null) doc.setClinicAddress(updated.getClinicAddress());
         if (updated.getProfileImage() != null) doc.setProfileImage(updated.getProfileImage());
@@ -158,12 +164,13 @@ public class DoctorService {
 
         DateTimeFormatter slotFormatter = DateTimeFormatter.ofPattern("hh:mm a", Locale.ENGLISH);
 
-        while (current.plusMinutes(duration).compareTo(endTime) <= 0) {
+        while (current.compareTo(endTime) <= 0) {
             LocalTime slotEnd = current.plusMinutes(duration);
 
             // Check if slot overlaps with doctor's break
             boolean inBreak = (current.compareTo(breakStart) >= 0 && current.compareTo(breakEnd) < 0) ||
-                    (slotEnd.compareTo(breakStart) > 0 && slotEnd.compareTo(breakEnd) <= 0);
+                    (slotEnd.compareTo(breakStart) > 0 && slotEnd.compareTo(breakEnd) <= 0) ||
+                    (current.isBefore(breakStart) && slotEnd.isAfter(breakEnd));
 
             if (!inBreak) {
                 // If today, filter out past slots

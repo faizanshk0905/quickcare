@@ -382,19 +382,29 @@ export const DoctorDashboard = () => {
     setSavingAvailability(true);
     setAvailabilitySuccess('');
     try {
+      const cleanWorkingHours = `${workingStartTime} - ${workingEndTime}`;
       const updatePayload = {
+        ...doctor,
         doctorId: doctor?.doctorId,
+        uid: doctor?.uid || user?.userId || user?.uid,
+        email: doctor?.email || user?.email,
         availableDays,
         workingStartTime,
         workingEndTime,
         breakStartTime,
         breakEndTime,
         slotDurationMinutes: Number(slotDuration),
-        workingHours: `${workingStartTime} - ${workingEndTime}`,
+        workingHours: cleanWorkingHours,
       };
       await doctorService.updateDoctorProfile(updatePayload);
-      setAvailabilitySuccess('Availability schedule and slot durations updated successfully!');
-      setTimeout(() => setAvailabilitySuccess(''), 4000);
+      await doctorService.updateAvailability(updatePayload).catch(() => {});
+      if (updateUser) {
+        updateUser({ ...updatePayload });
+      }
+      setAvailabilitySuccess(
+        `Availability schedule saved! Patients can now book appointment slots up to ${workingEndTime}.`
+      );
+      setTimeout(() => setAvailabilitySuccess(''), 5000);
       fetchDoctorData();
     } catch (err) {
       alert('Failed to save availability: ' + err.message);
@@ -1553,7 +1563,10 @@ export const DoctorDashboard = () => {
               {/* Working Hours */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700">Working Start Time</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-700">Working Start Time</label>
+                    <span className="text-[10px] font-medium text-slate-400">First slot start</span>
+                  </div>
                   <input
                     type="text"
                     value={workingStartTime}
@@ -1561,16 +1574,51 @@ export const DoctorDashboard = () => {
                     placeholder="e.g. 09:00 AM"
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
                   />
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {['08:00 AM', '09:00 AM', '10:00 AM'].map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setWorkingStartTime(t)}
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition cursor-pointer ${
+                          workingStartTime === t
+                            ? 'bg-teal-600 text-white shadow-2xs'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700">Working End Time</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-700">Working End Time</label>
+                    <span className="text-[10px] font-bold text-teal-600">Booking open till this time</span>
+                  </div>
                   <input
                     type="text"
                     value={workingEndTime}
                     onChange={(e) => setWorkingEndTime(e.target.value)}
-                    placeholder="e.g. 05:00 PM"
+                    placeholder="e.g. 05:00 PM or 08:00 PM"
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
                   />
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {['05:00 PM', '06:00 PM', '07:00 PM', '08:00 PM', '09:00 PM', '10:00 PM'].map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setWorkingEndTime(t)}
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition cursor-pointer ${
+                          workingEndTime === t
+                            ? 'bg-teal-600 text-white shadow-2xs'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
