@@ -17,6 +17,7 @@ import { Home } from './pages/public/Home';
 import { OurDoctors } from './pages/public/OurDoctors';
 import { AboutUs } from './pages/public/AboutUs';
 import { ContactUs } from './pages/public/ContactUs';
+import { VerifyPrescription } from './pages/public/VerifyPrescription';
 
 // Auth Pages
 import { Login } from './pages/auth/Login';
@@ -66,6 +67,7 @@ export function App() {
                 <Route path="/doctors/:doctorId" element={<DoctorDetails />} />
                 <Route path="/about" element={<AboutUs />} />
                 <Route path="/contact" element={<ContactUs />} />
+                <Route path="/verify-prescription" element={<VerifyPrescription />} />
 
                 {/* Auth Routes */}
                 <Route path="/login" element={<Login />} />

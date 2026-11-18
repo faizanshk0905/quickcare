@@ -43,6 +43,9 @@ import {
   Eye,
   Pill,
   Download,
+  FolderOpen,
+  FileUp,
+  Trash2,
 } from 'lucide-react';
 
 export const PatientDashboard = () => {
@@ -122,6 +125,145 @@ export const PatientDashboard = () => {
       }));
     }
   }, [user]);
+
+  // Medical Records & Lab Reports Upload State (Patient-Isolated)
+  const patientUid = user?.userId || user?.uid || (user?.email ? user.email.replace(/[^a-zA-Z0-9]/g, '_') : 'guest');
+  const [medicalRecords, setMedicalRecords] = useState(() => {
+    try {
+      const raw = localStorage.getItem(`quickcare_patient_records_${patientUid}`);
+      if (raw) return JSON.parse(raw);
+    } catch (e) {}
+    return [];
+  });
+  const [recordModalOpen, setRecordModalOpen] = useState(false);
+  const [selectedViewingRecord, setSelectedViewingRecord] = useState(null);
+  const [recordFilter, setRecordFilter] = useState('ALL');
+  const [recordError, setRecordError] = useState('');
+  const [recordForm, setRecordForm] = useState({
+    title: '',
+    category: 'Lab Report',
+    date: new Date().toISOString().split('T')[0],
+    fileData: null,
+    fileName: '',
+    fileSize: '',
+    notes: '',
+  });
+
+  // Re-sync medical records when patientUid changes
+  useEffect(() => {
+    if (!patientUid) return;
+    try {
+      const raw = localStorage.getItem(`quickcare_patient_records_${patientUid}`);
+      if (raw) {
+        setMedicalRecords(JSON.parse(raw));
+      } else {
+        setMedicalRecords([]);
+      }
+    } catch (e) {}
+  }, [patientUid]);
+
+  const handleRecordFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 8 * 1024 * 1024) {
+      setRecordError('File size exceeds 8MB limit.');
+      return;
+    }
+    setRecordError('');
+    const reader = new FileReader();
+    reader.onload = () => {
+      const sizeStr = file.size > 1024 * 1024
+        ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+        : `${Math.round(file.size / 1024)} KB`;
+
+      setRecordForm((prev) => ({
+        ...prev,
+        fileData: reader.result,
+        fileName: file.name,
+        fileSize: sizeStr,
+        title: prev.title || file.name.replace(/\.[^/.]+$/, ''),
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveRecord = (e) => {
+    e.preventDefault();
+    if (!recordForm.title.trim()) {
+      setRecordError('Please provide a document title.');
+      return;
+    }
+    if (!recordForm.fileData) {
+      setRecordError('Please select a PDF or image file to upload.');
+      return;
+    }
+
+    const newRecord = {
+      recordId: `REC-${Date.now()}`,
+      patientUid,
+      patientName: user?.fullName || 'Patient',
+      patientEmail: user?.email || '',
+      title: recordForm.title.trim(),
+      category: recordForm.category,
+      date: recordForm.date,
+      fileData: recordForm.fileData,
+      fileName: recordForm.fileName,
+      fileSize: recordForm.fileSize,
+      notes: recordForm.notes.trim(),
+      uploadedAt: new Date().toISOString(),
+    };
+
+    const updated = [newRecord, ...medicalRecords];
+    setMedicalRecords(updated);
+    try {
+      localStorage.setItem(`quickcare_patient_records_${patientUid}`, JSON.stringify(updated));
+      // Store in shared records index so consulting doctors can lookup
+      const sharedMapRaw = localStorage.getItem('quickcare_shared_patient_records');
+      const sharedMap = sharedMapRaw ? JSON.parse(sharedMapRaw) : {};
+      sharedMap[patientUid] = updated;
+      if (user?.email) {
+        sharedMap[user.email.toLowerCase()] = updated;
+      }
+      localStorage.setItem('quickcare_shared_patient_records', JSON.stringify(sharedMap));
+      window.dispatchEvent(new CustomEvent('quickcare_records_updated', { detail: { patientUid } }));
+    } catch (err) {
+      console.warn('Storage quota warning:', err);
+    }
+
+    setRecordModalOpen(false);
+    setRecordForm({
+      title: '',
+      category: 'Lab Report',
+      date: new Date().toISOString().split('T')[0],
+      fileData: null,
+      fileName: '',
+      fileSize: '',
+      notes: '',
+    });
+    setRecordError('');
+  };
+
+  const handleDeleteRecord = (recordId) => {
+    if (!window.confirm('Are you sure you want to delete this medical report?')) return;
+    const filtered = medicalRecords.filter((r) => r.recordId !== recordId);
+    setMedicalRecords(filtered);
+    try {
+      localStorage.setItem(`quickcare_patient_records_${patientUid}`, JSON.stringify(filtered));
+      const sharedMapRaw = localStorage.getItem('quickcare_shared_patient_records');
+      if (sharedMapRaw) {
+        const sharedMap = JSON.parse(sharedMapRaw);
+        sharedMap[patientUid] = filtered;
+        if (user?.email) sharedMap[user.email.toLowerCase()] = filtered;
+        localStorage.setItem('quickcare_shared_patient_records', JSON.stringify(sharedMap));
+      }
+    } catch (e) {}
+  };
+
+  const filteredRecords = useMemo(() => {
+    if (recordFilter === 'ALL') return medicalRecords;
+    return medicalRecords.filter((r) => r.category === recordFilter);
+  }, [medicalRecords, recordFilter]);
 
   // Live IST Clock
   useEffect(() => {
@@ -432,6 +574,7 @@ export const PatientDashboard = () => {
     { id: 'doctors', label: 'Find Doctors', icon: Stethoscope, badge: doctors.length > 0 ? doctors.length : null },
     { id: 'video', label: 'Video Consultations', icon: Video, badge: upcomingVideoCount > 0 ? upcomingVideoCount : null, isMeet: true },
     { id: 'prescriptions', label: 'Digital Prescriptions', icon: FileText, badge: prescriptions.length > 0 ? prescriptions.length : null },
+    { id: 'records', label: 'Medical Reports', icon: FolderOpen, badge: medicalRecords.length > 0 ? medicalRecords.length : null },
     { id: 'notifications', label: 'Notifications', icon: Bell, badge: unreadNotifsCount > 0 ? unreadNotifsCount : null, alert: unreadNotifsCount > 0 },
     { id: 'profile', label: 'My Profile', icon: User },
   ];
@@ -1596,6 +1739,143 @@ export const PatientDashboard = () => {
       )}
 
       {/* =========================================================================
+          SECTION E2: MEDICAL REPORTS & LAB RECORDS TAB
+      ========================================================================= */}
+      {activeTab === 'records' && (
+        <div className="space-y-6 animate-in fade-in">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-black text-slate-900">Medical Reports & Diagnostic Records</h1>
+              <p className="text-xs text-slate-500 mt-1">
+                Upload your blood test results, radiology scans, pathology reports, and past prescriptions for doctor consultations.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setRecordError('');
+                setRecordModalOpen(true);
+              }}
+              className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-md shadow-blue-500/20 transition flex items-center gap-2 cursor-pointer self-start sm:self-auto"
+            >
+              <FileUp className="w-4 h-4" />
+              <span>Upload Medical Report</span>
+            </button>
+          </div>
+
+          {/* Categories Filter */}
+          <div className="flex flex-wrap gap-2 text-xs">
+            {['ALL', 'Lab Report', 'Imaging / X-Ray', 'Pathology', 'Prescription', 'Discharge Summary'].map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setRecordFilter(cat)}
+                className={`px-3 py-1.5 rounded-xl font-bold transition cursor-pointer ${
+                  recordFilter === cat
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                {cat === 'ALL' ? 'All Reports' : cat}
+              </button>
+            ))}
+          </div>
+
+          {/* Records List / Grid */}
+          {filteredRecords.length === 0 ? (
+            <div className="bg-white rounded-3xl p-12 text-center border border-slate-200/80 shadow-xs space-y-4">
+              <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-3xl flex items-center justify-center mx-auto">
+                <FolderOpen className="w-8 h-8" />
+              </div>
+              <div className="space-y-1 max-w-sm mx-auto">
+                <h3 className="text-base font-extrabold text-slate-900">No medical records uploaded yet!</h3>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Upload your previous lab reports, X-rays, and prescriptions so consulting doctors can review your complete clinical background.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRecordModalOpen(true)}
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-xs transition cursor-pointer"
+              >
+                <FileUp className="w-4 h-4" />
+                <span>Upload First Medical Document</span>
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredRecords.map((rec) => (
+                <div
+                  key={rec.recordId}
+                  className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs hover:shadow-md transition space-y-3 flex flex-col justify-between"
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-50 text-blue-700 border border-blue-200/60">
+                        {rec.category}
+                      </span>
+                      <span className="text-[10px] font-medium text-slate-400">
+                        {rec.date}
+                      </span>
+                    </div>
+
+                    <div className="flex items-start gap-3 pt-1">
+                      <div className="w-10 h-10 rounded-xl bg-slate-100 text-blue-600 flex items-center justify-center shrink-0">
+                        <FileText className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h4 className="font-extrabold text-xs text-slate-900 truncate" title={rec.title}>
+                          {rec.title}
+                        </h4>
+                        <p className="text-[10px] text-slate-400 truncate">
+                          {rec.fileName} ({rec.fileSize || 'Document'})
+                        </p>
+                      </div>
+                    </div>
+
+                    {rec.notes && (
+                      <p className="text-[11px] text-slate-600 bg-slate-50 p-2 rounded-xl line-clamp-2">
+                        {rec.notes}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedViewingRecord(rec)}
+                      className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-xl transition cursor-pointer flex items-center gap-1"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>View</span>
+                    </button>
+                    <div className="flex items-center gap-1">
+                      <a
+                        href={rec.fileData}
+                        download={rec.fileName || 'medical_report'}
+                        className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition"
+                        title="Download file"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteRecord(rec.recordId)}
+                        className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg transition cursor-pointer"
+                        title="Delete report"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* =========================================================================
           SECTION F: MY PROFILE TAB
       ========================================================================= */}
       {activeTab === 'profile' && (
@@ -2091,6 +2371,181 @@ export const PatientDashboard = () => {
           prescription={selectedPrescription}
           onClose={() => setSelectedPrescription(null)}
         />
+      )}
+
+      {/* Upload Medical Record Modal */}
+      {recordModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <FileUp className="w-5 h-5 text-blue-600" />
+                <h3 className="font-extrabold text-base text-slate-900">Upload Medical Document</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRecordModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {recordError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{recordError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveRecord} className="space-y-4 text-xs">
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700">Document Title *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Complete Blood Count (CBC) or Spine X-Ray"
+                  value={recordForm.title}
+                  onChange={(e) => setRecordForm({ ...recordForm, title: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 font-medium text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700">Category *</label>
+                  <select
+                    value={recordForm.category}
+                    onChange={(e) => setRecordForm({ ...recordForm, category: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 font-medium text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="Lab Report">Lab Report (Blood / Urine)</option>
+                    <option value="Imaging / X-Ray">Imaging / X-Ray / MRI</option>
+                    <option value="Pathology">Pathology / Biopsy</option>
+                    <option value="Prescription">Past Prescription</option>
+                    <option value="Discharge Summary">Discharge Summary</option>
+                    <option value="Other">Other Clinical Document</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700">Report Date *</label>
+                  <input
+                    type="date"
+                    required
+                    value={recordForm.date}
+                    onChange={(e) => setRecordForm({ ...recordForm, date: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 font-medium text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              {/* File Picker */}
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700">Attach Document (PDF, PNG, JPG - max 8MB) *</label>
+                <div className="border-2 border-dashed border-slate-200 hover:border-blue-400 rounded-2xl p-4 text-center bg-slate-50/70 transition cursor-pointer relative">
+                  <input
+                    type="file"
+                    accept=".pdf,image/png,image/jpeg,image/jpg"
+                    onChange={handleRecordFileChange}
+                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                  />
+                  <div className="space-y-1">
+                    <Upload className="w-6 h-6 text-blue-600 mx-auto" />
+                    <p className="font-bold text-slate-700 text-xs">
+                      {recordForm.fileName ? recordForm.fileName : 'Click or drag file to upload'}
+                    </p>
+                    <p className="text-[10px] text-slate-400">
+                      {recordForm.fileSize ? `Size: ${recordForm.fileSize}` : 'Supports diagnostic PDF reports & scans'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700">Doctor Notes / Observation (Optional)</label>
+                <textarea
+                  rows={2}
+                  placeholder="e.g. Test ordered by previous doctor, elevated white blood cell count..."
+                  value={recordForm.notes}
+                  onChange={(e) => setRecordForm({ ...recordForm, notes: e.target.value })}
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50 font-medium text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500 resize-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setRecordModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-md shadow-blue-500/20 transition cursor-pointer"
+                >
+                  Save & Secure in Records
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Record Preview Modal */}
+      {selectedViewingRecord && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 space-y-4 shadow-2xl border border-slate-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600">
+                  {selectedViewingRecord.category}
+                </span>
+                <h3 className="font-extrabold text-slate-900 text-base">{selectedViewingRecord.title}</h3>
+                <p className="text-xs text-slate-500">Report Date: {selectedViewingRecord.date}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedViewingRecord(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="max-h-[60vh] overflow-y-auto flex items-center justify-center bg-slate-50 p-4 rounded-2xl border border-slate-100">
+              {selectedViewingRecord.fileData?.startsWith('data:image') ? (
+                <img
+                  src={selectedViewingRecord.fileData}
+                  alt={selectedViewingRecord.title}
+                  className="max-h-[50vh] object-contain rounded-xl"
+                />
+              ) : (
+                <div className="text-center p-8 space-y-3">
+                  <FileText className="w-16 h-16 text-blue-600 mx-auto" />
+                  <p className="font-bold text-slate-800 text-sm">{selectedViewingRecord.fileName}</p>
+                  <p className="text-xs text-slate-500">Document ({selectedViewingRecord.fileSize})</p>
+                  <a
+                    href={selectedViewingRecord.fileData}
+                    download={selectedViewingRecord.fileName}
+                    className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-bold shadow-md hover:bg-blue-700 transition"
+                  >
+                    <Download className="w-4 h-4" /> Download Document
+                  </a>
+                </div>
+              )}
+            </div>
+
+            {selectedViewingRecord.notes && (
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-xs text-slate-700">
+                <span className="font-bold block text-slate-800 mb-0.5">Notes:</span>
+                {selectedViewingRecord.notes}
+              </div>
+            )}
+          </div>
+        </div>
       )}
       </main>
     </div>

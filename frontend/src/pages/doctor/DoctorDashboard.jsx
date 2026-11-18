@@ -39,6 +39,9 @@ import {
   ChevronRight,
   RefreshCw,
   HeartPulse,
+  FolderOpen,
+  Eye,
+  Download,
 } from 'lucide-react';
 
 export const DoctorDashboard = () => {
@@ -2056,6 +2059,56 @@ export const DoctorDashboard = () => {
                 </div>
               ))}
             </div>
+
+            {/* Patient Uploaded Diagnostic Reports */}
+            {(() => {
+              let patientReports = [];
+              try {
+                const sharedRaw = localStorage.getItem('quickcare_shared_patient_records');
+                if (sharedRaw) {
+                  const shared = JSON.parse(sharedRaw);
+                  const pKey = selectedPatientHistory.patientUid || selectedPatientHistory.patientId;
+                  if (pKey && shared[pKey]) patientReports = shared[pKey];
+                  else if (selectedPatientHistory.patientEmail && shared[selectedPatientHistory.patientEmail.toLowerCase()]) {
+                    patientReports = shared[selectedPatientHistory.patientEmail.toLowerCase()];
+                  }
+                }
+              } catch (e) {}
+
+              if (patientReports.length === 0) return null;
+
+              return (
+                <div className="space-y-2 pt-2 border-t border-slate-100">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-blue-700 flex items-center gap-1.5">
+                    <FolderOpen className="w-4 h-4" />
+                    <span>Uploaded Medical Reports & Scans ({patientReports.length})</span>
+                  </h4>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {patientReports.map((rec) => (
+                      <div key={rec.id} className="p-3 bg-blue-50/60 rounded-xl border border-blue-200/70 flex items-center justify-between gap-3 text-xs">
+                        <div className="min-w-0 flex-1">
+                          <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-blue-100 text-blue-800">
+                            {rec.category || 'Report'}
+                          </span>
+                          <p className="font-bold text-slate-800 mt-1 truncate">{rec.title || rec.fileName}</p>
+                          <p className="text-[11px] text-slate-500">{rec.date} {rec.fileSize ? `• ${rec.fileSize}` : ''}</p>
+                        </div>
+                        {rec.fileUrl && (
+                          <a
+                            href={rec.fileUrl}
+                            download={rec.fileName || 'report'}
+                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg flex items-center gap-1 text-[11px] shadow-xs shrink-0"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            <span>Download</span>
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
 
             <div className="pt-2 border-t border-slate-100 flex justify-end">
               <button

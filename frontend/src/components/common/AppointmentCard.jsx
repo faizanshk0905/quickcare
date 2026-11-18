@@ -21,6 +21,10 @@ import {
   Mail,
   Link2,
   ShieldCheck,
+  FolderOpen,
+  Eye,
+  Download,
+  X,
 } from 'lucide-react';
 import { appointmentService } from '../../services/appointmentService';
 
@@ -35,6 +39,24 @@ export const AppointmentCard = ({
   const [confirming, setConfirming] = useState(false);
   const [confirmMsg, setConfirmMsg] = useState('');
   const [copiedMeetLink, setCopiedMeetLink] = useState(false);
+  const [showRecordsModal, setShowRecordsModal] = useState(false);
+  const [selectedRecordToView, setSelectedRecordToView] = useState(null);
+
+  // Patient uploaded records index lookup
+  const patientRecords = (() => {
+    try {
+      const sharedMapRaw = localStorage.getItem('quickcare_shared_patient_records');
+      if (sharedMapRaw) {
+        const sharedMap = JSON.parse(sharedMapRaw);
+        const pKey = appointment.patientUid || appointment.patientId;
+        if (pKey && sharedMap[pKey]) return sharedMap[pKey];
+        if (appointment.patientEmail && sharedMap[appointment.patientEmail.toLowerCase()]) {
+          return sharedMap[appointment.patientEmail.toLowerCase()];
+        }
+      }
+    } catch (e) {}
+    return [];
+  })();
 
   // Send Video Consultation Link modal state (Doctor)
   const [showSendLinkModal, setShowSendLinkModal] = useState(false);
@@ -648,6 +670,19 @@ export const AppointmentCard = ({
             <span>View Prescription</span>
           </button>
         )}
+
+        {/* Patient Uploaded Medical Records button (Doctor/Clinical view) */}
+        {patientRecords && patientRecords.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowRecordsModal(true)}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 text-xs font-bold rounded-xl transition cursor-pointer"
+            title="Inspect patient diagnostic reports and documents"
+          >
+            <FolderOpen className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+            <span>Patient Reports ({patientRecords.length})</span>
+          </button>
+        )}
       </div>
 
       {/* DOCTOR SEND VIDEO CONSULTATION LINK MODAL */}
@@ -946,6 +981,183 @@ export const AppointmentCard = ({
               >
                 <XCircle className="w-4 h-4" />
                 <span>{submittingReject ? 'Declining...' : 'Confirm Decline'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PATIENT MEDICAL REPORTS MODAL (Doctor Clinical Inspection) */}
+      {showRecordsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-xl w-full space-y-4 shadow-2xl max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-blue-100 dark:bg-blue-900/60 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                  <FolderOpen className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
+                    Patient Medical Reports
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Uploaded diagnostic scans, lab reports, and pathology records for {appointment.patientName}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowRecordsModal(false)}
+                className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-2.5 pr-1 py-1">
+              {patientRecords.length === 0 ? (
+                <div className="text-center py-8 text-slate-400 dark:text-slate-500 text-xs">
+                  No medical records uploaded by patient yet.
+                </div>
+              ) : (
+                patientRecords.map((record) => (
+                  <div
+                    key={record.id}
+                    className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 flex items-center justify-between gap-3"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-300">
+                          {record.category || 'General'}
+                        </span>
+                        <span className="text-[11px] text-slate-400">{record.date || 'Recent'}</span>
+                      </div>
+                      <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate mt-1">
+                        {record.title || record.fileName || 'Medical Document'}
+                      </h4>
+                      {record.notes && (
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                          {record.notes}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedRecordToView(record)}
+                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl flex items-center gap-1 shadow-xs transition cursor-pointer"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>View</span>
+                      </button>
+                      {record.fileUrl && (
+                        <a
+                          href={record.fileUrl}
+                          download={record.fileName || 'medical-report'}
+                          className="p-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl transition"
+                          title="Download Report"
+                        >
+                          <Download className="w-4 h-4" />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowRecordsModal(false)}
+                className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* RECORD PREVIEW MODAL */}
+      {selectedRecordToView && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 max-w-2xl w-full space-y-3 shadow-2xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+              <div>
+                <h3 className="text-sm font-extrabold text-slate-900 dark:text-white truncate max-w-md">
+                  {selectedRecordToView.title || selectedRecordToView.fileName}
+                </h3>
+                <span className="text-[11px] text-slate-500">
+                  {selectedRecordToView.category} • {selectedRecordToView.date}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedRecordToView(null)}
+                className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-auto flex items-center justify-center bg-slate-50 dark:bg-slate-950/60 rounded-2xl p-4 min-h-[300px]">
+              {selectedRecordToView.fileUrl && selectedRecordToView.fileType && selectedRecordToView.fileType.startsWith('image/') ? (
+                <img
+                  src={selectedRecordToView.fileUrl}
+                  alt={selectedRecordToView.title}
+                  className="max-h-[60vh] max-w-full object-contain rounded-xl shadow-md"
+                />
+              ) : selectedRecordToView.fileUrl && selectedRecordToView.fileType === 'application/pdf' ? (
+                <iframe
+                  src={selectedRecordToView.fileUrl}
+                  title="PDF Preview"
+                  className="w-full h-[60vh] rounded-xl border border-slate-200 dark:border-slate-700"
+                />
+              ) : (
+                <div className="text-center p-6 space-y-3">
+                  <FolderOpen className="w-12 h-12 text-slate-400 mx-auto" />
+                  <p className="text-xs text-slate-600 dark:text-slate-400">
+                    Document ready. Click download to view complete report.
+                  </p>
+                  {selectedRecordToView.fileUrl && (
+                    <a
+                      href={selectedRecordToView.fileUrl}
+                      download={selectedRecordToView.fileName || 'report'}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl"
+                    >
+                      <Download className="w-4 h-4" />
+                      <span>Download {selectedRecordToView.fileName || 'Report'}</span>
+                    </a>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {selectedRecordToView.notes && (
+              <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl text-xs text-slate-600 dark:text-slate-300">
+                <span className="font-bold block text-slate-800 dark:text-slate-200 mb-0.5">Patient Notes:</span>
+                {selectedRecordToView.notes}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+              {selectedRecordToView.fileUrl && (
+                <a
+                  href={selectedRecordToView.fileUrl}
+                  download={selectedRecordToView.fileName || 'report'}
+                  className="px-4 py-2 text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 rounded-xl flex items-center gap-1.5"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Download</span>
+                </a>
+              )}
+              <button
+                type="button"
+                onClick={() => setSelectedRecordToView(null)}
+                className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl"
+              >
+                Close Preview
               </button>
             </div>
           </div>

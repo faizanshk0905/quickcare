@@ -1,9 +1,22 @@
 import React from 'react';
 import { jsPDF } from 'jspdf';
-import { X, Download, FileText, CheckCircle2, ShieldCheck, Printer } from 'lucide-react';
+import { X, Download, FileText, CheckCircle2, ShieldCheck, Printer, ExternalLink } from 'lucide-react';
+import { QrCodeSvg } from './QrCodeSvg';
 
 export const PrescriptionModal = ({ prescription, onClose }) => {
   if (!prescription) return null;
+
+  const verifyUrl = `${window.location.origin}/verify-prescription?id=${encodeURIComponent(
+    prescription.prescriptionId || 'QC-RX-8419'
+  )}&doctor=${encodeURIComponent(
+    prescription.doctorName || 'Doctor'
+  )}&patient=${encodeURIComponent(
+    prescription.patientName || 'Patient'
+  )}&date=${encodeURIComponent(
+    prescription.consultationDate || ''
+  )}&specialization=${encodeURIComponent(
+    prescription.doctorSpecialization || 'General Medicine'
+  )}&diagnosis=${encodeURIComponent(prescription.diagnosis || '')}`;
 
   const downloadPdf = () => {
     const doc = new jsPDF();
@@ -103,6 +116,18 @@ export const PrescriptionModal = ({ prescription, onClose }) => {
     doc.setTextColor(71, 85, 105);
     const lines = doc.splitTextToSize(prescription.instructions || 'Take all prescribed doses on time. Stay hydrated and rest.', 180);
     doc.text(lines, 14, yPos + 6);
+
+    // Verification Box
+    doc.setFillColor(248, 250, 252);
+    doc.rect(14, 238, 182, 14, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(30, 41, 59);
+    doc.text('OFFICIAL QR VERIFICATION:', 18, 244);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(37, 99, 235);
+    doc.text(verifyUrl.slice(0, 95), 18, 249);
 
     // Digital Signature & Disclaimer
     doc.setDrawColor(226, 232, 240);
@@ -223,6 +248,35 @@ export const PrescriptionModal = ({ prescription, onClose }) => {
               </p>
             </div>
           )}
+
+          {/* Security & Scannable QR Code Verification Card */}
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-50/80 to-teal-50/80 border border-blue-200/80 flex flex-col sm:flex-row items-center gap-4">
+            <QrCodeSvg value={verifyUrl} size={90} className="shrink-0 shadow-sm" />
+            <div className="space-y-1.5 flex-1 text-center sm:text-left">
+              <div className="flex items-center justify-center sm:justify-start gap-1.5 text-blue-900 font-extrabold text-xs">
+                <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                <span>Prescription Authenticity QR Verification</span>
+              </div>
+              <p className="text-[11px] text-slate-600 leading-snug">
+                Scan with your phone camera or pharmacy scanner to verify official digital signature, doctor registration number, and clinical validity on the QuickCare Health Registry.
+              </p>
+              <div className="pt-1 flex items-center justify-center sm:justify-start gap-2">
+                <a
+                  href={verifyUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 hover:text-blue-900 hover:underline"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Verify Authenticity Online</span>
+                </a>
+                <span className="text-slate-300">•</span>
+                <span className="text-[10px] font-mono text-slate-500">
+                  ID: {prescription.prescriptionId || 'QC-RX-8419'}
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Footer with PDF Download button */}
