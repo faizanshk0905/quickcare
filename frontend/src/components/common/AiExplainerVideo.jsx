@@ -5,8 +5,6 @@ import {
   RotateCcw,
   Volume2,
   VolumeX,
-  Maximize2,
-  Minimize2,
   Sparkles,
   Bot,
   Calendar,
@@ -20,24 +18,39 @@ import {
   Stethoscope,
   Users,
   UserPlus,
-  ArrowRight,
-  ChevronRight,
-  Lock,
   Mail,
   Award,
+  X,
 } from 'lucide-react';
 
-export const AiExplainerVideo = () => {
+export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT' }) => {
   // Active Walkthrough Track: 'PATIENT' or 'DOCTOR'
-  const [activeTrack, setActiveTrack] = useState('PATIENT');
+  const [activeTrack, setActiveTrack] = useState(defaultTrack);
   const [isPlaying, setIsPlaying] = useState(true);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [progress, setProgress] = useState(0); // 0 to 100 within current step
   const [isMuted, setIsMuted] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
-  const [isFullscreen, setIsFullscreen] = useState(false);
 
-  const containerRef = useRef(null);
+  // Close on Escape key and prevent background scroll
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        onClose?.();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [isOpen, onClose]);
 
   // Complete End-to-End Patient Journey (From First to Last)
   const patientSteps = [
@@ -172,7 +185,7 @@ export const AiExplainerVideo = () => {
 
   // Auto-progress simulation
   useEffect(() => {
-    if (!isPlaying) return;
+    if (!isOpen || !isPlaying) return;
 
     const intervalTime = 100 / (playbackSpeed * 10);
     const timer = setInterval(() => {
@@ -187,7 +200,7 @@ export const AiExplainerVideo = () => {
     }, intervalTime);
 
     return () => clearInterval(timer);
-  }, [isPlaying, playbackSpeed, currentSteps.length]);
+  }, [isOpen, isPlaying, playbackSpeed, currentSteps.length]);
 
   // Switch Track (Patient vs Doctor)
   const handleSwitchTrack = (track) => {
@@ -221,71 +234,85 @@ export const AiExplainerVideo = () => {
   const seconds = currentTotalSeconds % 60;
   const timeFormatted = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
 
-  return (
-    <section id="ai-video" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 scroll-mt-20">
-      {/* Section Header */}
-      <div className="text-center max-w-3xl mx-auto mb-8 space-y-3">
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-50 border border-blue-200/80 text-blue-700 text-xs font-bold shadow-2xs">
-          <Sparkles className="w-4 h-4 text-blue-600 animate-pulse" />
-          <span>Interactive AI Video Walkthrough</span>
-        </div>
-        <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
-          How <span className="text-blue-600">QuickCare Works</span> from Start to Finish
-        </h2>
-        <p className="text-sm sm:text-base text-slate-600 leading-relaxed">
-          Explore the complete step-by-step workflow for both patients and healthcare providers—from first sign up to Google Meet consultation and digital prescriptions.
-        </p>
+  if (!isOpen) return null;
 
-        {/* Dual Track Selector: Patient vs Doctor */}
-        <div className="flex items-center justify-center pt-2">
-          <div className="bg-slate-100 p-1.5 rounded-2xl inline-flex items-center gap-2 border border-slate-200 shadow-inner">
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/85 backdrop-blur-md animate-fade-in overflow-y-auto"
+      onClick={onClose}
+    >
+      <div
+        className="relative w-full max-w-5xl bg-slate-950 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col my-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Top Header of Modal */}
+        <div className="px-5 py-3.5 bg-slate-900 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-xs">
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-extrabold text-white leading-tight">
+                QuickCare Walkthrough Tour
+              </h3>
+              <p className="text-[11px] text-slate-400">
+                Complete step-by-step workflow from first to last
+              </p>
+            </div>
+          </div>
+
+          {/* Track Switcher & Close Button */}
+          <div className="flex items-center gap-2.5">
+            <div className="bg-slate-800 p-1 rounded-xl flex items-center gap-1 border border-slate-700">
+              <button
+                type="button"
+                onClick={() => handleSwitchTrack('PATIENT')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                  activeTrack === 'PATIENT'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>Patient Walkthrough</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSwitchTrack('DOCTOR')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                  activeTrack === 'DOCTOR'
+                    ? 'bg-teal-600 text-white shadow-xs'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Stethoscope className="w-3.5 h-3.5" />
+                <span>Doctor Walkthrough</span>
+              </button>
+            </div>
+
             <button
               type="button"
-              onClick={() => handleSwitchTrack('PATIENT')}
-              className={`px-5 py-2.5 rounded-xl text-xs font-extrabold transition cursor-pointer flex items-center gap-2 ${
-                activeTrack === 'PATIENT'
-                  ? 'bg-blue-600 text-white shadow-md'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-              }`}
+              onClick={onClose}
+              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition cursor-pointer"
+              title="Close Video Tour (Esc)"
             >
-              <Users className="w-4 h-4" />
-              <span>Patient Walkthrough (5 Steps)</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSwitchTrack('DOCTOR')}
-              className={`px-5 py-2.5 rounded-xl text-xs font-extrabold transition cursor-pointer flex items-center gap-2 ${
-                activeTrack === 'DOCTOR'
-                  ? 'bg-teal-600 text-white shadow-md'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-              }`}
-            >
-              <Stethoscope className="w-4 h-4" />
-              <span>Doctor Walkthrough (5 Steps)</span>
+              <X className="w-5 h-5" />
             </button>
           </div>
         </div>
-      </div>
 
-      {/* Main Video Showcase Container */}
-      <div
-        ref={containerRef}
-        className={`bg-slate-950 rounded-3xl overflow-hidden shadow-2xl border border-slate-800 transition-all ${
-          isFullscreen ? 'fixed inset-0 z-50 rounded-none flex flex-col justify-between' : ''
-        }`}
-      >
         {/* Video Screen Area */}
-        <div className="relative aspect-video max-h-[560px] w-full bg-slate-950 flex items-center justify-center overflow-hidden">
-          <div className="w-full h-full p-4 sm:p-8 flex flex-col justify-between relative select-none">
+        <div className="relative aspect-video max-h-[500px] w-full bg-slate-950 flex items-center justify-center overflow-hidden">
+          <div className="w-full h-full p-4 sm:p-7 flex flex-col justify-between relative select-none">
             {/* Ambient Background Glows */}
-            <div className="absolute top-0 right-0 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
-            <div className="absolute bottom-0 left-0 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute top-0 right-0 w-80 h-80 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute bottom-0 left-0 w-80 h-80 bg-teal-500/10 rounded-full blur-3xl pointer-events-none" />
 
             {/* Top Bar inside Video Screen */}
             <div className="flex items-center justify-between z-10">
               <div className="flex items-center gap-2">
                 <div
-                  className={`px-3 py-1 rounded-full text-white text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-xs ${
+                  className={`px-3 py-1 rounded-full text-white text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-xs ${
                     activeTrack === 'PATIENT' ? 'bg-blue-600' : 'bg-teal-600'
                   }`}
                 >
@@ -314,14 +341,14 @@ export const AiExplainerVideo = () => {
             </div>
 
             {/* Dynamic Stage: Scenes for PATIENT or DOCTOR */}
-            <div className="my-auto py-3 z-10">
+            <div className="my-auto py-2 z-10">
               {/* ===================== PATIENT TRACK SCENES ===================== */}
               {activeTrack === 'PATIENT' && (
                 <>
                   {/* Step 1: Patient Registration & Profile */}
                   {currentStepIndex === 0 && (
-                    <div className="max-w-xl mx-auto space-y-3 animate-fade-in">
-                      <div className="bg-slate-900/95 backdrop-blur-md p-5 rounded-2xl border border-slate-700 shadow-xl space-y-3">
+                    <div className="max-w-xl mx-auto space-y-2.5 animate-fade-in">
+                      <div className="bg-slate-900/95 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-slate-700 shadow-xl space-y-3">
                         <div className="flex items-center justify-between pb-2 border-b border-slate-800">
                           <div className="flex items-center gap-2 text-white">
                             <UserPlus className="w-4 h-4 text-blue-400" />
@@ -343,8 +370,8 @@ export const AiExplainerVideo = () => {
                             <p className="text-[10px] text-slate-500">Clean New Dashboard</p>
                           </div>
                         </div>
-                        <div className="p-3 bg-blue-950/40 border border-blue-500/30 rounded-xl flex items-center justify-between text-xs">
-                          <span className="text-slate-300">"No appointments yet. Book your first appointment to get started."</span>
+                        <div className="p-2.5 bg-blue-950/40 border border-blue-500/30 rounded-xl flex items-center justify-between text-xs">
+                          <span className="text-slate-300 text-[11px]">"No appointments yet. Book your first appointment to get started."</span>
                           <span className="px-3 py-1 bg-blue-600 text-white font-bold rounded-lg text-[10px]">
                             Book Now
                           </span>
@@ -355,12 +382,12 @@ export const AiExplainerVideo = () => {
 
                   {/* Step 2: AI Clinical Triaging */}
                   {currentStepIndex === 1 && (
-                    <div className="max-w-xl mx-auto space-y-3 animate-fade-in">
-                      <div className="flex items-start gap-3 bg-slate-800/80 backdrop-blur-md p-4 rounded-2xl border border-slate-700/80 shadow-lg">
-                        <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white shrink-0 font-bold text-xs">
+                    <div className="max-w-xl mx-auto space-y-2.5 animate-fade-in">
+                      <div className="flex items-start gap-3 bg-slate-800/80 backdrop-blur-md p-3.5 rounded-2xl border border-slate-700/80 shadow-lg">
+                        <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-white shrink-0 font-bold text-xs">
                           P
                         </div>
-                        <div className="space-y-1">
+                        <div className="space-y-0.5">
                           <p className="text-[10px] font-bold text-slate-400">Patient Symptom Query (English / Hindi / Marathi)</p>
                           <p className="text-xs font-semibold text-white">
                             "I have knee swelling and joint pain after jogging for 2 days. Who should I visit?"
@@ -368,11 +395,11 @@ export const AiExplainerVideo = () => {
                         </div>
                       </div>
 
-                      <div className="flex items-start gap-3 bg-blue-950/70 backdrop-blur-md p-4 rounded-2xl border border-blue-600/50 shadow-xl">
-                        <div className="w-8 h-8 rounded-full bg-teal-500 flex items-center justify-center text-white shrink-0 shadow-xs">
+                      <div className="flex items-start gap-3 bg-blue-950/70 backdrop-blur-md p-3.5 rounded-2xl border border-blue-600/50 shadow-xl">
+                        <div className="w-7 h-7 rounded-full bg-teal-500 flex items-center justify-center text-white shrink-0 shadow-xs">
                           <Bot className="w-4 h-4" />
                         </div>
-                        <div className="space-y-2 flex-1">
+                        <div className="space-y-1.5 flex-1">
                           <div className="flex items-center justify-between">
                             <p className="text-xs font-bold text-teal-400">QuickCare AI Clinical Triager</p>
                             <span className="text-[10px] bg-emerald-500/20 text-emerald-400 font-bold px-2 py-0.5 rounded">
@@ -382,9 +409,9 @@ export const AiExplainerVideo = () => {
                           <p className="text-xs text-slate-200 leading-relaxed">
                             Based on your joint swelling, you should see an <strong className="text-teal-300">Orthopedic Specialist</strong>.
                           </p>
-                          <div className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-700 flex items-center justify-between">
+                          <div className="p-2 rounded-xl bg-slate-900/90 border border-slate-700 flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              <Stethoscope className="w-4 h-4 text-teal-400" />
+                              <Stethoscope className="w-3.5 h-3.5 text-teal-400" />
                               <span className="text-xs font-bold text-white">Dr. Vivek (Orthopedics)</span>
                             </div>
                             <span className="text-[10px] text-blue-400 font-bold">15-Min Slots Available</span>
@@ -396,8 +423,8 @@ export const AiExplainerVideo = () => {
 
                   {/* Step 3: Doctor Selection & Live Slot Booking */}
                   {currentStepIndex === 2 && (
-                    <div className="max-w-xl mx-auto space-y-3 animate-fade-in">
-                      <div className="bg-slate-900/95 backdrop-blur-md p-5 rounded-2xl border border-slate-700 space-y-3 shadow-xl">
+                    <div className="max-w-xl mx-auto space-y-2.5 animate-fade-in">
+                      <div className="bg-slate-900/95 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-slate-700 space-y-2.5 shadow-xl">
                         <div className="flex items-center justify-between pb-2 border-b border-slate-800">
                           <div className="flex items-center gap-2 text-white">
                             <Calendar className="w-4 h-4 text-teal-400" />
@@ -431,9 +458,9 @@ export const AiExplainerVideo = () => {
                           })}
                         </div>
 
-                        <div className="p-3 bg-emerald-950/60 border border-emerald-600/40 rounded-xl flex items-center justify-between text-xs">
-                          <div className="flex items-center gap-2 text-emerald-300">
-                            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                        <div className="p-2.5 bg-emerald-950/60 border border-emerald-600/40 rounded-xl flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2 text-emerald-300 text-[11px]">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
                             <span>10:15 AM Slot Confirmed (Zero Double-Booking Guarantee)</span>
                           </div>
                           <span className="text-[10px] font-bold text-white bg-emerald-600 px-2 py-0.5 rounded">
@@ -446,8 +473,8 @@ export const AiExplainerVideo = () => {
 
                   {/* Step 4: Doctor Review & Google Meet Link */}
                   {currentStepIndex === 3 && (
-                    <div className="max-w-xl mx-auto space-y-3 animate-fade-in">
-                      <div className="bg-slate-900/95 backdrop-blur-md p-5 rounded-2xl border border-slate-700 space-y-3 shadow-xl">
+                    <div className="max-w-xl mx-auto space-y-2.5 animate-fade-in">
+                      <div className="bg-slate-900/95 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-slate-700 space-y-2.5 shadow-xl">
                         <div className="flex items-center justify-between pb-2 border-b border-slate-800">
                           <div className="flex items-center gap-2 text-white">
                             <Mail className="w-4 h-4 text-indigo-400" />
@@ -460,13 +487,13 @@ export const AiExplainerVideo = () => {
 
                         <div className="p-3 bg-slate-800/80 rounded-xl border border-slate-700 text-xs space-y-2">
                           <div className="flex items-center justify-between">
-                            <span className="text-indigo-300 font-bold">To: john.doe@email.com</span>
+                            <span className="text-indigo-300 font-bold text-[11px]">To: john.doe@email.com</span>
                             <span className="text-[10px] text-slate-400">Just Now</span>
                           </div>
                           <p className="text-white font-bold text-xs">
                             Subject: Your QuickCare Video Consultation – Google Meet Invitation
                           </p>
-                          <div className="p-2.5 bg-slate-950 rounded-lg border border-indigo-500/30 text-[11px] font-mono text-emerald-300 flex items-center justify-between">
+                          <div className="p-2 bg-slate-950 rounded-lg border border-indigo-500/30 text-[11px] font-mono text-emerald-300 flex items-center justify-between">
                             <span>https://meet.google.com/qck-8419-care</span>
                             <span className="px-2 py-0.5 bg-emerald-600/40 text-emerald-300 text-[9px] rounded font-sans font-bold">
                               Verified Link
@@ -479,8 +506,8 @@ export const AiExplainerVideo = () => {
 
                   {/* Step 5: 1-Click Join & Digital Prescription */}
                   {currentStepIndex === 4 && (
-                    <div className="max-w-xl mx-auto space-y-3 animate-fade-in">
-                      <div className="bg-slate-900/95 backdrop-blur-md p-5 rounded-2xl border border-slate-700 space-y-3 shadow-xl">
+                    <div className="max-w-xl mx-auto space-y-2.5 animate-fade-in">
+                      <div className="bg-slate-900/95 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-slate-700 space-y-2.5 shadow-xl">
                         <div className="flex items-center justify-between pb-2 border-b border-slate-800">
                           <div className="flex items-center gap-2 text-white">
                             <FileText className="w-4 h-4 text-emerald-400" />
@@ -492,25 +519,22 @@ export const AiExplainerVideo = () => {
                           </span>
                         </div>
 
-                        <div className="p-3 bg-slate-800/80 rounded-xl border border-slate-700 text-xs space-y-2">
+                        <div className="p-3 bg-slate-800/80 rounded-xl border border-slate-700 text-xs space-y-1.5">
                           <div className="flex justify-between text-slate-300 text-[11px]">
                             <span>Diagnosis: <strong>Patellar Tendinitis</strong></span>
                             <span>Doctor: <strong>Dr. Vivek</strong></span>
                           </div>
-                          <div className="bg-slate-900 p-2 rounded-lg space-y-1 text-[10px] text-slate-300">
+                          <div className="bg-slate-900 p-2 rounded-lg space-y-0.5 text-[10px] text-slate-300">
                             <p className="font-bold text-white">Prescribed Medications:</p>
-                            <p>1. Aceclofenac + Paracetamol 100mg/325mg (1 tab twice daily - 5 days)</p>
+                            <p>1. Aceclofenac + Paracetamol 100mg/325mg (Twice daily after meals - 5 days)</p>
                             <p>2. Ice pack application & physical therapy exercises</p>
                           </div>
                           <div className="flex items-center justify-between pt-1">
                             <span className="text-[10px] text-slate-400">Available in Patient Medical Records</span>
-                            <button
-                              type="button"
-                              className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-xs cursor-pointer"
-                            >
+                            <span className="px-2.5 py-1 bg-emerald-600 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 shadow-xs">
                               <Download className="w-3 h-3" />
                               <span>Download PDF</span>
-                            </button>
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -524,8 +548,8 @@ export const AiExplainerVideo = () => {
                 <>
                   {/* Step 1: Doctor Registration & Verification */}
                   {currentStepIndex === 0 && (
-                    <div className="max-w-xl mx-auto space-y-3 animate-fade-in">
-                      <div className="bg-slate-900/95 backdrop-blur-md p-5 rounded-2xl border border-slate-700 space-y-3 shadow-xl">
+                    <div className="max-w-xl mx-auto space-y-2.5 animate-fade-in">
+                      <div className="bg-slate-900/95 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-slate-700 space-y-2.5 shadow-xl">
                         <div className="flex items-center justify-between pb-2 border-b border-slate-800">
                           <div className="flex items-center gap-2 text-white">
                             <ShieldCheck className="w-4 h-4 text-teal-400" />
@@ -549,7 +573,7 @@ export const AiExplainerVideo = () => {
                             <p className="text-[10px] text-slate-400">Approved by Admin</p>
                           </div>
                         </div>
-                        <div className="p-3 bg-teal-950/40 border border-teal-500/30 rounded-xl flex items-center justify-between text-xs text-slate-300">
+                        <div className="p-2.5 bg-teal-950/40 border border-teal-500/30 rounded-xl flex items-center justify-between text-xs text-slate-300">
                           <span>Doctor profile activated on QuickCare Clinical Directory with Verified Badge.</span>
                         </div>
                       </div>
@@ -558,8 +582,8 @@ export const AiExplainerVideo = () => {
 
                   {/* Step 2: Set Availability & Working End Time */}
                   {currentStepIndex === 1 && (
-                    <div className="max-w-xl mx-auto space-y-3 animate-fade-in">
-                      <div className="bg-slate-900/95 backdrop-blur-md p-5 rounded-2xl border border-slate-700 space-y-3 shadow-xl">
+                    <div className="max-w-xl mx-auto space-y-2.5 animate-fade-in">
+                      <div className="bg-slate-900/95 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-slate-700 space-y-2.5 shadow-xl">
                         <div className="flex items-center justify-between pb-2 border-b border-slate-800">
                           <div className="flex items-center gap-2 text-white">
                             <Clock className="w-4 h-4 text-blue-400" />
@@ -569,12 +593,12 @@ export const AiExplainerVideo = () => {
                             Slots Live
                           </span>
                         </div>
-                        <div className="grid grid-cols-2 gap-3 text-xs">
-                          <div className="p-3 bg-slate-800/70 rounded-xl border border-slate-700/60 space-y-1">
+                        <div className="grid grid-cols-2 gap-2.5 text-xs">
+                          <div className="p-2.5 bg-slate-800/70 rounded-xl border border-slate-700/60 space-y-0.5">
                             <span className="text-[10px] text-slate-400">Working Start Time</span>
                             <p className="text-sm font-bold text-white">09:00 AM</p>
                           </div>
-                          <div className="p-3 bg-blue-950/50 rounded-xl border border-blue-500/40 space-y-1">
+                          <div className="p-2.5 bg-blue-950/50 rounded-xl border border-blue-500/40 space-y-0.5">
                             <div className="flex items-center justify-between">
                               <span className="text-[10px] text-blue-300">Working End Time</span>
                               <span className="text-[9px] bg-blue-500/30 text-blue-200 px-1 rounded">Extended</span>
@@ -582,9 +606,9 @@ export const AiExplainerVideo = () => {
                             <p className="text-sm font-bold text-emerald-300">07:00 PM</p>
                           </div>
                         </div>
-                        <div className="p-3 bg-slate-800/80 rounded-xl text-xs flex items-center justify-between text-slate-300 border border-slate-700">
+                        <div className="p-2.5 bg-slate-800/80 rounded-xl text-xs flex items-center justify-between text-slate-300 border border-slate-700">
                           <span>15-Minute patient booking slots dynamically generated until 07:00 PM!</span>
-                          <span className="px-2.5 py-1 bg-teal-600 text-white font-bold rounded-lg text-[10px]">
+                          <span className="px-2 py-0.5 bg-teal-600 text-white font-bold rounded-lg text-[10px]">
                             Saved
                           </span>
                         </div>
@@ -594,8 +618,8 @@ export const AiExplainerVideo = () => {
 
                   {/* Step 3: Clinical Dashboard & Appointment Management */}
                   {currentStepIndex === 2 && (
-                    <div className="max-w-xl mx-auto space-y-3 animate-fade-in">
-                      <div className="bg-slate-900/95 backdrop-blur-md p-5 rounded-2xl border border-slate-700 space-y-3 shadow-xl">
+                    <div className="max-w-xl mx-auto space-y-2.5 animate-fade-in">
+                      <div className="bg-slate-900/95 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-slate-700 space-y-2.5 shadow-xl">
                         <div className="flex items-center justify-between pb-2 border-b border-slate-800">
                           <div className="flex items-center gap-2 text-white">
                             <Users className="w-4 h-4 text-indigo-400" />
@@ -606,25 +630,25 @@ export const AiExplainerVideo = () => {
                           </span>
                         </div>
                         <div className="grid grid-cols-3 gap-2 text-xs text-center">
-                          <div className="p-2.5 bg-slate-800/70 rounded-xl border border-slate-700/60">
+                          <div className="p-2 bg-slate-800/70 rounded-xl border border-slate-700/60">
                             <p className="text-lg font-black text-white">12</p>
                             <p className="text-[10px] text-slate-400">Total Visits</p>
                           </div>
-                          <div className="p-2.5 bg-slate-800/70 rounded-xl border border-slate-700/60">
+                          <div className="p-2 bg-slate-800/70 rounded-xl border border-slate-700/60">
                             <p className="text-lg font-black text-amber-400">3</p>
                             <p className="text-[10px] text-slate-400">Pending Review</p>
                           </div>
-                          <div className="p-2.5 bg-slate-800/70 rounded-xl border border-slate-700/60">
+                          <div className="p-2 bg-slate-800/70 rounded-xl border border-slate-700/60">
                             <p className="text-lg font-black text-teal-400">9</p>
                             <p className="text-[10px] text-slate-400">Completed</p>
                           </div>
                         </div>
-                        <div className="p-2.5 bg-slate-800/80 rounded-xl text-xs text-slate-300 flex items-center justify-between border border-slate-700">
+                        <div className="p-2 bg-slate-800/80 rounded-xl text-xs text-slate-300 flex items-center justify-between border border-slate-700">
                           <div>
                             <p className="font-bold text-white text-xs">Patient: John Doe (10:15 AM)</p>
                             <p className="text-[10px] text-slate-400">Symptom: Acute Knee Pain</p>
                           </div>
-                          <span className="px-2.5 py-1 bg-blue-600 text-white font-bold rounded-lg text-[10px]">
+                          <span className="px-2 py-0.5 bg-blue-600 text-white font-bold rounded-lg text-[10px]">
                             Review Request
                           </span>
                         </div>
@@ -634,8 +658,8 @@ export const AiExplainerVideo = () => {
 
                   {/* Step 4: Google Meet Only Consultation Workflow */}
                   {currentStepIndex === 3 && (
-                    <div className="max-w-xl mx-auto space-y-3 animate-fade-in">
-                      <div className="bg-slate-900/95 backdrop-blur-md p-5 rounded-2xl border border-slate-700 space-y-3 shadow-xl">
+                    <div className="max-w-xl mx-auto space-y-2.5 animate-fade-in">
+                      <div className="bg-slate-900/95 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-slate-700 space-y-2.5 shadow-xl">
                         <div className="flex items-center justify-between pb-2 border-b border-slate-800">
                           <div className="flex items-center gap-2 text-white">
                             <Video className="w-4 h-4 text-purple-400" />
@@ -646,7 +670,7 @@ export const AiExplainerVideo = () => {
                           </span>
                         </div>
                         <div className="space-y-2 text-xs">
-                          <div className="p-3 bg-purple-950/40 border border-purple-500/30 rounded-xl space-y-2">
+                          <div className="p-2.5 bg-purple-950/40 border border-purple-500/30 rounded-xl space-y-1.5">
                             <div className="flex items-center justify-between">
                               <span className="text-[11px] font-bold text-purple-200">Doctor Enters or Generates Link:</span>
                               <span className="text-[9px] bg-emerald-500/20 text-emerald-300 font-bold px-1.5 py-0.5 rounded">
@@ -657,13 +681,10 @@ export const AiExplainerVideo = () => {
                               https://meet.google.com/qck-8419-care
                             </div>
                             <div className="flex items-center justify-end">
-                              <button
-                                type="button"
-                                className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 shadow-xs cursor-pointer"
-                              >
+                              <span className="px-3 py-1 bg-teal-600 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 shadow-xs">
                                 <Send className="w-3 h-3" />
-                                <span>Send Invitation to Patient Email</span>
-                              </button>
+                                <span>Invitation Sent to Patient Email</span>
+                              </span>
                             </div>
                           </div>
                         </div>
@@ -673,8 +694,8 @@ export const AiExplainerVideo = () => {
 
                   {/* Step 5: Issue Authorized Digital Prescription */}
                   {currentStepIndex === 4 && (
-                    <div className="max-w-xl mx-auto space-y-3 animate-fade-in">
-                      <div className="bg-slate-900/95 backdrop-blur-md p-5 rounded-2xl border border-slate-700 space-y-3 shadow-xl">
+                    <div className="max-w-xl mx-auto space-y-2.5 animate-fade-in">
+                      <div className="bg-slate-900/95 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-slate-700 space-y-2.5 shadow-xl">
                         <div className="flex items-center justify-between pb-2 border-b border-slate-800">
                           <div className="flex items-center gap-2 text-white">
                             <FileText className="w-4 h-4 text-emerald-400" />
@@ -685,8 +706,8 @@ export const AiExplainerVideo = () => {
                             Digitally Signed
                           </span>
                         </div>
-                        <div className="p-3 bg-slate-800/80 rounded-xl border border-slate-700 text-xs space-y-2">
-                          <div className="space-y-1">
+                        <div className="p-2.5 bg-slate-800/80 rounded-xl border border-slate-700 text-xs space-y-1.5">
+                          <div className="space-y-0.5">
                             <span className="text-[10px] text-slate-400">Diagnosis</span>
                             <p className="text-xs font-bold text-white">Patellar Tendinitis & Quadriceps Strain</p>
                           </div>
@@ -697,7 +718,7 @@ export const AiExplainerVideo = () => {
                           </div>
                           <div className="flex items-center justify-between pt-1">
                             <span className="text-[10px] text-slate-400">Archived to Patient & Doctor Records</span>
-                            <span className="px-2.5 py-1 bg-emerald-600 text-white text-[10px] font-bold rounded-lg">
+                            <span className="px-2 py-0.5 bg-emerald-600 text-white text-[10px] font-bold rounded-lg">
                               Prescription Issued
                             </span>
                           </div>
@@ -710,7 +731,7 @@ export const AiExplainerVideo = () => {
             </div>
 
             {/* Bottom Captions Bar */}
-            <div className="z-10 bg-slate-900/95 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-slate-800 text-center text-xs text-slate-200 shadow-md">
+            <div className="z-10 bg-slate-900/95 backdrop-blur-md px-4 py-2 rounded-2xl border border-slate-800 text-center text-xs text-slate-200 shadow-md">
               <span className={`font-bold mr-2 ${activeTrack === 'PATIENT' ? 'text-blue-400' : 'text-teal-400'}`}>
                 {activeTrack === 'PATIENT' ? 'Patient Workflow:' : 'Doctor Workflow:'}
               </span>
@@ -828,69 +849,61 @@ export const AiExplainerVideo = () => {
                 );
               })}
             </div>
+          </div>
+        </div>
 
-            {/* Right Tools (Fullscreen) */}
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setIsFullscreen(!isFullscreen)}
-                className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
-                title={isFullscreen ? 'Exit Fullscreen' : 'Cinema / Fullscreen Mode'}
-              >
-                {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-              </button>
-            </div>
+        {/* 5 Interactive Step Cards at Bottom */}
+        <div className="p-4 bg-slate-950 border-t border-slate-850">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
+            {currentSteps.map((st, idx) => {
+              const isActive = idx === currentStepIndex;
+              const Icon = st.icon;
+              return (
+                <div
+                  key={st.id}
+                  onClick={() => handleSelectStep(idx)}
+                  className={`p-3 rounded-xl border transition-all cursor-pointer ${
+                    isActive
+                      ? activeTrack === 'PATIENT'
+                        ? 'bg-blue-950/70 border-blue-500 shadow-md'
+                        : 'bg-teal-950/70 border-teal-500 shadow-md'
+                      : 'bg-slate-900/80 border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div
+                      className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-xs ${
+                        isActive
+                          ? activeTrack === 'PATIENT'
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-teal-600 text-white'
+                          : 'bg-slate-800 text-slate-400'
+                      }`}
+                    >
+                      <Icon className="w-3 h-3" />
+                    </div>
+                    <span
+                      className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                        isActive
+                          ? activeTrack === 'PATIENT'
+                            ? 'bg-blue-600/30 text-blue-300'
+                            : 'bg-teal-600/30 text-teal-300'
+                          : 'bg-slate-800 text-slate-400'
+                      }`}
+                    >
+                      Step {st.stepNumber}
+                    </span>
+                  </div>
+                  <h4 className="text-[11px] font-bold text-white truncate">{st.title}</h4>
+                  <p className="text-[10px] text-slate-400 truncate">{st.subtitle}</p>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
-
-      {/* 5 Interactive Step Cards Below Video */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 mt-6">
-        {currentSteps.map((st, idx) => {
-          const isActive = idx === currentStepIndex;
-          const Icon = st.icon;
-          return (
-            <div
-              key={st.id}
-              onClick={() => handleSelectStep(idx)}
-              className={`p-4 rounded-2xl border transition-all cursor-pointer ${
-                isActive
-                  ? activeTrack === 'PATIENT'
-                    ? 'bg-blue-50/90 border-blue-500 shadow-md translate-y-[-2px]'
-                    : 'bg-teal-50/90 border-teal-500 shadow-md translate-y-[-2px]'
-                  : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-xs'
-              }`}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <div
-                  className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs ${
-                    isActive
-                      ? activeTrack === 'PATIENT'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-teal-600 text-white'
-                      : 'bg-slate-100 text-slate-600'
-                  }`}
-                >
-                  <Icon className="w-4 h-4" />
-                </div>
-                <span
-                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                    isActive
-                      ? activeTrack === 'PATIENT'
-                        ? 'bg-blue-200/80 text-blue-900'
-                        : 'bg-teal-200/80 text-teal-900'
-                      : 'bg-slate-100 text-slate-500'
-                  }`}
-                >
-                  Step {st.stepNumber}
-                </span>
-              </div>
-              <h3 className="text-xs font-extrabold text-slate-900 mb-1 leading-snug">{st.title}</h3>
-              <p className="text-[11px] text-slate-500 leading-tight">{st.subtitle}</p>
-            </div>
-          );
-        })}
-      </div>
-    </section>
+    </div>
   );
 };
+
+export const AiExplainerVideo = AiExplainerVideoModal;

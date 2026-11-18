@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { AiExplainerVideo } from '../../components/common/AiExplainerVideo';
+import { AiExplainerVideoModal } from '../../components/common/AiExplainerVideo';
 import {
   HeartPulse,
   Video,
@@ -24,6 +24,16 @@ import {
 
 export const Home = () => {
   const { t } = useTranslation();
+  const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
+
+  useEffect(() => {
+    const handleOpen = () => setIsVideoModalOpen(true);
+    window.addEventListener('open_quickcare_ai_video', handleOpen);
+    if (window.location.hash === '#ai-video') {
+      setIsVideoModalOpen(true);
+    }
+    return () => window.removeEventListener('open_quickcare_ai_video', handleOpen);
+  }, []);
 
   const specialities = [
     { name: 'Cardiology', icon: '❤️', doctors: 'Heart & Vascular', desc: 'Preventive cardiology, ECG, blood pressure & coronary management' },
@@ -104,15 +114,16 @@ export const Home = () => {
                   <span>{t('hero.ctaBook')}</span>
                 </Link>
 
-                <a
-                  href="#ai-video"
-                  className="px-5 py-3.5 bg-white hover:bg-blue-50 text-blue-700 font-bold rounded-2xl border border-blue-200/80 shadow-xs transition-all flex items-center gap-2 hover:translate-y-[-2px] group"
+                <button
+                  type="button"
+                  onClick={() => setIsVideoModalOpen(true)}
+                  className="px-5 py-3.5 bg-white hover:bg-blue-50 text-blue-700 font-bold rounded-2xl border border-blue-200/80 shadow-xs transition-all flex items-center gap-2 hover:translate-y-[-2px] group cursor-pointer"
                 >
                   <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center group-hover:scale-110 transition-transform shadow-xs">
                     <Play className="w-3 h-3 fill-current ml-0.5" />
                   </div>
                   <span>Watch AI Video Tour</span>
-                </a>
+                </button>
 
                 <Link
                   to="/register"
@@ -283,9 +294,6 @@ export const Home = () => {
         </div>
       </section>
 
-      {/* AI EXPLAINER VIDEO SECTION: HOW OUR WEBSITE WORKS */}
-      <AiExplainerVideo />
-
       {/* SPECIALITIES SECTION */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center max-w-2xl mx-auto mb-12">
@@ -450,6 +458,12 @@ export const Home = () => {
           </div>
         </div>
       </section>
+
+      {/* AI EXPLAINER VIDEO MODAL (OPENS ONLY ON BUTTON CLICK TO PREVENT CONGESTION) */}
+      <AiExplainerVideoModal
+        isOpen={isVideoModalOpen}
+        onClose={() => setIsVideoModalOpen(false)}
+      />
     </div>
   );
 };
