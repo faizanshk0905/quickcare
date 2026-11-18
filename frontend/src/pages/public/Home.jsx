@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { AiExplainerVideo } from '../../components/common/AiExplainerVideo';
 import {
   HeartPulse,
   Video,
@@ -18,6 +19,7 @@ import {
   Activity,
   BellRing,
   Stethoscope,
+  Play,
 } from 'lucide-react';
 
 export const Home = () => {
@@ -102,20 +104,30 @@ export const Home = () => {
                   <span>{t('hero.ctaBook')}</span>
                 </Link>
 
+                <a
+                  href="#ai-video"
+                  className="px-5 py-3.5 bg-white hover:bg-blue-50 text-blue-700 font-bold rounded-2xl border border-blue-200/80 shadow-xs transition-all flex items-center gap-2 hover:translate-y-[-2px] group"
+                >
+                  <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center group-hover:scale-110 transition-transform shadow-xs">
+                    <Play className="w-3 h-3 fill-current ml-0.5" />
+                  </div>
+                  <span>Watch AI Video Tour</span>
+                </a>
+
                 <Link
                   to="/register"
-                  className="px-5 py-3.5 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs transition-all flex items-center gap-2 hover:translate-y-[-2px]"
+                  className="px-5 py-3.5 bg-white hover:bg-slate-50 text-slate-800 font-bold rounded-2xl border border-slate-200 shadow-xs transition-all flex items-center gap-2 hover:translate-y-[-2px]"
                 >
-                  <Users className="w-5 h-5 text-teal-600 dark:text-teal-400" />
+                  <Users className="w-5 h-5 text-teal-600" />
                   <span>Join as Patient</span>
                 </Link>
 
                 <Link
                   to="/register-doctor"
-                  className="px-5 py-3.5 bg-teal-50 dark:bg-teal-950/40 hover:bg-teal-100 dark:hover:bg-teal-900/60 text-teal-800 dark:text-teal-300 font-bold rounded-2xl border border-teal-200/80 dark:border-teal-800 shadow-xs transition-all flex items-center gap-2 hover:translate-y-[-2px]"
+                  className="px-5 py-3.5 bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold rounded-2xl border border-teal-200/80 shadow-xs transition-all flex items-center gap-2 hover:translate-y-[-2px]"
                 >
-                  <Stethoscope className="w-5 h-5 text-teal-600 dark:text-teal-400" />
-                  <span>Join as a Doctor</span>
+                  <Stethoscope className="w-5 h-5 text-teal-600" />
+                  <span>Join as Doctor</span>
                 </Link>
               </div>
 
@@ -270,6 +282,9 @@ export const Home = () => {
           </div>
         </div>
       </section>
+
+      {/* AI EXPLAINER VIDEO SECTION: HOW OUR WEBSITE WORKS */}
+      <AiExplainerVideo />
 
       {/* SPECIALITIES SECTION */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

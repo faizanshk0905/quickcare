@@ -15,6 +15,7 @@ import {
   Stethoscope,
   ChevronDown,
   Settings,
+  Sparkles,
 } from 'lucide-react';
 
 export const Navbar = () => {
@@ -115,6 +116,13 @@ export const Navbar = () => {
               >
                 {t('nav.findDoctors')}
               </Link>
+              <a
+                href="/#ai-video"
+                className="px-3 py-2 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center gap-1.5"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                <span>How It Works</span>
+              </a>
               <Link
                 to="/about"
                 className="px-3 py-2 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
@@ -281,6 +289,14 @@ export const Navbar = () => {
           >
             {t('nav.findDoctors')}
           </Link>
+          <a
+            href="/#ai-video"
+            onClick={() => setMobileMenuOpen(false)}
+            className="block px-3 py-2 rounded-lg text-base font-medium text-blue-600 dark:text-blue-400 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2"
+          >
+            <Sparkles className="w-4 h-4 text-blue-600" />
+            <span>How It Works (AI Video)</span>
+          </a>
           <Link
             to="/about"
             onClick={() => setMobileMenuOpen(false)}
