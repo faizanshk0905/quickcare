@@ -136,6 +136,12 @@ export const Navbar = () => {
                 {t('nav.about')}
               </Link>
               <Link
+                to="/faq"
+                className="px-3 py-2 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+              >
+                FAQ
+              </Link>
+              <Link
                 to="/contact"
                 className="px-3 py-2 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
               >
@@ -315,6 +321,13 @@ export const Navbar = () => {
             className="block px-3 py-2 rounded-lg text-base font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
           >
             {t('nav.about')}
+          </Link>
+          <Link
+            to="/faq"
+            onClick={() => setMobileMenuOpen(false)}
+            className="block px-3 py-2 rounded-lg text-base font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
+          >
+            FAQ & Help Center
           </Link>
           <Link
             to="/contact"

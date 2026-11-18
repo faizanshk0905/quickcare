@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Mail, Phone, MapPin, Send, CheckCircle2, PhoneCall } from 'lucide-react';
+import { FaqSection } from '../../components/common/FaqSection';
 
 export const ContactUs = () => {
   const [submitted, setSubmitted] = useState(false);
@@ -133,6 +134,15 @@ export const ContactUs = () => {
             </form>
           )}
         </div>
+      </div>
+
+      {/* QUICK HELP & FAQ SECTION */}
+      <div className="pt-8 border-t border-slate-200/80">
+        <FaqSection
+          compact={true}
+          title="Frequently Asked Inquiries"
+          subtitle="Instant answers about video consultations, appointments, medical reports, and prescriptions."
+        />
       </div>
     </div>
   );

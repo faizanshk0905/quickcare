@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { AiExplainerVideoModal } from '../../components/common/AiExplainerVideo';
+import { FaqSection } from '../../components/common/FaqSection';
 import {
   HeartPulse,
   Video,
@@ -438,6 +439,9 @@ export const Home = () => {
           })}
         </div>
       </section>
+
+      {/* FREQUENTLY ASKED QUESTIONS (FAQ) & KNOWLEDGE BASE */}
+      <FaqSection />
 
       {/* CTA BANNER */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

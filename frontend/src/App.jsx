@@ -6,6 +6,7 @@ import './i18n';
 
 // Common Components
 import { AccessibilityBar } from './components/common/AccessibilityBar';
+import { EmergencyHelplineBanner } from './components/common/EmergencyHelplineBanner';
 import { Navbar } from './components/common/Navbar';
 import { Footer } from './components/common/Footer';
 import { AiChatWidget } from './components/ai/AiChatWidget';
@@ -18,6 +19,7 @@ import { OurDoctors } from './pages/public/OurDoctors';
 import { AboutUs } from './pages/public/AboutUs';
 import { ContactUs } from './pages/public/ContactUs';
 import { VerifyPrescription } from './pages/public/VerifyPrescription';
+import { FaqPage } from './pages/public/FaqPage';
 
 // Auth Pages
 import { Login } from './pages/auth/Login';
@@ -57,6 +59,7 @@ export function App() {
         <BrowserRouter>
           <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800">
             <AccessibilityBar />
+            <EmergencyHelplineBanner />
             <Navbar />
 
             <main className="flex-1">
@@ -67,6 +70,7 @@ export function App() {
                 <Route path="/doctors/:doctorId" element={<DoctorDetails />} />
                 <Route path="/about" element={<AboutUs />} />
                 <Route path="/contact" element={<ContactUs />} />
+                <Route path="/faq" element={<FaqPage />} />
                 <Route path="/verify-prescription" element={<VerifyPrescription />} />
 
                 {/* Auth Routes */}
