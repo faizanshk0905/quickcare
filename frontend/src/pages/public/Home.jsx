@@ -105,41 +105,50 @@ export const Home = () => {
               </p>
 
               {/* Action Buttons */}
-              <div className="flex flex-wrap items-center gap-3 pt-2">
-                <Link
-                  to="/doctors"
-                  className="px-6 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl shadow-lg shadow-blue-500/25 transition-all flex items-center gap-2 hover:translate-y-[-2px]"
-                >
-                  <Calendar className="w-5 h-5" />
-                  <span>{t('hero.ctaBook')}</span>
-                </Link>
+              <div className="space-y-3 pt-2">
+                {/* Primary Action Buttons (Appointments, Patient, Doctor) */}
+                <div className="flex flex-wrap items-center gap-3">
+                  <Link
+                    to="/doctors"
+                    className="px-6 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl shadow-lg shadow-blue-500/25 transition-all flex items-center gap-2 hover:translate-y-[-2px]"
+                  >
+                    <Calendar className="w-5 h-5" />
+                    <span>{t('hero.ctaBook')}</span>
+                  </Link>
 
-                <button
-                  type="button"
-                  onClick={() => setIsVideoModalOpen(true)}
-                  className="px-5 py-3.5 bg-white hover:bg-blue-50 text-blue-700 font-bold rounded-2xl border border-blue-200/80 shadow-xs transition-all flex items-center gap-2 hover:translate-y-[-2px] group cursor-pointer"
-                >
-                  <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center group-hover:scale-110 transition-transform shadow-xs">
-                    <Play className="w-3 h-3 fill-current ml-0.5" />
-                  </div>
-                  <span>Watch AI Video Tour</span>
-                </button>
+                  <Link
+                    to="/register"
+                    className="px-5 py-3.5 bg-white hover:bg-slate-50 text-slate-800 font-bold rounded-2xl border border-slate-200 shadow-xs transition-all flex items-center gap-2 hover:translate-y-[-2px]"
+                  >
+                    <Users className="w-5 h-5 text-teal-600" />
+                    <span>Join as Patient</span>
+                  </Link>
 
-                <Link
-                  to="/register"
-                  className="px-5 py-3.5 bg-white hover:bg-slate-50 text-slate-800 font-bold rounded-2xl border border-slate-200 shadow-xs transition-all flex items-center gap-2 hover:translate-y-[-2px]"
-                >
-                  <Users className="w-5 h-5 text-teal-600" />
-                  <span>Join as Patient</span>
-                </Link>
+                  <Link
+                    to="/register-doctor"
+                    className="px-5 py-3.5 bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold rounded-2xl border border-teal-200/80 shadow-xs transition-all flex items-center gap-2 hover:translate-y-[-2px]"
+                  >
+                    <Stethoscope className="w-5 h-5 text-teal-600" />
+                    <span>Join as Doctor</span>
+                  </Link>
+                </div>
 
-                <Link
-                  to="/register-doctor"
-                  className="px-5 py-3.5 bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold rounded-2xl border border-teal-200/80 shadow-xs transition-all flex items-center gap-2 hover:translate-y-[-2px]"
-                >
-                  <Stethoscope className="w-5 h-5 text-teal-600" />
-                  <span>Join as Doctor</span>
-                </Link>
+                {/* AI Video Tour (Down Below Primary CTAs) */}
+                <div className="pt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsVideoModalOpen(true)}
+                    className="inline-flex items-center gap-2.5 px-4 py-2.5 bg-blue-50/80 hover:bg-blue-100/80 text-blue-700 font-extrabold text-xs rounded-xl border border-blue-200/90 shadow-2xs transition-all hover:translate-y-[-1px] group cursor-pointer"
+                  >
+                    <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center group-hover:scale-110 transition-transform shadow-xs">
+                      <Play className="w-3 h-3 fill-current ml-0.5" />
+                    </div>
+                    <span>Watch AI Video Tour (How QuickCare Works)</span>
+                    <span className="text-[10px] bg-blue-200/80 text-blue-900 px-2 py-0.5 rounded-md font-bold">
+                      2 Mins
+                    </span>
+                  </button>
+                </div>
               </div>
 
               {/* Trust Badges */}
