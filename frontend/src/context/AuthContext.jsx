@@ -58,6 +58,19 @@ const DEMO_ACCOUNTS = {
     role: 'DOCTOR',
     profileId: 'doc_001'
   },
+  'doctor@quickcare.com': {
+    token: 'demo-token-doctor',
+    user: {
+      userId: 'usr_doc_001',
+      uid: 'demo_doctor_uid',
+      fullName: 'Dr. Priya Deshmukh',
+      email: 'doctor@quickcare.com',
+      role: 'DOCTOR',
+      phone: '+91 98220 12345'
+    },
+    role: 'DOCTOR',
+    profileId: 'doc_001'
+  },
   'admin@quickcare.com': {
     token: 'demo-token-admin',
     user: {
