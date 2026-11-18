@@ -21,6 +21,8 @@ import {
   Mail,
   Award,
   X,
+  SkipBack,
+  SkipForward,
 } from 'lucide-react';
 
 export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT' }) => {
@@ -30,7 +32,10 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [progress, setProgress] = useState(0); // 0 to 100 within current step
   const [isMuted, setIsMuted] = useState(false);
-  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1); // 0.75x, 1x, 1.25x
+
+  // 8.0 Seconds per scene at 1.0x speed (Professional, comfortable reading pace)
+  const STEP_DURATION_MS = 8000;
 
   // Close on Escape key and prevent background scroll
   useEffect(() => {
@@ -59,7 +64,7 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
       stepNumber: 1,
       title: 'Registration & Account Setup',
       subtitle: 'Sign Up & Patient Dashboard',
-      duration: '0:30',
+      duration: '8s',
       tag: 'Step 1 of 5 • Onboarding',
       caption:
         'Patient creates their account with email & password, sets up their personal medical profile, and accesses a clean personal dashboard with 0 appointments initially.',
@@ -71,10 +76,10 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
       stepNumber: 2,
       title: 'AI Clinical Triaging',
       subtitle: 'Multilingual Symptom Analysis',
-      duration: '0:35',
+      duration: '8s',
       tag: 'Step 2 of 5 • AI Triaging',
       caption:
-        'Patient tells QuickCare AI their symptoms in English, Hindi, or Marathi. The AI evaluates urgency and matches verified medical specialists.',
+        'Patient describes symptoms in English, Hindi, or Marathi. QuickCare AI evaluates clinical urgency and routes directly to verified medical specialists.',
       badgeColor: 'teal',
       icon: Bot,
     },
@@ -83,7 +88,7 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
       stepNumber: 3,
       title: 'Doctor Selection & Live Slot Booking',
       subtitle: '15-Min Slots & Atomic Lock',
-      duration: '0:35',
+      duration: '8s',
       tag: 'Step 3 of 5 • Slot Booking',
       caption:
         'Patient selects date and time slot from the doctor’s live schedule. Concurrency protection locks the slot atomically to prevent double booking.',
@@ -95,7 +100,7 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
       stepNumber: 4,
       title: 'Doctor Review & Google Meet Link',
       subtitle: 'Invitation Sent to Email',
-      duration: '0:35',
+      duration: '8s',
       tag: 'Step 4 of 5 • Consultation Setup',
       caption:
         'Doctor approves consultation, generates a secure Google Meet link, and dispatches the meeting details directly to the patient’s registered email.',
@@ -107,7 +112,7 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
       stepNumber: 5,
       title: '1-Click Join & Digital Prescription',
       subtitle: 'Consultation & PDF Rx Download',
-      duration: '0:35',
+      duration: '8s',
       tag: 'Step 5 of 5 • Digital Rx & Records',
       caption:
         'Patient joins the Google Meet consultation with one click. Upon completion, doctor issues an authorized digital prescription with instant PDF download.',
@@ -123,7 +128,7 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
       stepNumber: 1,
       title: 'Doctor Registration & Verification',
       subtitle: 'License & Certificate Verification',
-      duration: '0:30',
+      duration: '8s',
       tag: 'Step 1 of 5 • Credential Verification',
       caption:
         'Doctor signs up with clinical credentials, medical license number, and certificates to receive official Verified Doctor status from hospital administration.',
@@ -135,7 +140,7 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
       stepNumber: 2,
       title: 'Set Availability & Working End Time',
       subtitle: 'Custom Hours & Dynamic Slots',
-      duration: '0:35',
+      duration: '8s',
       tag: 'Step 2 of 5 • Schedule Configuration',
       caption:
         'Doctor configures working days, start time, extended end time (e.g. 07:00 PM or 09:00 PM), and breaks. Appointment slots update dynamically for patients.',
@@ -147,7 +152,7 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
       stepNumber: 3,
       title: 'Clinical Portal & Appointment Management',
       subtitle: 'Isolated Doctor Dashboard',
-      duration: '0:35',
+      duration: '8s',
       tag: 'Step 3 of 5 • Appointment Queue',
       caption:
         'Doctor accesses their Clinical Portal with private patient roster, today’s schedule, pending appointments, and complete clinical consultation history.',
@@ -159,7 +164,7 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
       stepNumber: 4,
       title: 'Google Meet Only Video Consultation',
       subtitle: 'Doctor Controls Meet Link',
-      duration: '0:35',
+      duration: '8s',
       tag: 'Step 4 of 5 • Google Meet Dispatch',
       caption:
         'Doctor reviews patient details, approves video consultation, generates or inputs a valid Google Meet link, and sends the invitation email to the patient.',
@@ -171,7 +176,7 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
       stepNumber: 5,
       title: 'Issue Authorized Digital Prescription',
       subtitle: 'Prescription & Clinical Records',
-      duration: '0:35',
+      duration: '8s',
       tag: 'Step 5 of 5 • Digital Rx Issuance',
       caption:
         'Doctor enters diagnosis, prescribes medications with dosage and instructions, digitally signs the prescription, and archives it directly to patient records.',
@@ -183,11 +188,12 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
   const currentSteps = activeTrack === 'PATIENT' ? patientSteps : doctorSteps;
   const currentStep = currentSteps[currentStepIndex] || currentSteps[0];
 
-  // Auto-progress simulation
+  // Auto-progress simulation with controlled, professional pacing
   useEffect(() => {
     if (!isOpen || !isPlaying) return;
 
-    const intervalTime = 100 / (playbackSpeed * 10);
+    // Tick every (STEP_DURATION_MS / 100) / playbackSpeed milliseconds
+    const tickInterval = (STEP_DURATION_MS / 100) / playbackSpeed;
     const timer = setInterval(() => {
       setProgress((prev) => {
         if (prev >= 100) {
@@ -197,7 +203,7 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
         }
         return prev + 1;
       });
-    }, intervalTime);
+    }, tickInterval);
 
     return () => clearInterval(timer);
   }, [isOpen, isPlaying, playbackSpeed, currentSteps.length]);
@@ -216,6 +222,22 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
     setIsPlaying(true);
   };
 
+  const handlePrevStep = () => {
+    if (currentStepIndex > 0) {
+      setCurrentStepIndex((prev) => prev - 1);
+      setProgress(0);
+      setIsPlaying(true);
+    }
+  };
+
+  const handleNextStep = () => {
+    if (currentStepIndex < currentSteps.length - 1) {
+      setCurrentStepIndex((prev) => prev + 1);
+      setProgress(0);
+      setIsPlaying(true);
+    }
+  };
+
   const handleTogglePlay = () => {
     setIsPlaying(!isPlaying);
   };
@@ -226,13 +248,14 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
     setIsPlaying(true);
   };
 
-  // Format simulated time (5 steps * 35s = ~2m 55s)
-  const currentTotalSeconds = Math.floor(
-    currentStepIndex * 35 + (progress / 100) * 35
+  // Format real-time duration (5 steps * 8s = 40 seconds)
+  const totalSeconds = currentSteps.length * 8;
+  const currentElapsedSeconds = Math.min(
+    totalSeconds,
+    Math.floor(currentStepIndex * 8 + (progress / 100) * 8)
   );
-  const minutes = Math.floor(currentTotalSeconds / 60);
-  const seconds = currentTotalSeconds % 60;
-  const timeFormatted = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+  const timeFormatted = `0:${currentElapsedSeconds < 10 ? '0' : ''}${currentElapsedSeconds}`;
+  const totalTimeFormatted = `0:${totalSeconds}`;
 
   if (!isOpen) return null;
 
@@ -242,7 +265,7 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-5xl bg-slate-950 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col my-auto"
+        className="relative w-full max-w-5xl bg-slate-950 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col my-auto transition-all"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Top Header of Modal */}
@@ -253,10 +276,10 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
             </div>
             <div>
               <h3 className="text-sm font-extrabold text-white leading-tight">
-                QuickCare Walkthrough Tour
+                QuickCare Walkthrough Video Tour
               </h3>
               <p className="text-[11px] text-slate-400">
-                Complete step-by-step workflow from first to last
+                Paced, step-by-step clinical walkthrough from start to finish
               </p>
             </div>
           </div>
@@ -302,7 +325,7 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
         </div>
 
         {/* Video Screen Area */}
-        <div className="relative aspect-video max-h-[500px] w-full bg-slate-950 flex items-center justify-center overflow-hidden">
+        <div className="relative aspect-video max-h-[480px] w-full bg-slate-950 flex items-center justify-center overflow-hidden">
           <div className="w-full h-full p-4 sm:p-7 flex flex-col justify-between relative select-none">
             {/* Ambient Background Glows */}
             <div className="absolute top-0 right-0 w-80 h-80 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
@@ -326,9 +349,18 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
                 </span>
               </div>
 
+              {/* Timing Counter & Audio Wave Indicator */}
               <div className="flex items-center gap-2">
+                {isPlaying && (
+                  <div className="hidden sm:flex items-center gap-0.5 px-2 py-1 rounded-lg bg-slate-900/80 border border-slate-800">
+                    <span className="w-0.5 h-2.5 bg-emerald-400 rounded-full animate-pulse" />
+                    <span className="w-0.5 h-3.5 bg-emerald-400 rounded-full animate-pulse" style={{ animationDelay: '100ms' }} />
+                    <span className="w-0.5 h-2 bg-emerald-400 rounded-full animate-pulse" style={{ animationDelay: '200ms' }} />
+                    <span className="w-0.5 h-3 bg-emerald-400 rounded-full animate-pulse" style={{ animationDelay: '300ms' }} />
+                  </div>
+                )}
                 <span className="px-2.5 py-1 rounded-lg bg-slate-800/90 border border-slate-700 text-slate-300 text-[11px] font-mono">
-                  {timeFormatted} / 2:55
+                  {timeFormatted} / {totalTimeFormatted}
                 </span>
                 <button
                   type="button"
@@ -340,14 +372,14 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
               </div>
             </div>
 
-            {/* Dynamic Stage: Scenes for PATIENT or DOCTOR */}
+            {/* Dynamic Stage: Paced Scenes with Progressive Reveal */}
             <div className="my-auto py-2 z-10">
               {/* ===================== PATIENT TRACK SCENES ===================== */}
               {activeTrack === 'PATIENT' && (
                 <>
                   {/* Step 1: Patient Registration & Profile */}
                   {currentStepIndex === 0 && (
-                    <div className="max-w-xl mx-auto space-y-2.5 animate-fade-in">
+                    <div className="max-w-xl mx-auto space-y-2.5 transition-all duration-500">
                       <div className="bg-slate-900/95 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-slate-700 shadow-xl space-y-3">
                         <div className="flex items-center justify-between pb-2 border-b border-slate-800">
                           <div className="flex items-center gap-2 text-white">
@@ -355,7 +387,7 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
                             <span className="text-xs font-bold">Patient Registration & Private Dashboard</span>
                           </div>
                           <span className="text-[10px] bg-blue-500/20 text-blue-300 font-bold px-2 py-0.5 rounded">
-                            Step 1
+                            Step 1 • Onboarding
                           </span>
                         </div>
                         <div className="grid grid-cols-2 gap-2 text-xs">
@@ -367,13 +399,21 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
                           <div className="p-2.5 bg-slate-800/70 rounded-xl border border-slate-700/60">
                             <p className="text-[10px] text-slate-400">Total Appointments</p>
                             <p className="text-lg font-black text-blue-400">0</p>
-                            <p className="text-[10px] text-slate-500">Clean New Dashboard</p>
+                            <p className="text-[10px] text-slate-500">Clean Isolated Dashboard</p>
                           </div>
                         </div>
-                        <div className="p-2.5 bg-blue-950/40 border border-blue-500/30 rounded-xl flex items-center justify-between text-xs">
-                          <span className="text-slate-300 text-[11px]">"No appointments yet. Book your first appointment to get started."</span>
-                          <span className="px-3 py-1 bg-blue-600 text-white font-bold rounded-lg text-[10px]">
-                            Book Now
+
+                        {/* Appears progressively */}
+                        <div
+                          className={`p-2.5 bg-blue-950/40 border border-blue-500/30 rounded-xl flex items-center justify-between text-xs transition-opacity duration-700 ${
+                            progress >= 25 ? 'opacity-100' : 'opacity-40'
+                          }`}
+                        >
+                          <span className="text-slate-300 text-[11px]">
+                            "No appointments yet! Book your first appointment with a doctor to get started."
+                          </span>
+                          <span className="px-3 py-1 bg-blue-600 text-white font-bold rounded-lg text-[10px] shrink-0">
+                            Book an Appointment
                           </span>
                         </div>
                       </div>
@@ -382,7 +422,7 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
 
                   {/* Step 2: AI Clinical Triaging */}
                   {currentStepIndex === 1 && (
-                    <div className="max-w-xl mx-auto space-y-2.5 animate-fade-in">
+                    <div className="max-w-xl mx-auto space-y-2.5 transition-all duration-500">
                       <div className="flex items-start gap-3 bg-slate-800/80 backdrop-blur-md p-3.5 rounded-2xl border border-slate-700/80 shadow-lg">
                         <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-white shrink-0 font-bold text-xs">
                           P
@@ -395,7 +435,12 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
                         </div>
                       </div>
 
-                      <div className="flex items-start gap-3 bg-blue-950/70 backdrop-blur-md p-3.5 rounded-2xl border border-blue-600/50 shadow-xl">
+                      {/* Progressive AI Response */}
+                      <div
+                        className={`flex items-start gap-3 bg-blue-950/70 backdrop-blur-md p-3.5 rounded-2xl border border-blue-600/50 shadow-xl transition-all duration-700 ${
+                          progress >= 25 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
+                        }`}
+                      >
                         <div className="w-7 h-7 rounded-full bg-teal-500 flex items-center justify-center text-white shrink-0 shadow-xs">
                           <Bot className="w-4 h-4" />
                         </div>
@@ -407,7 +452,7 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
                             </span>
                           </div>
                           <p className="text-xs text-slate-200 leading-relaxed">
-                            Based on your joint swelling, you should see an <strong className="text-teal-300">Orthopedic Specialist</strong>.
+                            Based on your acute joint swelling, I have matched you to our verified <strong className="text-teal-300">Orthopedic Specialists</strong>.
                           </p>
                           <div className="p-2 rounded-xl bg-slate-900/90 border border-slate-700 flex items-center justify-between">
                             <div className="flex items-center gap-2">
@@ -423,7 +468,7 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
 
                   {/* Step 3: Doctor Selection & Live Slot Booking */}
                   {currentStepIndex === 2 && (
-                    <div className="max-w-xl mx-auto space-y-2.5 animate-fade-in">
+                    <div className="max-w-xl mx-auto space-y-2.5 transition-all duration-500">
                       <div className="bg-slate-900/95 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-slate-700 space-y-2.5 shadow-xl">
                         <div className="flex items-center justify-between pb-2 border-b border-slate-800">
                           <div className="flex items-center gap-2 text-white">
@@ -443,7 +488,7 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
                             return (
                               <div
                                 key={s}
-                                className={`p-2 rounded-xl text-center font-bold text-[11px] ${
+                                className={`p-2 rounded-xl text-center font-bold text-[11px] transition-all duration-300 ${
                                   isSelected
                                     ? 'bg-blue-600 text-white ring-2 ring-blue-400 shadow-md scale-105'
                                     : isBooked
@@ -458,7 +503,12 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
                           })}
                         </div>
 
-                        <div className="p-2.5 bg-emerald-950/60 border border-emerald-600/40 rounded-xl flex items-center justify-between text-xs">
+                        {/* Confirmation notice reveals */}
+                        <div
+                          className={`p-2.5 bg-emerald-950/60 border border-emerald-600/40 rounded-xl flex items-center justify-between text-xs transition-all duration-700 ${
+                            progress >= 30 ? 'opacity-100' : 'opacity-30'
+                          }`}
+                        >
                           <div className="flex items-center gap-2 text-emerald-300 text-[11px]">
                             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
                             <span>10:15 AM Slot Confirmed (Zero Double-Booking Guarantee)</span>
@@ -473,7 +523,7 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
 
                   {/* Step 4: Doctor Review & Google Meet Link */}
                   {currentStepIndex === 3 && (
-                    <div className="max-w-xl mx-auto space-y-2.5 animate-fade-in">
+                    <div className="max-w-xl mx-auto space-y-2.5 transition-all duration-500">
                       <div className="bg-slate-900/95 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-slate-700 space-y-2.5 shadow-xl">
                         <div className="flex items-center justify-between pb-2 border-b border-slate-800">
                           <div className="flex items-center gap-2 text-white">
@@ -487,13 +537,17 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
 
                         <div className="p-3 bg-slate-800/80 rounded-xl border border-slate-700 text-xs space-y-2">
                           <div className="flex items-center justify-between">
-                            <span className="text-indigo-300 font-bold text-[11px]">To: john.doe@email.com</span>
-                            <span className="text-[10px] text-slate-400">Just Now</span>
+                            <span className="text-indigo-300 font-bold text-[11px]">To: patient@quickcare.com</span>
+                            <span className="text-[10px] text-slate-400">Direct From Doctor</span>
                           </div>
                           <p className="text-white font-bold text-xs">
                             Subject: Your QuickCare Video Consultation – Google Meet Invitation
                           </p>
-                          <div className="p-2 bg-slate-950 rounded-lg border border-indigo-500/30 text-[11px] font-mono text-emerald-300 flex items-center justify-between">
+                          <div
+                            className={`p-2 bg-slate-950 rounded-lg border border-indigo-500/40 text-[11px] font-mono text-emerald-300 flex items-center justify-between transition-all duration-700 ${
+                              progress >= 25 ? 'scale-100 ring-1 ring-emerald-500/40' : 'scale-95'
+                            }`}
+                          >
                             <span>https://meet.google.com/qck-8419-care</span>
                             <span className="px-2 py-0.5 bg-emerald-600/40 text-emerald-300 text-[9px] rounded font-sans font-bold">
                               Verified Link
@@ -506,7 +560,7 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
 
                   {/* Step 5: 1-Click Join & Digital Prescription */}
                   {currentStepIndex === 4 && (
-                    <div className="max-w-xl mx-auto space-y-2.5 animate-fade-in">
+                    <div className="max-w-xl mx-auto space-y-2.5 transition-all duration-500">
                       <div className="bg-slate-900/95 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-slate-700 space-y-2.5 shadow-xl">
                         <div className="flex items-center justify-between pb-2 border-b border-slate-800">
                           <div className="flex items-center gap-2 text-white">
@@ -548,7 +602,7 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
                 <>
                   {/* Step 1: Doctor Registration & Verification */}
                   {currentStepIndex === 0 && (
-                    <div className="max-w-xl mx-auto space-y-2.5 animate-fade-in">
+                    <div className="max-w-xl mx-auto space-y-2.5 transition-all duration-500">
                       <div className="bg-slate-900/95 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-slate-700 space-y-2.5 shadow-xl">
                         <div className="flex items-center justify-between pb-2 border-b border-slate-800">
                           <div className="flex items-center gap-2 text-white">
@@ -582,7 +636,7 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
 
                   {/* Step 2: Set Availability & Working End Time */}
                   {currentStepIndex === 1 && (
-                    <div className="max-w-xl mx-auto space-y-2.5 animate-fade-in">
+                    <div className="max-w-xl mx-auto space-y-2.5 transition-all duration-500">
                       <div className="bg-slate-900/95 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-slate-700 space-y-2.5 shadow-xl">
                         <div className="flex items-center justify-between pb-2 border-b border-slate-800">
                           <div className="flex items-center gap-2 text-white">
@@ -606,7 +660,11 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
                             <p className="text-sm font-bold text-emerald-300">07:00 PM</p>
                           </div>
                         </div>
-                        <div className="p-2.5 bg-slate-800/80 rounded-xl text-xs flex items-center justify-between text-slate-300 border border-slate-700">
+                        <div
+                          className={`p-2.5 bg-slate-800/80 rounded-xl text-xs flex items-center justify-between text-slate-300 border border-slate-700 transition-all duration-700 ${
+                            progress >= 30 ? 'opacity-100' : 'opacity-40'
+                          }`}
+                        >
                           <span>15-Minute patient booking slots dynamically generated until 07:00 PM!</span>
                           <span className="px-2 py-0.5 bg-teal-600 text-white font-bold rounded-lg text-[10px]">
                             Saved
@@ -618,7 +676,7 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
 
                   {/* Step 3: Clinical Dashboard & Appointment Management */}
                   {currentStepIndex === 2 && (
-                    <div className="max-w-xl mx-auto space-y-2.5 animate-fade-in">
+                    <div className="max-w-xl mx-auto space-y-2.5 transition-all duration-500">
                       <div className="bg-slate-900/95 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-slate-700 space-y-2.5 shadow-xl">
                         <div className="flex items-center justify-between pb-2 border-b border-slate-800">
                           <div className="flex items-center gap-2 text-white">
@@ -658,7 +716,7 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
 
                   {/* Step 4: Google Meet Only Consultation Workflow */}
                   {currentStepIndex === 3 && (
-                    <div className="max-w-xl mx-auto space-y-2.5 animate-fade-in">
+                    <div className="max-w-xl mx-auto space-y-2.5 transition-all duration-500">
                       <div className="bg-slate-900/95 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-slate-700 space-y-2.5 shadow-xl">
                         <div className="flex items-center justify-between pb-2 border-b border-slate-800">
                           <div className="flex items-center gap-2 text-white">
@@ -674,13 +732,17 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
                             <div className="flex items-center justify-between">
                               <span className="text-[11px] font-bold text-purple-200">Doctor Enters or Generates Link:</span>
                               <span className="text-[9px] bg-emerald-500/20 text-emerald-300 font-bold px-1.5 py-0.5 rounded">
-                                Validated
+                                Validated URL
                               </span>
                             </div>
                             <div className="p-2 bg-slate-950 rounded-lg border border-purple-500/40 font-mono text-emerald-300 text-[11px]">
                               https://meet.google.com/qck-8419-care
                             </div>
-                            <div className="flex items-center justify-end">
+                            <div
+                              className={`flex items-center justify-end transition-all duration-700 ${
+                                progress >= 30 ? 'opacity-100' : 'opacity-40'
+                              }`}
+                            >
                               <span className="px-3 py-1 bg-teal-600 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 shadow-xs">
                                 <Send className="w-3 h-3" />
                                 <span>Invitation Sent to Patient Email</span>
@@ -694,7 +756,7 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
 
                   {/* Step 5: Issue Authorized Digital Prescription */}
                   {currentStepIndex === 4 && (
-                    <div className="max-w-xl mx-auto space-y-2.5 animate-fade-in">
+                    <div className="max-w-xl mx-auto space-y-2.5 transition-all duration-500">
                       <div className="bg-slate-900/95 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-slate-700 space-y-2.5 shadow-xl">
                         <div className="flex items-center justify-between pb-2 border-b border-slate-800">
                           <div className="flex items-center gap-2 text-white">
@@ -730,7 +792,7 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
               )}
             </div>
 
-            {/* Bottom Captions Bar */}
+            {/* Bottom Captions Bar with Narration indicator */}
             <div className="z-10 bg-slate-900/95 backdrop-blur-md px-4 py-2 rounded-2xl border border-slate-800 text-center text-xs text-slate-200 shadow-md">
               <span className={`font-bold mr-2 ${activeTrack === 'PATIENT' ? 'text-blue-400' : 'text-teal-400'}`}>
                 {activeTrack === 'PATIENT' ? 'Patient Workflow:' : 'Doctor Workflow:'}
@@ -772,14 +834,24 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
             </div>
             <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
               <span>{timeFormatted}</span>
-              <span>Full Walkthrough Duration: 2:55</span>
+              <span>Full Walkthrough Duration: {totalTimeFormatted} (8s per step)</span>
             </div>
           </div>
 
           {/* Primary Action Buttons */}
           <div className="flex flex-wrap items-center justify-between gap-3">
-            {/* Play / Pause & Controls */}
-            <div className="flex items-center gap-2">
+            {/* Play, Step Prev/Next & Restart Controls */}
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={handlePrevStep}
+                disabled={currentStepIndex === 0}
+                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed text-slate-300 transition cursor-pointer"
+                title="Previous Step"
+              >
+                <SkipBack className="w-4 h-4" />
+              </button>
+
               <button
                 type="button"
                 onClick={handleTogglePlay}
@@ -788,23 +860,37 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
                     ? 'bg-blue-600 hover:bg-blue-700'
                     : 'bg-teal-600 hover:bg-teal-700'
                 }`}
-                title={isPlaying ? 'Pause Demo' : 'Play Demo'}
+                title={isPlaying ? 'Pause Walkthrough' : 'Play Walkthrough'}
               >
                 {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
               </button>
 
               <button
                 type="button"
+                onClick={handleNextStep}
+                disabled={currentStepIndex === currentSteps.length - 1}
+                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed text-slate-300 transition cursor-pointer"
+                title="Next Step"
+              >
+                <SkipForward className="w-4 h-4" />
+              </button>
+
+              <button
+                type="button"
                 onClick={handleRestart}
-                className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
-                title="Restart from beginning"
+                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer ml-1"
+                title="Restart from Step 1"
               >
                 <RotateCcw className="w-4 h-4" />
               </button>
 
-              {/* Speed Controller */}
-              <div className="flex items-center bg-slate-800 rounded-xl p-0.5 border border-slate-700">
-                {[1, 1.5, 2].map((spd) => (
+              {/* Speed Controller (Relaxed, Normal, Brisk) */}
+              <div className="flex items-center bg-slate-800 rounded-xl p-0.5 border border-slate-700 ml-2">
+                {[
+                  { spd: 0.75, label: '0.75x' },
+                  { spd: 1, label: '1x' },
+                  { spd: 1.25, label: '1.25x' },
+                ].map(({ spd, label }) => (
                   <button
                     key={spd}
                     type="button"
@@ -817,7 +903,7 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
                         : 'text-slate-400 hover:text-white'
                     }`}
                   >
-                    {spd}x
+                    {label}
                   </button>
                 ))}
               </div>
@@ -865,8 +951,8 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
                   className={`p-3 rounded-xl border transition-all cursor-pointer ${
                     isActive
                       ? activeTrack === 'PATIENT'
-                        ? 'bg-blue-950/70 border-blue-500 shadow-md'
-                        : 'bg-teal-950/70 border-teal-500 shadow-md'
+                        ? 'bg-blue-950/70 border-blue-500 shadow-md ring-1 ring-blue-500/50'
+                        : 'bg-teal-950/70 border-teal-500 shadow-md ring-1 ring-teal-500/50'
                       : 'bg-slate-900/80 border-slate-800 hover:border-slate-700'
                   }`}
                 >
@@ -891,7 +977,7 @@ export const AiExplainerVideoModal = ({ isOpen, onClose, defaultTrack = 'PATIENT
                           : 'bg-slate-800 text-slate-400'
                       }`}
                     >
-                      Step {st.stepNumber}
+                      Step {st.stepNumber} ({st.duration})
                     </span>
                   </div>
                   <h4 className="text-[11px] font-bold text-white truncate">{st.title}</h4>
