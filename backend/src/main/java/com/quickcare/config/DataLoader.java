@@ -106,13 +106,23 @@ public class DataLoader implements CommandLineRunner {
                 "Male"
         );
 
-        // 4b. REGISTERED PENDING DOCTOR (Dr. Prasad Kadam from Firestore nam5)
+        // 4b. REGISTERED DOCTORS IN SATARA
+        createDoctor(
+                "usr_doc_vivek", "Dr. Vivek Shelar", "vivek.shelar@quickcare.com", "+91 98200 88776",
+                "doc_vivek_shelar", "Orthopedics", "MBBS, MS (Orthopedics)", 12,
+                "MCI-ORTHO-78421", 500.0, "VERIFIED", 4.9, 96,
+                "Chief Consultant Orthopedic Surgeon at Shelar Hospital, Satara specializing in joint replacement, sports injury rehabilitation, and spine care.",
+                "Shelar Hospital, Radhika Road, Satara",
+                "https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400",
+                "Male"
+        );
+
         createDoctor(
                 "usr_b320c9f9", "Dr.Prasad Kadam", "prasadkadam123@gmail.com", "8766949419",
                 "doc_f3852f3d", "Cardiology", "MBBS, MD", 12,
-                "MCI-123", 500.0, "PENDING", 4.8, 0,
+                "MCI-123", 500.0, "VERIFIED", 4.8, 42,
                 "Experienced Senior Cardiologist at Kadam Hospital specializing in comprehensive cardiovascular care and clinical cardiology.",
-                "Kadam Hospital",
+                "Kadam Multi-Speciality Hospital, Powai Naka, Satara",
                 "https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400",
                 "Male"
         );

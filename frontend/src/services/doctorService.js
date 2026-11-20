@@ -52,6 +52,7 @@ export const DEFAULT_DOCTORS = [
     reviewCount: 128,
     bio: 'Senior Cardiologist specializing in preventive heart health, coronary artery disease, and cardiac rehabilitation.',
     clinicAddress: 'Apex Heart Institute, Mumbai',
+    city: 'Mumbai',
     profileImage: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=400',
     gender: 'Female',
     workingHours: '09:00 AM - 05:00 PM',
@@ -76,6 +77,7 @@ export const DEFAULT_DOCTORS = [
     reviewCount: 94,
     bio: 'Consultant Dermatologist & Trichologist focusing on clinical dermatology, eczema, psoriasis, and cosmetic dermatology.',
     clinicAddress: 'Skin & Glow Clinic, Pune',
+    city: 'Pune',
     profileImage: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400',
     gender: 'Male',
     workingHours: '09:00 AM - 05:00 PM',
@@ -100,8 +102,34 @@ export const DEFAULT_DOCTORS = [
     reviewCount: 162,
     bio: 'Compassionate Pediatrician dedicated to neonatal care, child growth monitoring, vaccination, and adolescent care.',
     clinicAddress: 'Little Sprouts Children Hospital, Delhi',
+    city: 'Delhi',
     profileImage: 'https://images.unsplash.com/photo-1594824813583-43efb8e23528?auto=format&fit=crop&q=80&w=400',
     gender: 'Female',
+    workingHours: '09:00 AM - 05:00 PM',
+    workingStartTime: '09:00 AM',
+    workingEndTime: '05:00 PM',
+    slotDurationMinutes: 15,
+    onlineStatus: 'AVAILABLE_FOR_VIDEO',
+    videoConsultationAvailable: true,
+    availableDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+  },
+  {
+    doctorId: 'doc_vivek_shelar',
+    uid: 'usr_doc_vivek',
+    fullName: 'Dr. Vivek Shelar',
+    specialization: 'Orthopedics',
+    qualification: 'MBBS, MS (Orthopedics)',
+    experience: 12,
+    medicalRegistrationNumber: 'MCI-ORTHO-78421',
+    consultationFee: 500,
+    verificationStatus: 'VERIFIED',
+    rating: 4.9,
+    reviewCount: 96,
+    bio: 'Chief Consultant Orthopedic Surgeon at Shelar Hospital, Satara specializing in joint replacement, sports injury rehabilitation, and spine care.',
+    clinicAddress: 'Shelar Hospital, Radhika Road, Satara',
+    city: 'Satara',
+    profileImage: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400',
+    gender: 'Male',
     workingHours: '09:00 AM - 05:00 PM',
     workingStartTime: '09:00 AM',
     workingEndTime: '05:00 PM',
@@ -122,8 +150,9 @@ export const DEFAULT_DOCTORS = [
     verificationStatus: 'VERIFIED',
     rating: 4.8,
     reviewCount: 42,
-    bio: 'Experienced Senior Cardiologist at Kadam Hospital specializing in comprehensive cardiovascular care and clinical cardiology.',
-    clinicAddress: 'Kadam Hospital',
+    bio: 'Experienced Senior Cardiologist at Kadam Hospital, Satara specializing in comprehensive cardiovascular care and clinical cardiology.',
+    clinicAddress: 'Kadam Multi-Speciality Hospital, Powai Naka, Satara',
+    city: 'Satara',
     profileImage: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400',
     gender: 'Male',
     workingHours: '09:00 AM - 05:00 PM',
@@ -148,6 +177,7 @@ export const DEFAULT_DOCTORS = [
     reviewCount: 87,
     bio: 'Chief Orthopedic & Joint Replacement Surgeon with extensive experience in sports injuries, spine care, and arthroscopy.',
     clinicAddress: 'Metro Joint & Spine Hospital, Bengaluru',
+    city: 'Bengaluru',
     profileImage: 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?auto=format&fit=crop&q=80&w=400',
     gender: 'Male',
     workingHours: '09:00 AM - 05:00 PM',
@@ -172,6 +202,7 @@ export const DEFAULT_DOCTORS = [
     reviewCount: 110,
     bio: 'Senior Neurologist & Stroke Specialist focusing on migraine management, epilepsy, and neurological disorders.',
     clinicAddress: 'City Neuro Sciences, Chennai',
+    city: 'Chennai',
     profileImage: 'https://images.unsplash.com/photo-1527613426441-4da17471b66d?auto=format&fit=crop&q=80&w=400',
     gender: 'Female',
     workingHours: '09:00 AM - 05:00 PM',
@@ -224,13 +255,23 @@ export const doctorService = {
         (d) => d.gender?.toLowerCase() === params.gender.toLowerCase()
       );
     }
+    const locationParam = params.location || params.city;
+    if (locationParam && locationParam !== 'ALL') {
+      const loc = locationParam.toLowerCase().trim();
+      filtered = filtered.filter(
+        (d) =>
+          (d.city && d.city.toLowerCase().includes(loc)) ||
+          (d.clinicAddress && d.clinicAddress.toLowerCase().includes(loc))
+      );
+    }
     if (params.query) {
       const q = params.query.toLowerCase();
       filtered = filtered.filter(
         (d) =>
           d.fullName.toLowerCase().includes(q) ||
           d.specialization.toLowerCase().includes(q) ||
-          d.clinicAddress.toLowerCase().includes(q)
+          d.clinicAddress.toLowerCase().includes(q) ||
+          (d.city && d.city.toLowerCase().includes(q))
       );
     }
     if (params.minExperience) {

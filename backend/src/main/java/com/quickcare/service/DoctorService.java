@@ -33,7 +33,8 @@ public class DoctorService {
                         String q = query.toLowerCase().trim();
                         boolean matchesName = d.getFullName() != null && d.getFullName().toLowerCase().contains(q);
                         boolean matchesSpec = d.getSpecialization() != null && d.getSpecialization().toLowerCase().contains(q);
-                        if (!matchesName && !matchesSpec) return false;
+                        boolean matchesClinic = d.getClinicAddress() != null && d.getClinicAddress().toLowerCase().contains(q);
+                        if (!matchesName && !matchesSpec && !matchesClinic) return false;
                     }
                     if (specialization != null && !specialization.trim().isEmpty() && !"ALL".equalsIgnoreCase(specialization)) {
                         if (d.getSpecialization() == null || !d.getSpecialization().equalsIgnoreCase(specialization.trim())) {

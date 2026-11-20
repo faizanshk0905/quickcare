@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { doctorService } from '../../services/doctorService';
 import { DoctorCard } from '../../components/common/DoctorCard';
-import { Search, Filter, Stethoscope, SlidersHorizontal, RefreshCw } from 'lucide-react';
+import { Search, Filter, Stethoscope, SlidersHorizontal, RefreshCw, MapPin } from 'lucide-react';
 
 export const OurDoctors = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -13,6 +13,7 @@ export const OurDoctors = () => {
   const [query, setQuery] = useState('');
   const [specialization, setSpecialization] = useState(initialSpec);
   const [gender, setGender] = useState('ALL');
+  const [location, setLocation] = useState('ALL');
   const [minExp, setMinExp] = useState(0);
   const [maxFee, setMaxFee] = useState(2000);
 
@@ -35,6 +36,7 @@ export const OurDoctors = () => {
       if (query.trim()) params.query = query.trim();
       if (specialization && specialization !== 'ALL') params.specialization = specialization;
       if (gender && gender !== 'ALL') params.gender = gender;
+      if (location && location !== 'ALL') params.location = location;
       if (minExp > 0) params.minExperience = minExp;
       if (maxFee < 2000) params.maxFee = maxFee;
 
@@ -51,7 +53,7 @@ export const OurDoctors = () => {
 
   useEffect(() => {
     fetchDoctors();
-  }, [specialization, gender, minExp, maxFee]);
+  }, [specialization, gender, location, minExp, maxFee]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -62,6 +64,7 @@ export const OurDoctors = () => {
     setQuery('');
     setSpecialization('ALL');
     setGender('ALL');
+    setLocation('ALL');
     setMinExp(0);
     setMaxFee(2000);
     setSearchParams({});
@@ -102,6 +105,36 @@ export const OurDoctors = () => {
             Search
           </button>
         </form>
+
+        {/* Location / City Filter Pills */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs no-scrollbar">
+          <span className="text-slate-600 font-bold shrink-0 flex items-center gap-1">
+            <MapPin className="w-3.5 h-3.5 text-rose-500" /> City / Location:
+          </span>
+          {['ALL', 'Satara', 'Pune', 'Mumbai', 'Delhi', 'Bengaluru', 'Chennai'].map((loc) => (
+            <button
+              key={loc}
+              type="button"
+              onClick={() => setLocation(loc)}
+              className={`px-3.5 py-1.5 rounded-full font-bold transition shrink-0 cursor-pointer ${
+                location === loc
+                  ? 'bg-rose-600 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              {loc === 'ALL' ? 'All Locations' : `📍 ${loc}`}
+            </button>
+          ))}
+          {location !== 'ALL' && (
+            <button
+              type="button"
+              onClick={() => setLocation('ALL')}
+              className="text-[11px] text-blue-600 hover:underline font-bold ml-1 cursor-pointer"
+            >
+              Clear City
+            </button>
+          )}
+        </div>
 
         {/* Specialization Filter Pills */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs no-scrollbar">
