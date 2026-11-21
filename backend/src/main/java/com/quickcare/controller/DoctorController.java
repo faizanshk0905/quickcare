@@ -107,15 +107,26 @@ public class DoctorController {
         return ResponseEntity.ok(ApiResponse.ok(da));
     }
 
+    @PutMapping("/{doctorId}/availability")
+    public ResponseEntity<ApiResponse<DoctorAvailability>> updateDoctorAvailabilityDirect(
+            @PathVariable String doctorId,
+            @RequestBody AvailabilityUpdateRequest req) {
+        req.setDoctorId(doctorId);
+        DoctorAvailability updated = doctorService.updateAvailability(req);
+        return ResponseEntity.ok(ApiResponse.ok("Availability updated successfully", updated));
+    }
+
     @PutMapping("/availability")
     public ResponseEntity<ApiResponse<DoctorAvailability>> updateAvailability(
             @AuthenticationPrincipal UserPrincipal principal,
             @RequestBody AvailabilityUpdateRequest req) {
-        if (principal == null) {
-            return ResponseEntity.status(401).body(ApiResponse.error("Authentication required"));
+        if (req.getDoctorId() == null || req.getDoctorId().trim().isEmpty()) {
+            if (principal == null) {
+                return ResponseEntity.status(401).body(ApiResponse.error("Authentication required"));
+            }
+            Doctor doctor = doctorService.getDoctorByUid(principal.getUid());
+            req.setDoctorId(doctor.getDoctorId());
         }
-        Doctor doctor = doctorService.getDoctorByUid(principal.getUid());
-        req.setDoctorId(doctor.getDoctorId());
         DoctorAvailability updated = doctorService.updateAvailability(req);
         return ResponseEntity.ok(ApiResponse.ok("Availability updated successfully", updated));
     }

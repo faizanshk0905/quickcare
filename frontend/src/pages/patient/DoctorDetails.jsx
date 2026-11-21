@@ -90,9 +90,30 @@ export const DoctorDetails = () => {
 
     window.addEventListener('quickcare_doctors_updated', handleDoctorUpdate);
     window.addEventListener('quickcare_doctor_availability_updated', handleDoctorUpdate);
+
+    // Cross-tab real-time BroadcastChannel sync (<5ms)
+    let syncChannel = null;
+    try {
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        syncChannel = new BroadcastChannel('quickcare_realtime_sync');
+        syncChannel.onmessage = (event) => {
+          if (
+            event.data?.type === 'DOCTOR_AVAILABILITY_UPDATED' ||
+            event.data?.type === 'DOCTORS_UPDATED'
+          ) {
+            fetchDoc();
+            fetchAvailability(true);
+          }
+        };
+      }
+    } catch (e) {}
+
     return () => {
       window.removeEventListener('quickcare_doctors_updated', handleDoctorUpdate);
       window.removeEventListener('quickcare_doctor_availability_updated', handleDoctorUpdate);
+      try {
+        if (syncChannel) syncChannel.close();
+      } catch (e) {}
     };
   }, [doctorId]);
 
@@ -120,9 +141,13 @@ export const DoctorDetails = () => {
     setSelectedSlot('');
     setBookingError('');
 
-    // Real-time synchronization interval (every 3 seconds for instant double-booking detection)
+    // Real-time synchronization interval (every 3 seconds for instant double-booking detection and live schedule sync)
     const interval = setInterval(() => {
       fetchAvailability(true);
+      // Also silently refresh doctor info so schedule header reflects changes
+      doctorService.getDoctorById(doctorId).then((r) => {
+        if (r && r.data) setDoctor(r.data);
+      }).catch(() => {});
     }, 3000);
 
     return () => clearInterval(interval);

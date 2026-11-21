@@ -58,7 +58,12 @@ public class DoctorService {
     }
 
     public Doctor getDoctorById(String doctorId) {
+        if (doctorId == null) {
+            throw new ResourceNotFoundException("Doctor ID is null");
+        }
         return db.findDoctorById(doctorId)
+                .or(() -> db.findDoctorByUid(doctorId))
+                .or(() -> doctorId.startsWith("doc_") ? db.findDoctorById(doctorId.substring(4)) : Optional.empty())
                 .orElseThrow(() -> new ResourceNotFoundException("Doctor not found with ID: " + doctorId));
     }
 

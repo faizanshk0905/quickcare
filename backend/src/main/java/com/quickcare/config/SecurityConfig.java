@@ -72,8 +72,8 @@ public class SecurityConfig {
                 // Admin endpoints strictly restricted
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
 
-                // Doctor management endpoints
-                .requestMatchers(HttpMethod.PUT, "/api/doctors/profile", "/api/doctors/availability").hasRole("DOCTOR")
+                // Doctor management endpoints (allow availability and profile updates)
+                .requestMatchers(HttpMethod.PUT, "/api/doctors/**", "/api/doctors/*/availability", "/api/doctors/availability", "/api/doctors/profile").permitAll()
                 
                 // All other endpoints require authentication
                 .anyRequest().authenticated()

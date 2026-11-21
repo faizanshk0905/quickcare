@@ -339,10 +339,33 @@ export const PatientDashboard = () => {
 
     window.addEventListener('quickcare_appointments_updated', handleAptsUpdated);
     window.addEventListener('quickcare_notifications_updated', handleNotifsUpdated);
+    window.addEventListener('quickcare_doctors_updated', handleAptsUpdated);
+    window.addEventListener('quickcare_doctor_availability_updated', handleAptsUpdated);
+
+    let syncChannel = null;
+    try {
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        syncChannel = new BroadcastChannel('quickcare_realtime_sync');
+        syncChannel.onmessage = (event) => {
+          if (
+            event.data?.type === 'DOCTOR_AVAILABILITY_UPDATED' ||
+            event.data?.type === 'DOCTORS_UPDATED' ||
+            event.data?.type === 'APPOINTMENT_UPDATED'
+          ) {
+            fetchDashboardData();
+          }
+        };
+      }
+    } catch (e) {}
 
     return () => {
       window.removeEventListener('quickcare_appointments_updated', handleAptsUpdated);
       window.removeEventListener('quickcare_notifications_updated', handleNotifsUpdated);
+      window.removeEventListener('quickcare_doctors_updated', handleAptsUpdated);
+      window.removeEventListener('quickcare_doctor_availability_updated', handleAptsUpdated);
+      try {
+        if (syncChannel) syncChannel.close();
+      } catch (e) {}
     };
   }, [user?.uid, user?.userId, user?.email]);
 

@@ -53,6 +53,33 @@ export const OurDoctors = () => {
 
   useEffect(() => {
     fetchDoctors();
+
+    const handleUpdate = () => fetchDoctors();
+    window.addEventListener('quickcare_doctors_updated', handleUpdate);
+    window.addEventListener('quickcare_doctor_availability_updated', handleUpdate);
+
+    let syncChannel = null;
+    try {
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        syncChannel = new BroadcastChannel('quickcare_realtime_sync');
+        syncChannel.onmessage = (event) => {
+          if (
+            event.data?.type === 'DOCTOR_AVAILABILITY_UPDATED' ||
+            event.data?.type === 'DOCTORS_UPDATED'
+          ) {
+            fetchDoctors();
+          }
+        };
+      }
+    } catch (e) {}
+
+    return () => {
+      window.removeEventListener('quickcare_doctors_updated', handleUpdate);
+      window.removeEventListener('quickcare_doctor_availability_updated', handleUpdate);
+      try {
+        if (syncChannel) syncChannel.close();
+      } catch (e) {}
+    };
   }, [specialization, gender, location, minExp, maxFee]);
 
   const handleSearchSubmit = (e) => {

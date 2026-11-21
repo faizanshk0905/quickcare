@@ -476,7 +476,8 @@ public class FirestoreDatabaseService {
         availabilities.put(key, availability);
         if (firestore != null) {
             try {
-                firestore.collection("doctorAvailability").document(availability.getAvailabilityId()).set(availability, SetOptions.merge());
+                firestore.collection("doctorAvailability").document(availability.getAvailabilityId()).set(availability, SetOptions.merge()).get();
+                logger.info(">>> Cloud Firestore SUCCESS: Saved doctorAvailability [{}]", availability.getAvailabilityId());
             } catch (Exception e) {
                 logger.error("Firestore sync error on availability: {}", e.getMessage());
             }

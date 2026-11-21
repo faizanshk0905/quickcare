@@ -187,12 +187,14 @@ export const ManageAvailability = () => {
     setMsg('');
     setError('');
     try {
-      const res = await doctorService.updateAvailability({
+      const payload = {
         doctorId: doctor.doctorId,
+        uid: doctor.uid,
         date: selectedDate,
         availableSlots: slots,
         workingHours: `${workingStartTime} - ${workingEndTime}`,
         workingDays,
+        availableDays: workingDays,
         workingStartTime,
         workingEndTime,
         breakStartTime,
@@ -200,8 +202,10 @@ export const ManageAvailability = () => {
         slotDurationMinutes: slotDuration,
         holidays,
         timezone: 'Asia/Kolkata',
-      });
+      };
+      const res = await doctorService.updateAvailability(payload);
       if (res && res.success) {
+        setDoctor((prev) => ({ ...(prev || {}), ...payload }));
         setMsg(`Schedule & Availability updated successfully!`);
         fetchAvailability();
       }

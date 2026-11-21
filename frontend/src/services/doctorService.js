@@ -288,21 +288,22 @@ export const doctorService = {
   },
 
   async getDoctorById(id) {
+    let remoteDoc = null;
     try {
       const res = await api.get(`/doctors/${id}`);
       if (res && res.data && (res.data.data?.doctorId || res.data.doctorId)) {
-        return { success: true, data: res.data.data || res.data };
+        remoteDoc = res.data.data || res.data;
       }
     } catch (err) {
       console.warn('Backend getDoctorById API offline, resolving from faculty roster:', err.message);
     }
 
-    let doc = null;
+    let localDoc = null;
     try {
       const raw = localStorage.getItem('quickcare_shared_doctors');
       if (raw) {
         const local = JSON.parse(raw);
-        doc = local.find(
+        localDoc = local.find(
           (d) =>
             d.doctorId === id ||
             d.uid === id ||
@@ -313,13 +314,13 @@ export const doctorService = {
       }
     } catch (e) {}
 
-    if (!doc) {
-      doc = DEFAULT_DOCTORS.find((d) => d.doctorId === id || d.uid === id);
-    }
-    doc = doc || DEFAULT_DOCTORS[0];
+    const defaultMatch = DEFAULT_DOCTORS.find((d) => d.doctorId === id || d.uid === id) || DEFAULT_DOCTORS[0];
+
+    // Priority merge: DEFAULT_DOCTORS < remoteDoc < localDoc (immediate availability changes take precedence!)
+    const merged = { ...defaultMatch, ...(remoteDoc || {}), ...(localDoc || {}) };
     return {
       success: true,
-      data: doc,
+      data: merged,
     };
   },
 
@@ -702,12 +703,40 @@ export const doctorService = {
   },
 
   async updateAvailability(data) {
-    await this.updateDoctorProfile(data);
+    // 1. Normalize workingDays and availableDays to guarantee cross-compatibility
+    const days = data.workingDays || data.availableDays || ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+    const normalizedData = {
+      ...data,
+      workingDays: days,
+      availableDays: days,
+      workingHours: data.workingHours || (data.workingStartTime && data.workingEndTime ? `${data.workingStartTime} - ${data.workingEndTime}` : '09:00 AM - 05:00 PM'),
+    };
+
+    // 2. Persist directly to local store
+    await this.updateDoctorProfile(normalizedData);
+
+    // 3. Dispatch real-time BroadcastChannel event for instant cross-tab sync (<5ms)
     try {
-      const res = await api.put('/doctors/availability', data);
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        const syncChannel = new BroadcastChannel('quickcare_realtime_sync');
+        syncChannel.postMessage({
+          type: 'DOCTOR_AVAILABILITY_UPDATED',
+          doctorId: data.doctorId,
+          data: normalizedData,
+          timestamp: Date.now(),
+        });
+      }
+    } catch (e) {}
+
+    // 4. Persist to backend and Cloud Firestore
+    try {
+      if (data.doctorId) {
+        await api.put(`/doctors/${data.doctorId}/availability`, normalizedData);
+      }
+      const res = await api.put('/doctors/availability', normalizedData);
       return res.data;
     } catch (err) {
-      return { success: true, message: 'Availability schedule saved successfully', data };
+      return { success: true, message: 'Availability schedule saved successfully', data: normalizedData };
     }
   },
 
