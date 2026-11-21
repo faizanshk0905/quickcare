@@ -1,7 +1,17 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { HeartPulse, Mail, Lock, AlertCircle, ArrowRight } from 'lucide-react';
+import {
+  HeartPulse,
+  Mail,
+  Lock,
+  AlertCircle,
+  ArrowRight,
+  User,
+  Stethoscope,
+  ShieldCheck,
+  RotateCcw,
+} from 'lucide-react';
 
 export const Login = () => {
   const navigate = useNavigate();
@@ -10,8 +20,33 @@ export const Login = () => {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [selectedRole, setSelectedRole] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Handle role option click (Quick-switch between Patient, Doctor, Admin)
+  const handleSelectRole = (roleType) => {
+    setError('');
+    setSelectedRole(roleType);
+
+    if (roleType === 'PATIENT') {
+      setEmail('patient@quickcare.com');
+      setPassword('password123');
+    } else if (roleType === 'DOCTOR') {
+      setEmail('doctor@quickcare.com');
+      setPassword('password123');
+    } else if (roleType === 'ADMIN') {
+      setEmail('admin@quickcare.com');
+      setPassword('admin123');
+    }
+  };
+
+  const handleClear = () => {
+    setEmail('');
+    setPassword('');
+    setSelectedRole(null);
+    setError('');
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -59,6 +94,64 @@ export const Login = () => {
 
         {/* Form Card */}
         <div className="bg-white p-8 rounded-3xl border border-slate-200/80 shadow-xl space-y-5">
+          {/* Role Options: Patient, Doctor, Admin */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs font-bold text-slate-700">
+              <span>Choose Account Type</span>
+              {(email || password || selectedRole) && (
+                <button
+                  type="button"
+                  onClick={handleClear}
+                  className="text-[11px] font-semibold text-slate-400 hover:text-slate-700 flex items-center gap-1 transition cursor-pointer"
+                >
+                  <RotateCcw className="w-3 h-3" /> Clear
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => handleSelectRole('PATIENT')}
+                className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                  selectedRole === 'PATIENT'
+                    ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                    : 'bg-slate-50 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border-slate-200'
+                }`}
+              >
+                <User className="w-3.5 h-3.5" />
+                Patient
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleSelectRole('DOCTOR')}
+                className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                  selectedRole === 'DOCTOR'
+                    ? 'bg-teal-600 text-white border-teal-600 shadow-sm'
+                    : 'bg-slate-50 hover:bg-teal-50 text-slate-700 hover:text-teal-700 border-slate-200'
+                }`}
+              >
+                <Stethoscope className="w-3.5 h-3.5" />
+                Doctor
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleSelectRole('ADMIN')}
+                className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                  selectedRole === 'ADMIN'
+                    ? 'bg-purple-600 text-white border-purple-600 shadow-sm'
+                    : 'bg-slate-50 hover:bg-purple-50 text-slate-700 hover:text-purple-700 border-slate-200'
+                }`}
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                Admin
+              </button>
+            </div>
+          </div>
+
+          {/* Error Alert with direct registration links */}
           {error && (
             <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl text-xs text-rose-800 space-y-2 animate-in fade-in">
               <div className="flex items-start gap-2">
