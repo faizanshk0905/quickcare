@@ -106,6 +106,30 @@ public class AdminService {
         return db.saveDoctor(doc);
     }
 
+    public Patient syncPatientFromFrontend(Map<String, Object> body) {
+        String patientId = body.getOrDefault("patientId", "").toString();
+        String uid       = body.getOrDefault("uid", patientId).toString();
+        if (patientId.isEmpty()) patientId = "pat_" + uid;
+
+        Patient pat = db.findPatientById(patientId).orElse(null);
+        if (pat == null) pat = new Patient();
+
+        if (pat.getPatientId() == null || pat.getPatientId().isEmpty()) pat.setPatientId(patientId);
+        if (pat.getUid()       == null || pat.getUid().isEmpty())       pat.setUid(uid);
+
+        if (body.get("fullName")    != null) pat.setFullName(body.get("fullName").toString());
+        if (body.get("email")       != null) pat.setEmail(body.get("email").toString());
+        if (body.get("phone")       != null) pat.setPhone(body.get("phone").toString());
+        if (body.get("dateOfBirth") != null) pat.setDateOfBirth(body.get("dateOfBirth").toString());
+        if (body.get("gender")      != null) pat.setGender(body.get("gender").toString());
+        if (body.get("address")     != null) pat.setAddress(body.get("address").toString());
+        if (body.get("profileImage") != null) pat.setProfileImage(body.get("profileImage").toString());
+        if (body.get("age") instanceof Number) pat.setAge(((Number) body.get("age")).intValue());
+        pat.setEmailVerified(true);
+
+        return db.savePatient(pat);
+    }
+
     public Doctor verifyDoctor(String doctorId, boolean approve, String feedback) {
         Doctor doctor = db.findDoctorById(doctorId)
                 .orElseThrow(() -> new ResourceNotFoundException("Doctor not found: " + doctorId));

@@ -304,6 +304,47 @@ api.interceptors.response.use(
         }
       } catch (e) {}
 
+      // Sync to Firebase via backend (async, non-blocking)
+      try {
+        if (role === 'PATIENT') {
+          const syncApi = axios.create({ baseURL: baseURL.replace('/api', '') + '/api', headers: { 'Content-Type': 'application/json' } });
+          syncApi.post('/admin/patients/sync', {
+            patientId: `pat_${generatedUid}`,
+            uid: generatedUid,
+            fullName: localUser.fullName,
+            email: localUser.email,
+            phone: localUser.phone || '',
+            dateOfBirth: localUser.dateOfBirth || '',
+            gender: localUser.gender || '',
+            address: localUser.address || '',
+            age: localUser.age || 0,
+            profileImage: '',
+          }).catch(() => {});
+        } else if (role === 'DOCTOR') {
+          const syncApi = axios.create({ baseURL: baseURL.replace('/api', '') + '/api', headers: { 'Content-Type': 'application/json' } });
+          syncApi.post('/admin/doctors/sync', {
+            doctorId: `doc_${generatedUid}`,
+            uid: generatedUid,
+            fullName: payload.fullName || '',
+            email: (payload.email || '').toLowerCase().trim(),
+            phone: payload.phone || '',
+            specialization: payload.specialization || 'General Physician',
+            qualifications: payload.qualification || 'MBBS',
+            medicalRegistrationNumber: payload.medicalRegistrationNumber || '',
+            clinicAddress: payload.clinicAddress || '',
+            consultationFee: Number(payload.consultationFee) || 500,
+            bio: payload.bio || '',
+            verificationStatus: 'PENDING',
+            approvalStatus: 'PENDING',
+            rating: 5.0,
+            reviewCount: 0,
+            workingStartTime: '09:00 AM',
+            workingEndTime: '05:00 PM',
+            slotDurationMinutes: 15,
+          }).catch(() => {});
+        }
+      } catch (e) {}
+
       return Promise.resolve({
         data: {
           success: true,

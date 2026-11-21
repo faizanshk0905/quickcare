@@ -65,6 +65,13 @@ public class AdminController {
         return ResponseEntity.ok(ApiResponse.ok("Doctor synced to Firebase", doctor));
     }
 
+    @PostMapping("/patients/sync")
+    public ResponseEntity<ApiResponse<Patient>> syncPatientToFirebase(
+            @RequestBody Map<String, Object> body) {
+        Patient patient = adminService.syncPatientFromFrontend(body);
+        return ResponseEntity.ok(ApiResponse.ok("Patient synced to Firebase", patient));
+    }
+
     @PutMapping("/users/{userId}/status")
     public ResponseEntity<ApiResponse<User>> updateUserStatus(
             @PathVariable String userId,
