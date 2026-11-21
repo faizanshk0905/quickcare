@@ -236,18 +236,29 @@ export const adminService = {
       console.warn('Failed reading registered users for doctor sync:', e);
     }
 
-    // 3. Try fetching from backend API
+    // 3. Try fetching from backend/Firebase API — this is the source of truth for ALL devices
     let remoteDocs = [];
     try {
       const res = await api.get('/admin/doctors');
       if (res && res.data && Array.isArray(res.data.data || res.data)) {
         remoteDocs = res.data.data || res.data;
+        // Save remote doctors into local so this device's admin sees cross-device registrations
+        if (remoteDocs.length > 0) {
+          const existingLocal = getLocalDoctors();
+          const localMap = new Map(existingLocal.map((d) => [d.doctorId, d]));
+          remoteDocs.forEach((d) => {
+            if (d && d.doctorId && !localMap.has(d.doctorId)) {
+              localMap.set(d.doctorId, d);
+            }
+          });
+          saveLocalDoctors(Array.from(localMap.values()));
+        }
       }
     } catch (err) {
       console.warn('Backend /admin/doctors API offline or starting, serving synchronized roster:', err.message);
     }
 
-    // 4. Merge: Local Doctors (with priority) + Remote Doctors + DEFAULT_DOCTORS
+    // 4. Merge: DEFAULT_DOCTORS < Local Doctors < Remote Firebase (Firebase is source of truth)
     const mergedMap = new Map();
 
     // First add all seed doctors
@@ -255,17 +266,18 @@ export const adminService = {
       mergedMap.set(d.doctorId, { ...d, verificationStatus: d.verificationStatus || 'VERIFIED' });
     });
 
-    // Next merge remote doctors
-    remoteDocs.forEach((d) => {
+    // Next merge local doctors (includes this device's registrations)
+    localDocs.forEach((d) => {
       if (d && d.doctorId) {
         mergedMap.set(d.doctorId, { ...mergedMap.get(d.doctorId), ...d });
       }
     });
 
-    // Finally override with local registered doctors (ensuring newly added / modified doctors are preserved)
-    localDocs.forEach((d) => {
+    // Finally override with remote Firebase doctors — Firebase is source of truth across all devices
+    remoteDocs.forEach((d) => {
       if (d && d.doctorId) {
         const prev = mergedMap.get(d.doctorId) || {};
+        // Keep local isRecentlyAdded/pending flags if remote doesn't have them
         mergedMap.set(d.doctorId, { ...prev, ...d });
       }
     });

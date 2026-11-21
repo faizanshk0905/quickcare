@@ -286,6 +286,32 @@ export const DoctorRegister = () => {
     // INSTANT REAL-TIME DISPATCH: Notify admin immediately (<5ms)
     registerDoctorToSharedRegistry(doctorPayload);
 
+    // CROSS-DEVICE SYNC: Push to Firebase immediately so admin on any device sees this
+    try {
+      await import('../../services/api').then(({ default: api }) =>
+        api.post('/admin/doctors/sync', {
+          doctorId: doctorPayload.doctorId,
+          uid: doctorPayload.uid,
+          fullName: doctorPayload.fullName || '',
+          email: (doctorPayload.email || '').toLowerCase().trim(),
+          phone: doctorPayload.phone || '',
+          specialization: doctorPayload.specialization || 'General Physician',
+          qualifications: doctorPayload.qualification || doctorPayload.qualifications || 'MBBS',
+          medicalRegistrationNumber: doctorPayload.medicalRegistrationNumber || '',
+          clinicAddress: doctorPayload.clinicAddress || '',
+          consultationFee: Number(doctorPayload.consultationFee) || 500,
+          bio: doctorPayload.bio || '',
+          verificationStatus: 'PENDING',
+          approvalStatus: 'PENDING',
+          rating: 5.0,
+          reviewCount: 0,
+          workingStartTime: '09:00 AM',
+          workingEndTime: '05:00 PM',
+          slotDurationMinutes: 15,
+        }).catch(() => {})
+      );
+    } catch (e) {}
+
     try {
       setUploadProgress(95);
       const regRes = await register(doctorPayload);

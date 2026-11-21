@@ -57,7 +57,23 @@ export const PatientRegister = () => {
     };
 
     try {
-      await register(patientPayload);
+      const regRes = await register(patientPayload);
+      // CROSS-DEVICE SYNC: Push patient to Firebase so admin on any device sees them
+      const uid = regRes?.data?.profileId || regRes?.data?.user?.uid || `usr_${Date.now().toString(36)}`;
+      try {
+        const { default: api } = await import('../../services/api');
+        api.post('/admin/patients/sync', {
+          patientId: `pat_${uid}`,
+          uid,
+          fullName: patientPayload.fullName || '',
+          email: (patientPayload.email || '').toLowerCase().trim(),
+          phone: patientPayload.phone || '',
+          dateOfBirth: patientPayload.dateOfBirth || '',
+          gender: patientPayload.gender || '',
+          address: patientPayload.address || '',
+          age: patientPayload.age || 0,
+        }).catch(() => {});
+      } catch (e) {}
       navigate('/patient', { replace: true });
     } catch (err) {
       console.warn('Registration completed with local session:', err.message);
