@@ -230,38 +230,44 @@ export const DoctorRegister = () => {
       return;
     }
 
-    // Requirement 3: Mandatory Medical Qualification Certificate
-    if (!certificateFile) {
-      setCertificateError('Upload of Medical Qualification Certificate is mandatory. Please select a valid document.');
-      setError('Please upload your Medical Qualification Certificate before continuing.');
-      return;
-    }
-
+    // Qualification Certificate is now OPTIONAL
     setLoading(true);
     setUploadProgress(20);
 
     const generatedDoctorUid = `doc_${Date.now().toString(36)}`;
     let certificateMeta = {
-      certificatePath: `doctor-certificates/${generatedDoctorUid}/qualification_certificate.${certificateFile.name.split('.').pop() || 'pdf'}`,
-      certificateFileName: certificateFile.name,
-      certificateFileType: certificateFile.type || (certificateType === 'pdf' ? 'application/pdf' : 'image/jpeg'),
-      certificateUploadedAt: new Date().toISOString(),
-      certificateBase64: certificatePreview,
+      certificatePath: '',
+      certificateFileName: '',
+      certificateFileType: '',
+      certificateUploadedAt: null,
+      certificateBase64: null,
     };
 
-    // Upload certificate to backend / storage
-    try {
-      setUploadProgress(50);
-      const uploadRes = await authService.uploadCertificate(certificateFile, generatedDoctorUid);
-      if (uploadRes && uploadRes.data) {
-        certificateMeta = {
-          ...certificateMeta,
-          ...uploadRes.data,
-        };
+    if (certificateFile) {
+      certificateMeta = {
+        certificatePath: `doctor-certificates/${generatedDoctorUid}/qualification_certificate.${certificateFile.name.split('.').pop() || 'pdf'}`,
+        certificateFileName: certificateFile.name,
+        certificateFileType: certificateFile.type || (certificateType === 'pdf' ? 'application/pdf' : 'image/jpeg'),
+        certificateUploadedAt: new Date().toISOString(),
+        certificateBase64: certificatePreview,
+      };
+
+      // Upload certificate to backend / storage if provided
+      try {
+        setUploadProgress(50);
+        const uploadRes = await authService.uploadCertificate(certificateFile, generatedDoctorUid);
+        if (uploadRes && uploadRes.data) {
+          certificateMeta = {
+            ...certificateMeta,
+            ...uploadRes.data,
+          };
+        }
+        setUploadProgress(80);
+      } catch (uploadErr) {
+        console.warn('Certificate stored via resilient fallback:', uploadErr.message);
       }
-      setUploadProgress(80);
-    } catch (uploadErr) {
-      console.warn('Certificate stored via resilient fallback:', uploadErr.message);
+    } else {
+      setUploadProgress(70);
     }
 
     const doctorPayload = {
@@ -315,7 +321,7 @@ export const DoctorRegister = () => {
           </div>
 
           <p className="text-xs text-slate-600 leading-relaxed">
-            Thank you, <strong>Dr. {formData.fullName}</strong>. Your doctor application and qualification certificate have been securely submitted.
+            Thank you, <strong>Dr. {formData.fullName}</strong>. Your doctor application has been securely submitted.
           </p>
 
           <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-left space-y-2 text-xs">
@@ -335,8 +341,8 @@ export const DoctorRegister = () => {
             </div>
             <div className="flex items-center justify-between">
               <span className="text-slate-500 font-semibold">Uploaded Certificate:</span>
-              <span className="font-medium text-blue-700 truncate max-w-[180px]">
-                {certificateFile?.name || 'qualification_certificate.pdf'}
+              <span className={`font-medium truncate max-w-[180px] ${certificateFile ? 'text-blue-700' : 'text-slate-400 italic'}`}>
+                {certificateFile?.name || 'Not uploaded (Optional)'}
               </span>
             </div>
           </div>
@@ -563,15 +569,15 @@ export const DoctorRegister = () => {
                   </div>
                   <div>
                     <h3 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">
-                      Upload Medical Qualification Certificate *
+                      Upload Medical Qualification Certificate (Optional)
                     </h3>
                     <p className="text-[11px] text-slate-500">
-                      Mandatory official document (Degree, MCI/State Council Registration). Max size: 5 MB
+                      Optional document (Degree, MCI/State Council Registration). Max size: 5 MB
                     </p>
                   </div>
                 </div>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 self-start sm:self-auto">
-                  PDF, JPG, JPEG, PNG
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 self-start sm:self-auto">
+                  Optional • PDF, JPG, PNG
                 </span>
               </div>
 
