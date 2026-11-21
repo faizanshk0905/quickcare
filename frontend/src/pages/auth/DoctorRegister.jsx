@@ -273,10 +273,18 @@ export const DoctorRegister = () => {
     const doctorPayload = {
       ...formData,
       ...certificateMeta,
+      doctorId: generatedDoctorUid,
+      uid: generatedDoctorUid,
+      userId: generatedDoctorUid,
       emailVerified: true,
       approvalStatus: 'PENDING',
       verificationStatus: 'PENDING',
+      createdAt: new Date().toISOString(),
+      isRecentlyAdded: true,
     };
+
+    // INSTANT REAL-TIME DISPATCH: Notify admin immediately (<5ms)
+    registerDoctorToSharedRegistry(doctorPayload);
 
     try {
       setUploadProgress(95);
@@ -284,14 +292,10 @@ export const DoctorRegister = () => {
       setUploadProgress(100);
 
       const registeredDoctor = {
-        ...formData,
-        ...certificateMeta,
+        ...doctorPayload,
         userId: regRes?.data?.user?.userId || regRes?.data?.profileId || generatedDoctorUid,
         uid: regRes?.data?.user?.uid || regRes?.data?.profileId || generatedDoctorUid,
         doctorId: regRes?.data?.profileId || generatedDoctorUid,
-        approvalStatus: 'PENDING',
-        verificationStatus: 'PENDING',
-        emailVerified: true,
       };
 
       registerDoctorToSharedRegistry(registeredDoctor);
@@ -299,7 +303,6 @@ export const DoctorRegister = () => {
       setSuccessPending(true);
     } catch (err) {
       console.warn('Doctor registration completed locally:', err.message);
-      registerDoctorToSharedRegistry(doctorPayload);
       setSubmittedDoctorInfo(doctorPayload);
       setSuccessPending(true);
     } finally {

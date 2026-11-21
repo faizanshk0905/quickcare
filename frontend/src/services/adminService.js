@@ -4,6 +4,27 @@ import { DEFAULT_DOCTORS } from './doctorService';
 const DOCTORS_STORAGE_KEY = 'quickcare_shared_doctors';
 const USERS_STORAGE_KEY = 'quickcare_all_registered_users';
 
+// Cross-tab broadcast channel for instantaneous real-time sync (< 5ms)
+let syncChannel = null;
+try {
+  if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+    syncChannel = new BroadcastChannel('quickcare_realtime_sync');
+  }
+} catch (e) {}
+
+export const broadcastDoctorUpdate = (payload = {}) => {
+  if (typeof window !== 'undefined') {
+    // 1. Same-window custom event
+    window.dispatchEvent(new CustomEvent('quickcare_doctors_updated', { detail: payload }));
+    // 2. Cross-tab BroadcastChannel (< 5ms)
+    try {
+      if (syncChannel) {
+        syncChannel.postMessage({ type: 'DOCTORS_UPDATED', ...payload, timestamp: Date.now() });
+      }
+    } catch (e) {}
+  }
+};
+
 export const getLocalDoctors = () => {
   try {
     const raw = localStorage.getItem(DOCTORS_STORAGE_KEY);
@@ -16,12 +37,79 @@ export const getLocalDoctors = () => {
 export const saveLocalDoctors = (list) => {
   try {
     localStorage.setItem(DOCTORS_STORAGE_KEY, JSON.stringify(list));
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('quickcare_doctors_updated'));
-    }
+    localStorage.setItem('quickcare_doctor_last_updated', Date.now().toString());
+    broadcastDoctorUpdate({ count: list.length });
   } catch (e) {
     console.error('Failed to save doctors locally:', e);
   }
+};
+
+// Returns synchronous, sorted doctor list (including pending approvals) with 0ms delay
+export const getImmediateDoctorsList = () => {
+  const localDocs = getLocalDoctors();
+
+  try {
+    const rawUsers = localStorage.getItem(USERS_STORAGE_KEY);
+    if (rawUsers) {
+      const users = JSON.parse(rawUsers);
+      users.forEach((u) => {
+        if (u && (u.role || '').toUpperCase() === 'DOCTOR') {
+          const normEmail = (u.email || '').toLowerCase().trim();
+          const exists = localDocs.some((d) => (d.email || '').toLowerCase().trim() === normEmail);
+          if (!exists) {
+            const uid = u.userId || u.uid || `usr_${Date.now().toString(36)}`;
+            const doctorId = u.doctorId || (uid.startsWith('doc_') ? uid : `doc_${uid}`);
+            localDocs.unshift({
+              doctorId,
+              uid,
+              fullName: (u.fullName || 'Doctor').startsWith('Dr.') ? u.fullName : `Dr. ${u.fullName || 'Doctor'}`,
+              email: normEmail,
+              phone: u.phone || '',
+              gender: u.gender || 'Female',
+              specialization: u.specialization || 'General Physician',
+              qualification: u.qualification || 'MBBS',
+              experience: Number(u.experience) || 5,
+              medicalRegistrationNumber: u.medicalRegistrationNumber || 'REG-PENDING',
+              consultationFee: Number(u.consultationFee) || 500,
+              workingHours: u.workingHours || '09:00 AM - 05:00 PM',
+              workingStartTime: u.workingStartTime || '09:00 AM',
+              workingEndTime: u.workingEndTime || '05:00 PM',
+              clinicAddress: u.clinicAddress || 'QuickCare Medical Center',
+              bio: u.bio || 'Consultant practitioner at QuickCare Healthcare',
+              verificationStatus: u.verificationStatus || 'PENDING',
+              approvalStatus: u.approvalStatus || 'PENDING',
+              status: u.status || 'ACTIVE',
+              isRecentlyAdded: true,
+              createdAt: u.createdAt || new Date().toISOString(),
+            });
+          }
+        }
+      });
+    }
+  } catch (e) {}
+
+  const mergedMap = new Map();
+  DEFAULT_DOCTORS.forEach((d) => {
+    mergedMap.set(d.doctorId, { ...d, verificationStatus: d.verificationStatus || 'VERIFIED' });
+  });
+
+  localDocs.forEach((d) => {
+    if (d && d.doctorId) {
+      const prev = mergedMap.get(d.doctorId) || {};
+      mergedMap.set(d.doctorId, { ...prev, ...d });
+    }
+  });
+
+  const allDoctors = Array.from(mergedMap.values());
+  allDoctors.sort((a, b) => {
+    if (a.verificationStatus === 'PENDING' && b.verificationStatus !== 'PENDING') return -1;
+    if (b.verificationStatus === 'PENDING' && a.verificationStatus !== 'PENDING') return 1;
+    if (a.isRecentlyAdded && !b.isRecentlyAdded) return -1;
+    if (b.isRecentlyAdded && !a.isRecentlyAdded) return 1;
+    return (b.createdAt || '').localeCompare(a.createdAt || '');
+  });
+
+  return allDoctors;
 };
 
 // Helper to register or sync a doctor into shared doctors store
@@ -78,7 +166,21 @@ export const registerDoctorToSharedRegistry = (doctorData) => {
 };
 
 export const adminService = {
+  getImmediateDoctors() {
+    return getImmediateDoctorsList();
+  },
+
   async getDashboardStats() {
+    const doctors = getImmediateDoctorsList();
+    const verifiedCount = doctors.filter((d) => d.verificationStatus === 'VERIFIED').length;
+    const pendingCount = doctors.filter((d) => d.verificationStatus === 'PENDING').length;
+
+    const specStats = {};
+    doctors.forEach((d) => {
+      const spec = d.specialization || 'General Physician';
+      specStats[spec] = (specStats[spec] || 0) + 1;
+    });
+
     let remoteStats = null;
     try {
       const res = await api.get('/admin/dashboard');
@@ -88,17 +190,6 @@ export const adminService = {
     } catch (err) {
       console.warn('Backend dashboard stats offline, computing synchronized statistics:', err.message);
     }
-
-    const docsRes = await this.getAllDoctors();
-    const doctors = docsRes?.data || [];
-    const verifiedCount = doctors.filter((d) => d.verificationStatus === 'VERIFIED').length;
-    const pendingCount = doctors.filter((d) => d.verificationStatus === 'PENDING').length;
-
-    const specStats = {};
-    doctors.forEach((d) => {
-      const spec = d.specialization || 'General Physician';
-      specStats[spec] = (specStats[spec] || 0) + 1;
-    });
 
     return {
       success: true,

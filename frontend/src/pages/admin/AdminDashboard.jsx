@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { adminService } from '../../services/adminService';
+import { adminService, getImmediateDoctorsList } from '../../services/adminService';
 import { appointmentService } from '../../services/appointmentService';
 import {
   Users,
   Stethoscope,
   ShieldCheck,
+  ShieldAlert,
   Clock,
   Calendar,
   CheckCircle,
@@ -180,20 +181,58 @@ export const AdminDashboard = () => {
   };
 
   useEffect(() => {
+    // 1. Instant synchronous doctor sync (0ms latency)
+    const syncImmediateDoctors = () => {
+      try {
+        const immediateDocs = getImmediateDoctorsList();
+        setAllDoctors(immediateDocs);
+        const pending = immediateDocs.filter((d) => d.verificationStatus === 'PENDING');
+        setPendingDoctors(pending);
+        setStats((prev) => (prev ? {
+          ...prev,
+          pendingDoctorApprovals: pending.length,
+          totalDoctors: immediateDocs.length,
+          verifiedDoctors: immediateDocs.filter((d) => d.verificationStatus === 'VERIFIED').length,
+        } : prev));
+      } catch (e) {}
+    };
+
+    // Load instantly on mount
+    syncImmediateDoctors();
     fetchStats(true);
 
+    // Fast interval polling (every 1.5 seconds)
     const interval = setInterval(() => {
+      syncImmediateDoctors();
       fetchStats(false);
-    }, 3000);
+    }, 1500);
 
-    const handleDoctorUpdate = () => fetchStats(false);
+    const handleDoctorUpdate = () => {
+      syncImmediateDoctors();
+      fetchStats(false);
+    };
+
     window.addEventListener('quickcare_doctors_updated', handleDoctorUpdate);
     window.addEventListener('storage', handleDoctorUpdate);
+
+    let bc = null;
+    try {
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        bc = new BroadcastChannel('quickcare_realtime_sync');
+        bc.onmessage = (msg) => {
+          if (msg.data?.type === 'DOCTORS_UPDATED') {
+            syncImmediateDoctors();
+            fetchStats(false);
+          }
+        };
+      }
+    } catch (e) {}
 
     return () => {
       clearInterval(interval);
       window.removeEventListener('quickcare_doctors_updated', handleDoctorUpdate);
       window.removeEventListener('storage', handleDoctorUpdate);
+      if (bc) bc.close();
     };
   }, []);
 
@@ -484,6 +523,34 @@ export const AdminDashboard = () => {
                 </button>
               </div>
             </div>
+
+            {/* Real-time Pending Doctor Verification Alert Banner */}
+            {pendingDoctors.length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-3xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm animate-in fade-in">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs animate-pulse">
+                    <ShieldAlert className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs sm:text-sm font-extrabold text-amber-950 uppercase tracking-wider flex items-center gap-2">
+                      <span>{pendingDoctors.length} New Doctor Application{pendingDoctors.length > 1 ? 's' : ''} Received</span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] bg-amber-200 text-amber-800 font-bold">Action Required</span>
+                    </h4>
+                    <p className="text-[11px] sm:text-xs text-amber-800/90 mt-0.5">
+                      New medical doctors have completed registration and are awaiting qualification review before appearing to patients.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('doctors')}
+                  className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-xs transition flex items-center justify-center gap-2 shrink-0 cursor-pointer active:scale-95"
+                >
+                  <span>Review Applications ({pendingDoctors.length})</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
 
             {/* KPI Stats Grid */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">

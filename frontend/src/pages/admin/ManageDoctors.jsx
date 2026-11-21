@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { adminService } from '../../services/adminService';
+import { adminService, getImmediateDoctorsList } from '../../services/adminService';
 import {
   Stethoscope,
   Search,
@@ -60,20 +60,45 @@ export const ManageDoctors = () => {
   };
 
   useEffect(() => {
+    // 1. Instant synchronous load (0ms delay)
+    try {
+      const immediate = getImmediateDoctorsList();
+      setDoctors(immediate);
+    } catch (e) {}
+
     fetchDoctors(true);
 
-    const interval = setInterval(() => {
+    const syncDoctors = () => {
+      try {
+        const immediate = getImmediateDoctorsList();
+        setDoctors(immediate);
+      } catch (e) {}
       fetchDoctors(false);
-    }, 2500);
+    };
 
-    const handleDoctorUpdate = () => fetchDoctors(false);
+    const interval = setInterval(syncDoctors, 1500);
+
+    const handleDoctorUpdate = () => syncDoctors();
     window.addEventListener('quickcare_doctors_updated', handleDoctorUpdate);
     window.addEventListener('storage', handleDoctorUpdate);
+
+    let bc = null;
+    try {
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        bc = new BroadcastChannel('quickcare_realtime_sync');
+        bc.onmessage = (msg) => {
+          if (msg.data?.type === 'DOCTORS_UPDATED') {
+            syncDoctors();
+          }
+        };
+      }
+    } catch (e) {}
 
     return () => {
       clearInterval(interval);
       window.removeEventListener('quickcare_doctors_updated', handleDoctorUpdate);
       window.removeEventListener('storage', handleDoctorUpdate);
+      if (bc) bc.close();
     };
   }, []);
 
