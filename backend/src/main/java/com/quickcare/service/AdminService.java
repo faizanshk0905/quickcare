@@ -10,6 +10,7 @@ import com.quickcare.repository.FirestoreDatabaseService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
@@ -67,6 +68,42 @@ public class AdminService {
         stats.setMonthlyAppointments(monthly);
 
         return stats;
+    }
+
+    public Doctor syncDoctorFromFrontend(Map<String, Object> body) {
+        String doctorId = body.getOrDefault("doctorId", "").toString();
+        String uid      = body.getOrDefault("uid", doctorId).toString();
+
+        // Check if already in Firestore (in-memory mirror)
+        Doctor existing = db.findDoctorById(doctorId).orElse(null);
+        if (existing == null) existing = db.findDoctorByUid(uid).orElse(null);
+
+        Doctor doc = existing != null ? existing : new Doctor();
+        if (doc.getDoctorId() == null || doc.getDoctorId().isEmpty()) doc.setDoctorId(doctorId);
+        if (doc.getUid()      == null || doc.getUid().isEmpty())      doc.setUid(uid);
+
+        if (body.get("fullName")   != null) doc.setFullName(body.get("fullName").toString());
+        if (body.get("email")      != null) doc.setEmail(body.get("email").toString());
+        if (body.get("phone")      != null) doc.setPhone(body.get("phone").toString());
+        if (body.get("specialization") != null) doc.setSpecialization(body.get("specialization").toString());
+        if (body.get("qualifications") != null) doc.setQualification(body.get("qualifications").toString());
+        if (body.get("medicalRegistrationNumber") != null) doc.setMedicalRegistrationNumber(body.get("medicalRegistrationNumber").toString());
+        if (body.get("city")           != null) doc.setClinicAddress(body.get("city").toString());
+        if (body.get("clinicAddress")  != null) doc.setClinicAddress(body.get("clinicAddress").toString());
+        if (body.get("bio")            != null) doc.setBio(body.get("bio").toString());
+        if (body.get("profileImage")   != null) doc.setProfileImage(body.get("profileImage").toString());
+        if (body.get("verificationStatus") != null) doc.setVerificationStatus(body.get("verificationStatus").toString());
+        if (body.get("approvalStatus")     != null) doc.setApprovalStatus(body.get("approvalStatus").toString());
+        if (body.get("rejectionReason")    != null) doc.setRejectionReason(body.get("rejectionReason").toString());
+        if (body.get("consultationFee") instanceof Number) doc.setConsultationFee(((Number) body.get("consultationFee")).doubleValue());
+        if (body.get("rating")          instanceof Number) doc.setRating(((Number) body.get("rating")).doubleValue());
+        if (body.get("reviewCount")     instanceof Number) doc.setReviewCount(((Number) body.get("reviewCount")).intValue());
+        if (body.get("slotDurationMinutes") instanceof Number) doc.setSlotDurationMinutes(((Number) body.get("slotDurationMinutes")).intValue());
+        if (body.get("workingStartTime") != null) doc.setWorkingStartTime(body.get("workingStartTime").toString());
+        if (body.get("workingEndTime")   != null) doc.setWorkingEndTime(body.get("workingEndTime").toString());
+        doc.setVideoConsultationAvailable(true);
+
+        return db.saveDoctor(doc);
     }
 
     public Doctor verifyDoctor(String doctorId, boolean approve, String feedback) {

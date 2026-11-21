@@ -408,7 +408,42 @@ export const adminService = {
       window.dispatchEvent(new CustomEvent('quickcare_doctors_updated', { detail: { doctorId, status: newStatus } }));
     }
 
-    // Call backend asynchronously
+    // Push full doctor data to backend/Firebase (so it appears in Firestore)
+    try {
+      if (updatedDoctor) {
+        // First, register the doctor in backend Firestore via /auth/register-doctor-sync
+        // so that Firebase has the record before we try to verify it
+        await api.post('/admin/doctors/sync', {
+          doctorId: updatedDoctor.doctorId || updatedDoctor.uid,
+          uid: updatedDoctor.uid || updatedDoctor.doctorId,
+          fullName: updatedDoctor.fullName || updatedDoctor.name || '',
+          email: updatedDoctor.email || '',
+          phone: updatedDoctor.phone || '',
+          specialization: updatedDoctor.specialization || 'General Physician',
+          qualifications: updatedDoctor.qualifications || '',
+          medicalRegistrationNumber: updatedDoctor.medicalRegistrationNumber || '',
+          city: updatedDoctor.city || '',
+          clinicAddress: updatedDoctor.clinicAddress || '',
+          consultationFee: updatedDoctor.consultationFee || 500,
+          bio: updatedDoctor.bio || '',
+          verificationStatus: newStatus,
+          approvalStatus: newStatus,
+          rejectionReason: approve ? '' : (feedback || ''),
+          verifiedAt: updatedDoctor.verifiedAt || new Date().toISOString(),
+          createdAt: updatedDoctor.createdAt || new Date().toISOString(),
+          rating: updatedDoctor.rating || 5.0,
+          reviewCount: updatedDoctor.reviewCount || 0,
+          profileImage: updatedDoctor.profileImage || '',
+          availableDays: updatedDoctor.availableDays || ['Monday','Tuesday','Wednesday','Thursday','Friday'],
+          workingStartTime: updatedDoctor.workingStartTime || '09:00 AM',
+          workingEndTime: updatedDoctor.workingEndTime || '05:00 PM',
+          slotDurationMinutes: updatedDoctor.slotDurationMinutes || 15,
+          videoConsultationAvailable: true,
+        }).catch(() => {});
+      }
+    } catch (e) {}
+
+    // Call backend verify endpoint
     try {
       const res = await api.put(`/admin/doctors/${doctorId}/verify`, {
         approve,
