@@ -158,8 +158,16 @@ export const DoctorDashboard = () => {
       if (resolvedDoc.availableDays && resolvedDoc.availableDays.length > 0) {
         setAvailableDays(resolvedDoc.availableDays);
       }
-      if (resolvedDoc.workingStartTime) setWorkingStartTime(resolvedDoc.workingStartTime);
-      if (resolvedDoc.workingEndTime) setWorkingEndTime(resolvedDoc.workingEndTime);
+      if (resolvedDoc.workingStartTime) {
+        setWorkingStartTime(resolvedDoc.workingStartTime);
+      } else if (resolvedDoc.workingHours && resolvedDoc.workingHours.includes('-')) {
+        setWorkingStartTime(resolvedDoc.workingHours.split('-')[0].trim());
+      }
+      if (resolvedDoc.workingEndTime) {
+        setWorkingEndTime(resolvedDoc.workingEndTime);
+      } else if (resolvedDoc.workingHours && resolvedDoc.workingHours.includes('-')) {
+        setWorkingEndTime(resolvedDoc.workingHours.split('-')[1].trim());
+      }
       if (resolvedDoc.breakStartTime) setBreakStartTime(resolvedDoc.breakStartTime);
       if (resolvedDoc.breakEndTime) setBreakEndTime(resolvedDoc.breakEndTime);
       if (resolvedDoc.slotDurationMinutes) setSlotDuration(resolvedDoc.slotDurationMinutes);
@@ -386,12 +394,14 @@ export const DoctorDashboard = () => {
     setAvailabilitySuccess('');
     try {
       const cleanWorkingHours = `${workingStartTime} - ${workingEndTime}`;
+      const docId = doctor?.doctorId || user?.doctorId || user?.userId || user?.uid || 'doc_001';
       const updatePayload = {
         ...doctor,
-        doctorId: doctor?.doctorId,
+        doctorId: docId,
         uid: doctor?.uid || user?.userId || user?.uid,
         email: doctor?.email || user?.email,
         availableDays,
+        workingDays: availableDays,
         workingStartTime,
         workingEndTime,
         breakStartTime,

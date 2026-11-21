@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 
 @Component
 public class DataLoader implements CommandLineRunner {
@@ -248,6 +249,12 @@ public class DataLoader implements CommandLineRunner {
                 "Dr. Priya Deshmukh has issued your digital prescription for Mild Hyperlipidemia.", "PRESCRIPTION_ISSUED", "rx_101");
         db.saveNotification(n2);
 
+        // Demo Doctor standard login alias
+        User docDemoLogin = new User("usr_doc_01", "Dr. Priya Deshmukh", "doctor@quickcare.com", "+91 98200 44332", "DOCTOR");
+        docDemoLogin.setPassword(passwordEncoder.encode("doctor123"));
+        docDemoLogin.setAccountStatus("ACTIVE");
+        db.saveUser(docDemoLogin);
+
         logger.info("QuickCare sample healthcare data seeded successfully!");
     }
 
@@ -255,63 +262,83 @@ public class DataLoader implements CommandLineRunner {
                               String docId, String spec, String qual, int exp,
                               String regNo, double fee, String status, double rating, int reviews,
                               String bio, String clinic, String img, String gender) {
-        User u = new User(uid, name, email, phone, "DOCTOR");
+        User u = db.findUserByUid(uid).orElse(new User(uid, name, email, phone, "DOCTOR"));
         u.setPassword(passwordEncoder.encode("doctor123"));
-        u.setAccountStatus("VERIFIED".equals(status) ? "ACTIVE" : "PENDING");
-        u.setProfileImage(img);
+        if (u.getAccountStatus() == null) {
+            u.setAccountStatus("VERIFIED".equals(status) ? "ACTIVE" : "PENDING");
+        }
+        if (u.getProfileImage() == null) {
+            u.setProfileImage(img);
+        }
         db.saveUser(u);
 
-        Doctor d = new Doctor();
+        // Check if doctor profile already exists in DB (or synced from Cloud Firestore)
+        Optional<Doctor> existingDocOpt = db.findDoctorById(docId).or(() -> db.findDoctorByUid(uid));
+        Doctor d = existingDocOpt.orElse(new Doctor());
         d.setDoctorId(docId);
         d.setUid(uid);
-        d.setFullName(name);
-        d.setEmail(email);
-        d.setPhone(phone);
-        d.setGender(gender);
-        d.setSpecialization(spec);
-        d.setQualification(qual);
-        d.setExperience(exp);
-        d.setMedicalRegistrationNumber(regNo);
-        d.setConsultationFee(fee);
-        d.setVerificationStatus(status);
-        d.setRating(rating);
-        d.setReviewCount(reviews);
-        d.setBio(bio);
-        d.setClinicAddress(clinic);
-        d.setProfileImage(img);
-        d.setWorkingHours("09:00 AM - 05:00 PM");
-        d.setWorkingStartTime("09:00 AM");
-        d.setWorkingEndTime("05:00 PM");
-        d.setBreakStartTime("01:00 PM");
-        d.setBreakEndTime("02:00 PM");
-        d.setSlotDurationMinutes(15);
-        d.setTimezone("Asia/Kolkata");
-        d.setOnlineStatus("AVAILABLE_FOR_VIDEO");
+        if (d.getFullName() == null || d.getFullName().trim().isEmpty()) d.setFullName(name);
+        if (d.getEmail() == null || d.getEmail().trim().isEmpty()) d.setEmail(email);
+        if (d.getPhone() == null || d.getPhone().trim().isEmpty()) d.setPhone(phone);
+        if (d.getGender() == null || d.getGender().trim().isEmpty()) d.setGender(gender);
+        if (d.getSpecialization() == null || d.getSpecialization().trim().isEmpty()) d.setSpecialization(spec);
+        if (d.getQualification() == null || d.getQualification().trim().isEmpty()) d.setQualification(qual);
+        if (d.getExperience() <= 0) d.setExperience(exp);
+        if (d.getMedicalRegistrationNumber() == null || d.getMedicalRegistrationNumber().trim().isEmpty()) d.setMedicalRegistrationNumber(regNo);
+        if (d.getConsultationFee() <= 0) d.setConsultationFee(fee);
+        if (d.getVerificationStatus() == null || d.getVerificationStatus().trim().isEmpty()) d.setVerificationStatus(status);
+        if (d.getRating() <= 0) d.setRating(rating);
+        if (d.getReviewCount() <= 0) d.setReviewCount(reviews);
+        if (d.getBio() == null || d.getBio().trim().isEmpty()) d.setBio(bio);
+        if (d.getClinicAddress() == null || d.getClinicAddress().trim().isEmpty()) d.setClinicAddress(clinic);
+        if (d.getProfileImage() == null || d.getProfileImage().trim().isEmpty()) d.setProfileImage(img);
+
+        // DO NOT overwrite doctor's custom schedule if already configured!
+        if (d.getWorkingHours() == null || d.getWorkingHours().trim().isEmpty()) {
+            d.setWorkingHours("09:00 AM - 05:00 PM");
+        }
+        if (d.getWorkingStartTime() == null || d.getWorkingStartTime().trim().isEmpty()) {
+            d.setWorkingStartTime("09:00 AM");
+        }
+        if (d.getWorkingEndTime() == null || d.getWorkingEndTime().trim().isEmpty()) {
+            d.setWorkingEndTime("05:00 PM");
+        }
+        if (d.getBreakStartTime() == null || d.getBreakStartTime().trim().isEmpty()) {
+            d.setBreakStartTime("01:00 PM");
+        }
+        if (d.getBreakEndTime() == null || d.getBreakEndTime().trim().isEmpty()) {
+            d.setBreakEndTime("02:00 PM");
+        }
+        if (d.getSlotDurationMinutes() <= 0) {
+            d.setSlotDurationMinutes(15);
+        }
+        if (d.getTimezone() == null || d.getTimezone().trim().isEmpty()) {
+            d.setTimezone("Asia/Kolkata");
+        }
+        if (d.getOnlineStatus() == null || d.getOnlineStatus().trim().isEmpty()) {
+            d.setOnlineStatus("AVAILABLE_FOR_VIDEO");
+        }
         d.setVideoConsultationAvailable(true);
-        d.setAvailableDays(Arrays.asList("Monday", "Tuesday", "Wednesday", "Thursday", "Friday"));
+        if (d.getAvailableDays() == null || d.getAvailableDays().isEmpty()) {
+            d.setAvailableDays(Arrays.asList("Monday", "Tuesday", "Wednesday", "Thursday", "Friday"));
+        }
         db.saveDoctor(d);
 
-        // Populate 15-minute availability slots for next 7 days (excluding break 1-2 PM)
-        List<String> slots = Arrays.asList(
-                "09:00 AM", "09:15 AM", "09:30 AM", "09:45 AM",
-                "10:00 AM", "10:15 AM", "10:30 AM", "10:45 AM",
-                "11:00 AM", "11:15 AM", "11:30 AM", "11:45 AM",
-                "12:00 PM", "12:15 PM", "12:30 PM", "12:45 PM",
-                "02:00 PM", "02:15 PM", "02:30 PM", "02:45 PM",
-                "03:00 PM", "03:15 PM", "03:30 PM", "03:45 PM",
-                "04:00 PM", "04:15 PM", "04:30 PM", "04:45 PM"
-        );
+        // Populate 15-minute availability slots only if not already configured for future dates
         LocalDate start = LocalDate.now();
         for (int i = 0; i < 7; i++) {
-            DoctorAvailability da = new DoctorAvailability(
-                    d.getDoctorId() + "_" + start.plusDays(i),
-                    d.getDoctorId(),
-                    start.plusDays(i).toString(),
-                    new java.util.ArrayList<>(slots)
-            );
-            da.setWorkingHours(d.getWorkingHours());
-            da.setSlotDurationMinutes(15);
-            db.saveAvailability(da);
+            String dateStr = start.plusDays(i).toString();
+            if (db.findAvailability(d.getDoctorId(), dateStr).isEmpty()) {
+                DoctorAvailability da = new DoctorAvailability(
+                        d.getDoctorId() + "_" + dateStr,
+                        d.getDoctorId(),
+                        dateStr,
+                        new java.util.ArrayList<>()
+                );
+                da.setWorkingHours(d.getWorkingHours());
+                da.setSlotDurationMinutes(d.getSlotDurationMinutes() > 0 ? d.getSlotDurationMinutes() : 15);
+                db.saveAvailability(da);
+            }
         }
     }
 }

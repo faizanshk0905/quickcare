@@ -61,6 +61,10 @@ public class DoctorService {
         if (doctorId == null) {
             throw new ResourceNotFoundException("Doctor ID is null");
         }
+        if ("usr_doc_quickcare".equals(doctorId) || "doctor@quickcare.com".equalsIgnoreCase(doctorId) || "demo_doctor_uid".equals(doctorId)) {
+            Optional<Doctor> priya = db.findDoctorById("doc_001").or(() -> db.findDoctorByUid("usr_doc_01"));
+            if (priya.isPresent()) return priya.get();
+        }
         return db.findDoctorById(doctorId)
                 .or(() -> db.findDoctorByUid(doctorId))
                 .or(() -> doctorId.startsWith("doc_") ? db.findDoctorById(doctorId.substring(4)) : Optional.empty())
@@ -68,7 +72,12 @@ public class DoctorService {
     }
 
     public Doctor getDoctorByUid(String uid) {
+        if ("usr_doc_quickcare".equals(uid) || "usr_doc_01".equals(uid) || "demo_doctor_uid".equals(uid) || "doctor@quickcare.com".equalsIgnoreCase(uid)) {
+            Optional<Doctor> priya = db.findDoctorById("doc_001").or(() -> db.findDoctorByUid("usr_doc_01"));
+            if (priya.isPresent()) return priya.get();
+        }
         return db.findDoctorByUid(uid)
+                .or(() -> db.findDoctorById(uid))
                 .orElseThrow(() -> new ResourceNotFoundException("Doctor profile not found for user: " + uid));
     }
 
@@ -155,8 +164,18 @@ public class DoctorService {
         }
 
         // 3. Working Hours & Breaks
-        LocalTime startTime = parseTimeFlexible(doctor.getWorkingStartTime(), LocalTime.of(9, 0));
-        LocalTime endTime = parseTimeFlexible(doctor.getWorkingEndTime(), LocalTime.of(17, 0));
+        String startTimeStr = doctor.getWorkingStartTime();
+        String endTimeStr = doctor.getWorkingEndTime();
+        if ((startTimeStr == null || startTimeStr.trim().isEmpty() || endTimeStr == null || endTimeStr.trim().isEmpty())
+                && doctor.getWorkingHours() != null && doctor.getWorkingHours().contains("-")) {
+            String[] parts = doctor.getWorkingHours().split("-");
+            if (parts.length == 2) {
+                if (startTimeStr == null || startTimeStr.trim().isEmpty()) startTimeStr = parts[0].trim();
+                if (endTimeStr == null || endTimeStr.trim().isEmpty()) endTimeStr = parts[1].trim();
+            }
+        }
+        LocalTime startTime = parseTimeFlexible(startTimeStr, LocalTime.of(9, 0));
+        LocalTime endTime = parseTimeFlexible(endTimeStr, LocalTime.of(17, 0));
         LocalTime breakStart = parseTimeFlexible(doctor.getBreakStartTime(), LocalTime.of(13, 0));
         LocalTime breakEnd = parseTimeFlexible(doctor.getBreakEndTime(), LocalTime.of(14, 0));
 
@@ -268,8 +287,10 @@ public class DoctorService {
 
         // Update Doctor's global schedule configuration if supplied
         boolean doctorConfigUpdated = false;
-        if (req.getWorkingDays() != null && !req.getWorkingDays().isEmpty()) {
-            doctor.setAvailableDays(req.getWorkingDays());
+        List<String> days = req.getAvailableDays() != null && !req.getAvailableDays().isEmpty()
+                ? req.getAvailableDays() : req.getWorkingDays();
+        if (days != null && !days.isEmpty()) {
+            doctor.setAvailableDays(days);
             doctorConfigUpdated = true;
         }
         if (req.getWorkingStartTime() != null && !req.getWorkingStartTime().trim().isEmpty()) {
@@ -303,14 +324,23 @@ public class DoctorService {
         if (req.getWorkingHours() != null && !req.getWorkingHours().trim().isEmpty()) {
             doctor.setWorkingHours(req.getWorkingHours().trim());
             doctorConfigUpdated = true;
+        } else if (doctor.getWorkingStartTime() != null && doctor.getWorkingEndTime() != null) {
+            doctor.setWorkingHours(doctor.getWorkingStartTime() + " - " + doctor.getWorkingEndTime());
+            doctorConfigUpdated = true;
         }
         if (doctorConfigUpdated) {
             db.saveDoctor(doctor);
+            // Pre-calculate and persist upcoming 14 days of availability for this doctor so patient portal sees them immediately!
+            LocalDate today = LocalDate.now();
+            for (int i = 0; i < 14; i++) {
+                String dStr = today.plusDays(i).toString();
+                getOrCreateAvailability(doctor.getDoctorId(), dStr);
+            }
         }
 
         // If specific date requested
         String targetDate = req.getDate() != null ? req.getDate() : LocalDate.now().toString();
-        DoctorAvailability da = getOrCreateAvailability(req.getDoctorId(), targetDate);
+        DoctorAvailability da = getOrCreateAvailability(doctor.getDoctorId(), targetDate);
 
         if (req.getAvailableSlots() != null) {
             da.setAvailableSlots(req.getAvailableSlots());

@@ -316,8 +316,28 @@ export const doctorService = {
 
     const defaultMatch = DEFAULT_DOCTORS.find((d) => d.doctorId === id || d.uid === id) || DEFAULT_DOCTORS[0];
 
-    // Priority merge: DEFAULT_DOCTORS < remoteDoc < localDoc (immediate availability changes take precedence!)
-    const merged = { ...defaultMatch, ...(remoteDoc || {}), ...(localDoc || {}) };
+    // Priority merge: DEFAULT_DOCTORS < localDoc < remoteDoc (remoteDoc from Cloud Firestore is the persistent truth across all devices)
+    const merged = { ...defaultMatch, ...(localDoc || {}), ...(remoteDoc || {}) };
+    if (localDoc && (!remoteDoc || !remoteDoc.workingEndTime)) {
+      if (localDoc.workingEndTime) merged.workingEndTime = localDoc.workingEndTime;
+      if (localDoc.workingStartTime) merged.workingStartTime = localDoc.workingStartTime;
+      if (localDoc.workingHours) merged.workingHours = localDoc.workingHours;
+      if (localDoc.availableDays) merged.availableDays = localDoc.availableDays;
+    }
+
+    // Refresh local cache with latest merged data
+    try {
+      const raw = localStorage.getItem('quickcare_shared_doctors');
+      const list = raw ? JSON.parse(raw) : [];
+      const idx = list.findIndex((d) => d.doctorId === merged.doctorId || d.uid === merged.uid);
+      if (idx >= 0) {
+        list[idx] = { ...list[idx], ...merged };
+      } else {
+        list.push(merged);
+      }
+      localStorage.setItem('quickcare_shared_doctors', JSON.stringify(list));
+    } catch (e) {}
+
     return {
       success: true,
       data: merged,
@@ -640,8 +660,15 @@ export const doctorService = {
 
     // 6. Dynamic slot generation using doctor's exact workingStartTime and workingEndTime
     const duration = Number(targetDoc.slotDurationMinutes) || 15;
-    const startMinutes = parseTimeStringToMinutes(targetDoc.workingStartTime, 9 * 60);
-    const endMinutes = parseTimeStringToMinutes(targetDoc.workingEndTime, 17 * 60);
+    let startStr = targetDoc.workingStartTime;
+    let endStr = targetDoc.workingEndTime;
+    if ((!startStr || !endStr) && targetDoc.workingHours && targetDoc.workingHours.includes('-')) {
+      const parts = targetDoc.workingHours.split('-');
+      if (!startStr) startStr = parts[0]?.trim();
+      if (!endStr) endStr = parts[1]?.trim();
+    }
+    const startMinutes = parseTimeStringToMinutes(startStr, 9 * 60);
+    const endMinutes = parseTimeStringToMinutes(endStr, 17 * 60);
     const breakStart = parseTimeStringToMinutes(targetDoc.breakStartTime, 13 * 60);
     const breakEnd = parseTimeStringToMinutes(targetDoc.breakEndTime, 14 * 60);
 
@@ -705,11 +732,14 @@ export const doctorService = {
   async updateAvailability(data) {
     // 1. Normalize workingDays and availableDays to guarantee cross-compatibility
     const days = data.workingDays || data.availableDays || ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+    const resolvedDocId = data.doctorId || data.uid;
+    const workingHours = data.workingHours || (data.workingStartTime && data.workingEndTime ? `${data.workingStartTime} - ${data.workingEndTime}` : '09:00 AM - 05:00 PM');
     const normalizedData = {
       ...data,
+      doctorId: resolvedDocId,
       workingDays: days,
       availableDays: days,
-      workingHours: data.workingHours || (data.workingStartTime && data.workingEndTime ? `${data.workingStartTime} - ${data.workingEndTime}` : '09:00 AM - 05:00 PM'),
+      workingHours,
     };
 
     // 2. Persist directly to local store
@@ -721,7 +751,7 @@ export const doctorService = {
         const syncChannel = new BroadcastChannel('quickcare_realtime_sync');
         syncChannel.postMessage({
           type: 'DOCTOR_AVAILABILITY_UPDATED',
-          doctorId: data.doctorId,
+          doctorId: resolvedDocId,
           data: normalizedData,
           timestamp: Date.now(),
         });
@@ -730,12 +760,15 @@ export const doctorService = {
 
     // 4. Persist to backend and Cloud Firestore
     try {
-      if (data.doctorId) {
-        await api.put(`/doctors/${data.doctorId}/availability`, normalizedData);
+      if (resolvedDocId) {
+        const res = await api.put(`/doctors/${resolvedDocId}/availability`, normalizedData);
+        return res.data;
+      } else {
+        const res = await api.put('/doctors/availability', normalizedData);
+        return res.data;
       }
-      const res = await api.put('/doctors/availability', normalizedData);
-      return res.data;
     } catch (err) {
+      console.warn('Backend update availability sync note:', err.message);
       return { success: true, message: 'Availability schedule saved successfully', data: normalizedData };
     }
   },

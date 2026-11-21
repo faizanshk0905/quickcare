@@ -79,6 +79,20 @@ public class FirestoreDatabaseService {
                 }
             }
             logger.info("Loaded {} user accounts directly from Cloud Firestore.", userCount);
+
+            // Sync doctorAvailability
+            List<QueryDocumentSnapshot> availList = firestore.collection("doctorAvailability").get().get().getDocuments();
+            int availCount = 0;
+            for (QueryDocumentSnapshot snap : availList) {
+                try {
+                    DoctorAvailability da = snap.toObject(DoctorAvailability.class);
+                    if (da != null && da.getDoctorId() != null && da.getDate() != null) {
+                        availabilities.put(da.getDoctorId() + "_" + da.getDate(), da);
+                        availCount++;
+                    }
+                } catch (Exception ignored) {}
+            }
+            logger.info("Loaded {} doctor availability records directly from Cloud Firestore.", availCount);
         } catch (Exception e) {
             logger.warn("Cloud Firestore initial sync notice: {}", e.getMessage());
         }
@@ -331,6 +345,13 @@ public class FirestoreDatabaseService {
         if (doc != null) {
             return Optional.of(doc);
         }
+        // Also check by UID or doctorId matching in-memory
+        Optional<Doctor> byUid = doctors.values().stream()
+                .filter(d -> doctorId.equals(d.getDoctorId()) || doctorId.equals(d.getUid()))
+                .findFirst();
+        if (byUid.isPresent()) {
+            return byUid;
+        }
         if (firestore != null) {
             try {
                 DocumentSnapshot snap = firestore.collection("doctors").document(doctorId).get().get();
@@ -338,6 +359,22 @@ public class FirestoreDatabaseService {
                 if (parsed != null) {
                     doctors.put(parsed.getDoctorId(), parsed);
                     return Optional.of(parsed);
+                }
+                List<QueryDocumentSnapshot> list = firestore.collection("doctors").whereEqualTo("doctorId", doctorId).get().get().getDocuments();
+                if (!list.isEmpty()) {
+                    parsed = parseDoctorSnapshot(list.get(0));
+                    if (parsed != null) {
+                        doctors.put(parsed.getDoctorId(), parsed);
+                        return Optional.of(parsed);
+                    }
+                }
+                list = firestore.collection("doctors").whereEqualTo("uid", doctorId).get().get().getDocuments();
+                if (!list.isEmpty()) {
+                    parsed = parseDoctorSnapshot(list.get(0));
+                    if (parsed != null) {
+                        doctors.put(parsed.getDoctorId(), parsed);
+                        return Optional.of(parsed);
+                    }
                 }
             } catch (Exception e) {
                 logger.warn("Firestore findDoctorById({}) lookup: {}", doctorId, e.getMessage());
@@ -486,7 +523,26 @@ public class FirestoreDatabaseService {
     }
 
     public Optional<DoctorAvailability> findAvailability(String doctorId, String date) {
-        return Optional.ofNullable(availabilities.get(doctorId + "_" + date));
+        String key = doctorId + "_" + date;
+        DoctorAvailability local = availabilities.get(key);
+        if (local != null) {
+            return Optional.of(local);
+        }
+        if (firestore != null) {
+            try {
+                DocumentSnapshot snap = firestore.collection("doctorAvailability").document(key).get().get();
+                if (snap.exists()) {
+                    DoctorAvailability fromCloud = snap.toObject(DoctorAvailability.class);
+                    if (fromCloud != null) {
+                        availabilities.put(key, fromCloud);
+                        return Optional.of(fromCloud);
+                    }
+                }
+            } catch (Exception e) {
+                logger.warn("Firestore findAvailability lookup: {}", e.getMessage());
+            }
+        }
+        return Optional.empty();
     }
 
     public List<DoctorAvailability> findAvailabilitiesByDoctor(String doctorId) {

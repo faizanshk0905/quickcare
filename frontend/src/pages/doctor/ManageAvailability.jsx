@@ -49,8 +49,16 @@ export const ManageAvailability = () => {
           if (res.data.availableDays && res.data.availableDays.length > 0) {
             setWorkingDays(res.data.availableDays);
           }
-          if (res.data.workingStartTime) setWorkingStartTime(res.data.workingStartTime);
-          if (res.data.workingEndTime) setWorkingEndTime(res.data.workingEndTime);
+          if (res.data.workingStartTime) {
+            setWorkingStartTime(res.data.workingStartTime);
+          } else if (res.data.workingHours && res.data.workingHours.includes('-')) {
+            setWorkingStartTime(res.data.workingHours.split('-')[0].trim());
+          }
+          if (res.data.workingEndTime) {
+            setWorkingEndTime(res.data.workingEndTime);
+          } else if (res.data.workingHours && res.data.workingHours.includes('-')) {
+            setWorkingEndTime(res.data.workingHours.split('-')[1].trim());
+          }
           if (res.data.breakStartTime) setBreakStartTime(res.data.breakStartTime);
           if (res.data.breakEndTime) setBreakEndTime(res.data.breakEndTime);
           if (res.data.slotDurationMinutes) setSlotDuration(res.data.slotDurationMinutes);

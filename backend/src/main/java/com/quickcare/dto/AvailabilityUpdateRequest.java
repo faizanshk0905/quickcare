@@ -8,6 +8,7 @@ public class AvailabilityUpdateRequest {
     private List<String> availableSlots;
     private String workingHours;
     private List<String> workingDays;
+    private List<String> availableDays;
     private String workingStartTime;
     private String workingEndTime;
     private String breakStartTime;
@@ -30,8 +31,25 @@ public class AvailabilityUpdateRequest {
     public String getWorkingHours() { return workingHours; }
     public void setWorkingHours(String workingHours) { this.workingHours = workingHours; }
 
-    public List<String> getWorkingDays() { return workingDays; }
-    public void setWorkingDays(List<String> workingDays) { this.workingDays = workingDays; }
+    public List<String> getWorkingDays() {
+        return (workingDays != null && !workingDays.isEmpty()) ? workingDays : availableDays;
+    }
+    public void setWorkingDays(List<String> workingDays) {
+        this.workingDays = workingDays;
+        if (this.availableDays == null || this.availableDays.isEmpty()) {
+            this.availableDays = workingDays;
+        }
+    }
+
+    public List<String> getAvailableDays() {
+        return (availableDays != null && !availableDays.isEmpty()) ? availableDays : workingDays;
+    }
+    public void setAvailableDays(List<String> availableDays) {
+        this.availableDays = availableDays;
+        if (this.workingDays == null || this.workingDays.isEmpty()) {
+            this.workingDays = availableDays;
+        }
+    }
 
     public String getWorkingStartTime() { return workingStartTime; }
     public void setWorkingStartTime(String workingStartTime) { this.workingStartTime = workingStartTime; }

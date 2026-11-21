@@ -313,6 +313,13 @@ export const DoctorDetails = () => {
 
   const slotInterval = doctor.slotDurationMinutes || 15;
 
+  const displayWorkingHours =
+    availability?.workingHours ||
+    (doctor.workingStartTime && doctor.workingEndTime
+      ? `${doctor.workingStartTime} - ${doctor.workingEndTime}`
+      : doctor.workingHours) ||
+    '09:00 AM - 05:00 PM';
+
   // Doctor Online Status
   const getDoctorStatusMeta = (status) => {
     switch (status?.toUpperCase()) {
@@ -448,7 +455,7 @@ export const DoctorDetails = () => {
                   <Clock className="w-5 h-5 text-teal-600 shrink-0" />
                   <div>
                     <span className="text-[10px] text-slate-400 font-bold block uppercase">In-Clinic Hours</span>
-                    <span className="font-semibold text-slate-800">{doctor.workingHours || '09:00 AM - 05:00 PM'}</span>
+                    <span className="font-semibold text-slate-800">{displayWorkingHours}</span>
                   </div>
                 </div>
               </div>
@@ -596,10 +603,7 @@ export const DoctorDetails = () => {
                     <span>
                       🕒 Working:{' '}
                       <strong className="text-slate-700">
-                        {doctor.workingHours ||
-                          (doctor.workingStartTime && doctor.workingEndTime
-                            ? `${doctor.workingStartTime} - ${doctor.workingEndTime}`
-                            : '09:00 AM - 05:00 PM')}
+                        {displayWorkingHours}
                       </strong>
                     </span>
                     <span>
