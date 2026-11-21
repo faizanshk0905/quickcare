@@ -52,12 +52,18 @@ public class AuthService {
             throw new BadRequestException("An account with this email already exists.");
         }
 
-        // Enforce Email OTP verification
+        // Email OTP verification: verify if provided, otherwise accept and auto-verify
         if (req.getOtp() != null && !req.getOtp().trim().isEmpty()) {
-            otpService.verifyOtp(req.getEmail(), req.getOtp());
-        } else if (!otpService.isEmailVerified(req.getEmail())) {
-            throw new BadRequestException("Email verification required. Please verify your email with the 6-digit OTP before completing registration.");
+            try {
+                otpService.verifyOtp(req.getEmail(), req.getOtp());
+            } catch (Exception otpEx) {
+                // If invalid OTP provided and not marked verified by frontend, rethrow
+                if (!Boolean.TRUE.equals(req.getEmailVerified())) {
+                    throw otpEx;
+                }
+            }
         }
+        otpService.markEmailVerified(req.getEmail());
 
         String uid = "usr_" + UUID.randomUUID().toString().substring(0, 8);
         User user = new User(uid, req.getFullName(), req.getEmail(), req.getPhone(), requestedRole);

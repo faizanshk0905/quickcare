@@ -103,7 +103,26 @@ public class AdminService {
         if (body.get("workingEndTime")   != null) doc.setWorkingEndTime(body.get("workingEndTime").toString());
         doc.setVideoConsultationAvailable(true);
 
-        return db.saveDoctor(doc);
+        Doctor savedDoctor = db.saveDoctor(doc);
+
+        // Also save to 'users' collection in Firestore
+        try {
+            User user = db.findUserByUid(uid).orElse(null);
+            if (user == null && doc.getEmail() != null) user = db.findUserByEmail(doc.getEmail()).orElse(null);
+            if (user == null) user = new User();
+            user.setUid(uid);
+            user.setEmail(doc.getEmail());
+            user.setFullName(doc.getFullName());
+            user.setPhone(doc.getPhone());
+            user.setRole("DOCTOR");
+            user.setAccountStatus("VERIFIED".equalsIgnoreCase(doc.getVerificationStatus()) ? "ACTIVE" : "PENDING");
+            user.setEmailVerified(true);
+            db.saveUser(user);
+        } catch (Exception e) {
+            // ignore
+        }
+
+        return savedDoctor;
     }
 
     public Patient syncPatientFromFrontend(Map<String, Object> body) {
@@ -127,7 +146,26 @@ public class AdminService {
         if (body.get("age") instanceof Number) pat.setAge(((Number) body.get("age")).intValue());
         pat.setEmailVerified(true);
 
-        return db.savePatient(pat);
+        Patient savedPatient = db.savePatient(pat);
+
+        // Also save to 'users' collection in Firestore
+        try {
+            User user = db.findUserByUid(uid).orElse(null);
+            if (user == null && pat.getEmail() != null) user = db.findUserByEmail(pat.getEmail()).orElse(null);
+            if (user == null) user = new User();
+            user.setUid(uid);
+            user.setEmail(pat.getEmail());
+            user.setFullName(pat.getFullName());
+            user.setPhone(pat.getPhone());
+            user.setRole("PATIENT");
+            user.setAccountStatus("ACTIVE");
+            user.setEmailVerified(true);
+            db.saveUser(user);
+        } catch (Exception e) {
+            // ignore
+        }
+
+        return savedPatient;
     }
 
     public Doctor verifyDoctor(String doctorId, boolean approve, String feedback) {

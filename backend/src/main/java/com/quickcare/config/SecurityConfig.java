@@ -66,6 +66,9 @@ public class SecurityConfig {
                 // Health check & System info
                 .requestMatchers("/api/health", "/api/public/**", "/public/**").permitAll()
 
+                // Public sync endpoints (allow cross-device client synchronization)
+                .requestMatchers("/api/admin/doctors/sync", "/api/admin/patients/sync").permitAll()
+
                 // Admin endpoints strictly restricted
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
 

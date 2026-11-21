@@ -43,6 +43,7 @@ public class RegisterRequest {
 
     // Verification
     private String otp;
+    private Boolean emailVerified; // true when OTP was verified on frontend (mobile/offline fallback)
 
     public RegisterRequest() {}
 
@@ -114,4 +115,7 @@ public class RegisterRequest {
 
     public String getOtp() { return otp; }
     public void setOtp(String otp) { this.otp = otp; }
+
+    public Boolean getEmailVerified() { return emailVerified; }
+    public void setEmailVerified(Boolean emailVerified) { this.emailVerified = emailVerified; }
 }

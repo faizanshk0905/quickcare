@@ -218,7 +218,8 @@ public class FirestoreDatabaseService {
         users.put(user.getUid(), user);
         if (firestore != null) {
             try {
-                firestore.collection("users").document(user.getUid()).set(user, SetOptions.merge());
+                firestore.collection("users").document(user.getUid()).set(user, SetOptions.merge()).get();
+                logger.info(">>> Cloud Firestore SUCCESS: Saved user [{}] ({})", user.getUid(), user.getEmail());
             } catch (Exception e) {
                 logger.error("Firestore sync error on user: {}", e.getMessage());
             }
@@ -286,7 +287,8 @@ public class FirestoreDatabaseService {
         patients.put(patient.getPatientId(), patient);
         if (firestore != null) {
             try {
-                firestore.collection("patients").document(patient.getPatientId()).set(patient, SetOptions.merge());
+                firestore.collection("patients").document(patient.getPatientId()).set(patient, SetOptions.merge()).get();
+                logger.info(">>> Cloud Firestore SUCCESS: Saved patient [{}] ({})", patient.getPatientId(), patient.getFullName());
             } catch (Exception e) {
                 logger.error("Firestore sync error on patient: {}", e.getMessage());
             }
@@ -314,7 +316,8 @@ public class FirestoreDatabaseService {
         doctors.put(doctor.getDoctorId(), doctor);
         if (firestore != null) {
             try {
-                firestore.collection("doctors").document(doctor.getDoctorId()).set(doctor, SetOptions.merge());
+                firestore.collection("doctors").document(doctor.getDoctorId()).set(doctor, SetOptions.merge()).get();
+                logger.info(">>> Cloud Firestore SUCCESS: Saved doctor [{}] ({})", doctor.getDoctorId(), doctor.getFullName());
             } catch (Exception e) {
                 logger.error("Firestore sync error on doctor: {}", e.getMessage());
             }
