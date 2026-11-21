@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { HeartPulse, Mail, Lock, AlertCircle, ArrowRight, Sparkles, Check, RotateCcw } from 'lucide-react';
+import { HeartPulse, Mail, Lock, AlertCircle, ArrowRight } from 'lucide-react';
 
 export const Login = () => {
   const navigate = useNavigate();
@@ -12,8 +12,6 @@ export const Login = () => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [selectedRole, setSelectedRole] = useState(null);
-  const [fillMessage, setFillMessage] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -36,50 +34,11 @@ export const Login = () => {
         navigate('/patient', { replace: true });
       }
     } catch (err) {
-      const msg = err.response?.data?.message || err.message || '';
-      if (
-        !err.response ||
-        err.code === 'ERR_NETWORK' ||
-        err.response?.status === 500 ||
-        err.response?.status === 502 ||
-        err.response?.status === 405 ||
-        err.response?.status === 404
-      ) {
-        setError(msg || 'Account not found. Please verify your email and password or register a new account.');
-      } else {
-        setError(msg || 'Login failed. Please check your email and password.');
-      }
+      const msg = err.response?.data?.message || err.message || 'Login failed. Please verify your credentials.';
+      setError(msg);
     } finally {
       setLoading(false);
     }
-  };
-
-  // Only fills credentials into the input fields — DOES NOT auto-login or redirect!
-  const handleQuickFill = (roleType) => {
-    setError('');
-    setSelectedRole(roleType);
-
-    if (roleType === 'PATIENT') {
-      setEmail('patient@quickcare.com');
-      setPassword('password123');
-      setFillMessage('Sample Patient credentials filled. You can modify or click "Sign In to Account" below.');
-    } else if (roleType === 'DOCTOR') {
-      setEmail('doctor@quickcare.com');
-      setPassword('password123');
-      setFillMessage('Sample Doctor credentials filled. You can enter your own doctor email & password, then click "Sign In".');
-    } else if (roleType === 'ADMIN') {
-      setEmail('admin@quickcare.com');
-      setPassword('password123');
-      setFillMessage('Sample Admin credentials filled. Click "Sign In to Account" below.');
-    }
-  };
-
-  const handleClear = () => {
-    setEmail('');
-    setPassword('');
-    setSelectedRole(null);
-    setFillMessage('');
-    setError('');
   };
 
   return (
@@ -98,79 +57,25 @@ export const Login = () => {
           </p>
         </div>
 
-        {/* Quick-Fill Sample Credentials Box (No Automatic Login) */}
-        <div className="bg-blue-50/70 border border-blue-200/80 rounded-2xl p-4 space-y-2.5">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-blue-900 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-              Quick-Fill Sample Credentials (Optional)
-            </span>
-            {(email || password) && (
-              <button
-                type="button"
-                onClick={handleClear}
-                className="text-[10px] font-bold text-slate-500 hover:text-slate-800 flex items-center gap-1 cursor-pointer transition"
-              >
-                <RotateCcw className="w-3 h-3" /> Clear
-              </button>
-            )}
-          </div>
-          <p className="text-[11px] text-slate-500 leading-snug">
-            Click a button to fill sample credentials into the form, or directly type your own email and password below.
-          </p>
-          <div className="grid grid-cols-3 gap-2 text-xs">
-            <button
-              type="button"
-              onClick={() => handleQuickFill('PATIENT')}
-              className={`px-2.5 py-2 font-bold rounded-xl border transition active:scale-95 cursor-pointer text-center ${
-                selectedRole === 'PATIENT'
-                  ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                  : 'bg-white hover:bg-blue-50 text-blue-700 border-blue-200 shadow-2xs'
-              }`}
-              title="Fill Sample Patient Credentials"
-            >
-              Patient
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickFill('DOCTOR')}
-              className={`px-2.5 py-2 font-bold rounded-xl border transition active:scale-95 cursor-pointer text-center ${
-                selectedRole === 'DOCTOR'
-                  ? 'bg-teal-600 text-white border-teal-600 shadow-sm'
-                  : 'bg-white hover:bg-teal-50 text-teal-700 border-teal-200 shadow-2xs'
-              }`}
-              title="Fill Sample Doctor Credentials"
-            >
-              Doctor
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickFill('ADMIN')}
-              className={`px-2.5 py-2 font-bold rounded-xl border transition active:scale-95 cursor-pointer text-center ${
-                selectedRole === 'ADMIN'
-                  ? 'bg-purple-600 text-white border-purple-600 shadow-sm'
-                  : 'bg-white hover:bg-purple-50 text-purple-700 border-purple-200 shadow-2xs'
-              }`}
-              title="Fill Sample Admin Credentials"
-            >
-              Admin
-            </button>
-          </div>
-
-          {fillMessage && (
-            <div className="p-2 bg-white rounded-lg border border-blue-200 text-[11px] text-blue-800 flex items-center gap-1.5 animate-in fade-in">
-              <Check className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-              <span>{fillMessage}</span>
-            </div>
-          )}
-        </div>
-
         {/* Form Card */}
         <div className="bg-white p-8 rounded-3xl border border-slate-200/80 shadow-xl space-y-5">
           {error && (
-            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
-              <span>{error}</span>
+            <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl text-xs text-rose-800 space-y-2 animate-in fade-in">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
+                <span className="font-medium leading-relaxed">{error}</span>
+              </div>
+              {error.toLowerCase().includes('register') && (
+                <div className="pt-2 border-t border-rose-200/60 flex items-center gap-3 text-[11px] font-bold">
+                  <Link to="/register" className="text-blue-700 hover:text-blue-900 underline">
+                    Register as Patient &rarr;
+                  </Link>
+                  <span className="text-rose-300">|</span>
+                  <Link to="/register-doctor" className="text-teal-700 hover:text-teal-900 underline">
+                    Register as Doctor &rarr;
+                  </Link>
+                </div>
+              )}
             </div>
           )}
 
@@ -184,9 +89,9 @@ export const Login = () => {
                   value={email}
                   onChange={(e) => {
                     setEmail(e.target.value);
-                    setFillMessage('');
+                    if (error) setError('');
                   }}
-                  placeholder="name@quickcare.com"
+                  placeholder="name@example.com"
                   className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 text-slate-900 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
                   required
                 />
@@ -210,7 +115,7 @@ export const Login = () => {
                   value={password}
                   onChange={(e) => {
                     setPassword(e.target.value);
-                    setFillMessage('');
+                    if (error) setError('');
                   }}
                   placeholder="••••••••"
                   className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 text-slate-900 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
@@ -229,7 +134,7 @@ export const Login = () => {
             </button>
           </form>
 
-          <div className="pt-4 border-t border-slate-100 text-center text-xs text-slate-500 space-y-2">
+          <div className="pt-4 border-t border-slate-100 text-center text-xs text-slate-500 space-y-2.5">
             <p>
               Don't have an account?{' '}
               <Link to="/register" className="font-bold text-blue-600 hover:text-blue-800">
@@ -241,6 +146,9 @@ export const Login = () => {
               <Link to="/register-doctor" className="font-bold text-teal-600 hover:text-teal-800">
                 Doctor Registration Portal
               </Link>
+            </p>
+            <p className="text-[11px] text-slate-400 pt-1">
+              Hospital Administration: Sign in with authorized administrator credentials.
             </p>
           </div>
         </div>

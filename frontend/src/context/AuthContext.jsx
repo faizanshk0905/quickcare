@@ -31,59 +31,59 @@ const saveStoredUser = (newUser) => {
   }
 };
 
-const DEMO_ACCOUNTS = {
+const SEEDED_SYSTEM_ACCOUNTS = {
+  'admin@quickcare.com': {
+    validPasswords: ['admin123', 'password123', 'Admin@123'],
+    user: {
+      userId: 'usr_admin_001',
+      uid: 'demo_admin_uid',
+      fullName: 'QuickCare Administrator',
+      email: 'admin@quickcare.com',
+      role: 'ADMIN',
+      phone: '+91 99999 00000',
+    },
+    role: 'ADMIN',
+    profileId: 'usr_admin_001',
+  },
   'patient@quickcare.com': {
-    token: 'demo-token-patient',
+    validPasswords: ['password123', 'patient123'],
     user: {
       userId: 'usr_pat_001',
       uid: 'demo_patient_uid',
       fullName: 'Aarav Sharma',
       email: 'patient@quickcare.com',
       role: 'PATIENT',
-      phone: '+91 98765 43210'
+      phone: '+91 98765 43210',
     },
     role: 'PATIENT',
-    profileId: 'usr_pat_001'
-  },
-  'priya.deshmukh@quickcare.com': {
-    token: 'demo-token-doctor',
-    user: {
-      userId: 'usr_doc_001',
-      uid: 'demo_doctor_uid',
-      fullName: 'Dr. Priya Deshmukh',
-      email: 'priya.deshmukh@quickcare.com',
-      role: 'DOCTOR',
-      phone: '+91 98220 12345'
-    },
-    role: 'DOCTOR',
-    profileId: 'doc_001'
+    profileId: 'usr_pat_001',
   },
   'doctor@quickcare.com': {
-    token: 'demo-token-doctor',
+    validPasswords: ['password123', 'doctor123'],
     user: {
       userId: 'usr_doc_001',
       uid: 'demo_doctor_uid',
       fullName: 'Dr. Priya Deshmukh',
       email: 'doctor@quickcare.com',
       role: 'DOCTOR',
-      phone: '+91 98220 12345'
+      phone: '+91 98220 12345',
     },
     role: 'DOCTOR',
-    profileId: 'doc_001'
+    profileId: 'doc_001',
   },
-  'admin@quickcare.com': {
-    token: 'demo-token-admin',
+  'priya.deshmukh@quickcare.com': {
+    validPasswords: ['password123', 'doctor123'],
     user: {
-      userId: 'usr_admin_001',
-      uid: 'demo_admin_uid',
-      fullName: 'QuickCare Admin',
-      email: 'admin@quickcare.com',
-      role: 'ADMIN',
-      phone: '+91 99999 00000'
+      userId: 'usr_doc_001',
+      uid: 'demo_doctor_uid',
+      fullName: 'Dr. Priya Deshmukh',
+      email: 'priya.deshmukh@quickcare.com',
+      role: 'DOCTOR',
+      phone: '+91 98220 12345',
     },
-    role: 'ADMIN',
-    profileId: 'usr_admin_001'
-  }
+    role: 'DOCTOR',
+    profileId: 'doc_001',
+  },
 };
 
 export const AuthProvider = ({ children }) => {
@@ -149,9 +149,17 @@ export const AuthProvider = ({ children }) => {
     setProfileId(null);
 
     const normalizedEmail = (email || '').toLowerCase().trim();
+    const trimmedPassword = (password || '').trim();
+
+    if (!normalizedEmail) {
+      throw new Error('Please enter your email address.');
+    }
+    if (!trimmedPassword) {
+      throw new Error('Please enter your password.');
+    }
 
     try {
-      const res = await authService.login({ email, password });
+      const res = await authService.login({ email: normalizedEmail, password });
       if (res && res.success && res.data) {
         const { token: newToken, user: newUser, role: newRole, profileId: newPid } = res.data;
         setToken(newToken);
@@ -170,16 +178,16 @@ export const AuthProvider = ({ children }) => {
       }
       throw new Error(res?.message || 'Login failed');
     } catch (apiErr) {
-      console.warn('Backend login unavailable or returned error, checking resilient local registry:', apiErr.message);
+      console.warn('Backend login unavailable or returned error, verifying against registered accounts:', apiErr.message);
 
-      // 1. Check local registered users first
+      // 1. Check local registered users (Patients & Doctors registered through QuickCare portal)
       const storedUsers = getStoredUsers();
       const existingUser = storedUsers.find(
         (u) => (u.email || '').toLowerCase().trim() === normalizedEmail
       );
 
       if (existingUser) {
-        if (existingUser.password && password && existingUser.password !== password) {
+        if (existingUser.password && existingUser.password !== password) {
           throw new Error('Incorrect password. Please verify your password and try again.');
         }
 
@@ -196,7 +204,6 @@ export const AuthProvider = ({ children }) => {
         localStorage.setItem('quickcare_role', userRole);
         localStorage.setItem('quickcare_profile_id', pid);
         localStorage.setItem('quickcare_current_user', JSON.stringify(existingUser));
-        localStorage.setItem('quickcare_demo_user', JSON.stringify(existingUser));
 
         return {
           token: localToken,
@@ -206,57 +213,98 @@ export const AuthProvider = ({ children }) => {
         };
       }
 
-      // 2. Check demo accounts
-      const demoAccount = DEMO_ACCOUNTS[normalizedEmail];
-      if (demoAccount) {
-        console.warn('Activating resilient Demo Session for:', email);
-        const { token: newToken, user: newUser, role: newRole, profileId: newPid } = demoAccount;
-        setToken(newToken);
+      // 2. Check local registered doctors (stored in quickcare_shared_doctors)
+      let sharedDoctors = [];
+      try {
+        const raw = localStorage.getItem('quickcare_shared_doctors');
+        if (raw) sharedDoctors = JSON.parse(raw);
+      } catch (e) {
+        sharedDoctors = [];
+      }
+      const existingDoctor = sharedDoctors.find(
+        (d) => (d.email || '').toLowerCase().trim() === normalizedEmail
+      );
+
+      if (existingDoctor) {
+        if (existingDoctor.password && existingDoctor.password !== password) {
+          throw new Error('Incorrect password. Please verify your doctor credentials and try again.');
+        }
+
+        const localToken = `resilient-token-${existingDoctor.doctorId || existingDoctor.uid || 'doc'}`;
+        const userRole = 'DOCTOR';
+        const pid = existingDoctor.doctorId || existingDoctor.uid;
+        const doctorUser = {
+          userId: existingDoctor.uid || pid,
+          uid: existingDoctor.uid || pid,
+          fullName: existingDoctor.fullName,
+          email: existingDoctor.email,
+          role: 'DOCTOR',
+          phone: existingDoctor.phone,
+          specialization: existingDoctor.specialization,
+          verificationStatus: existingDoctor.verificationStatus || 'APPROVED',
+        };
+
+        setToken(localToken);
+        setUser(doctorUser);
+        setRole(userRole);
+        setProfileId(pid);
+
+        localStorage.setItem('quickcare_token', localToken);
+        localStorage.setItem('quickcare_role', userRole);
+        localStorage.setItem('quickcare_profile_id', pid);
+        localStorage.setItem('quickcare_current_user', JSON.stringify(doctorUser));
+
+        return {
+          token: localToken,
+          user: doctorUser,
+          role: userRole,
+          profileId: pid,
+        };
+      }
+
+      // 3. Check system pre-seeded accounts (Administrator & System Profiles) with strict password enforcement
+      const seedAccount = SEEDED_SYSTEM_ACCOUNTS[normalizedEmail];
+      if (seedAccount) {
+        const isPasswordValid = seedAccount.validPasswords.includes(password);
+        if (!isPasswordValid) {
+          if (seedAccount.role === 'ADMIN') {
+            throw new Error('Incorrect administrator password. Please verify your credentials and try again.');
+          }
+          throw new Error('Incorrect password. Please verify your password and try again.');
+        }
+
+        const { user: newUser, role: newRole, profileId: newPid } = seedAccount;
+        const localToken = `resilient-token-${newUser.userId || newUser.uid || 'sys'}`;
+
+        setToken(localToken);
         setUser(newUser);
         setRole(newRole);
         setProfileId(newPid);
 
-        localStorage.setItem('quickcare_token', newToken);
+        localStorage.setItem('quickcare_token', localToken);
         localStorage.setItem('quickcare_role', newRole);
-        localStorage.setItem('quickcare_demo_user', JSON.stringify(newUser));
         localStorage.setItem('quickcare_current_user', JSON.stringify(newUser));
         if (newPid) {
           localStorage.setItem('quickcare_profile_id', newPid);
         }
-        return demoAccount;
+
+        return {
+          token: localToken,
+          user: newUser,
+          role: newRole,
+          profileId: newPid,
+        };
       }
 
-      // 3. If an explicit 401 was returned by server, re-throw with server's message
-      if (apiErr.response?.status === 401) {
-        throw new Error(apiErr.response?.data?.message || 'Invalid email or password.');
-      }
-
-      // 4. For 405 (Method Not Allowed), 502, 404, or network error when account doesn't exist locally:
+      // 4. Account not found in any registered stores: refuse login
       throw new Error(
-        'Account not found for this email on this device. Please click "Register" to create your account or select any 1-Click Demo Profile above.'
+        'No registered account found with this email. Please register your account as a patient or doctor before signing in.'
       );
     }
   };
 
-  const loginAsDemo = (roleType) => {
-    const email = roleType === 'ADMIN' ? 'admin@quickcare.com' : (roleType === 'DOCTOR' ? 'priya.deshmukh@quickcare.com' : 'patient@quickcare.com');
-    const demoAccount = DEMO_ACCOUNTS[email];
-    if (demoAccount) {
-      const { token: newToken, user: newUser, role: newRole, profileId: newPid } = demoAccount;
-      setToken(newToken);
-      setUser(newUser);
-      setRole(newRole);
-      setProfileId(newPid);
-
-      localStorage.setItem('quickcare_token', newToken);
-      localStorage.setItem('quickcare_role', newRole);
-      localStorage.setItem('quickcare_demo_user', JSON.stringify(newUser));
-      localStorage.setItem('quickcare_current_user', JSON.stringify(newUser));
-      if (newPid) {
-        localStorage.setItem('quickcare_profile_id', newPid);
-      }
-      return demoAccount;
-    }
+  const loginAsDemo = () => {
+    throw new Error('Direct bypass is disabled. Please enter your registered credentials or register a new account.');
   };
 
   const register = async (registerData) => {
